@@ -1,0 +1,91 @@
+{
+  "theme": "dark",
+  "archetype": "5_Jewel_and_Luxury",
+  "branding": {
+    "name": "Auto-AI India",
+    "vibe": "Premium, Futuristic, Unbiased, Trustworthy",
+    "primary_emotion": "Authority and Clarity"
+  },
+  "typography": {
+    "heading_font": "Outfit, sans-serif",
+    "body_font": "Manrope, sans-serif",
+    "rules": {
+      "h1": "text-5xl lg:text-6xl tracking-tighter font-light uppercase",
+      "h2": "text-3xl lg:text-4xl tracking-tight font-medium",
+      "h3": "text-xl font-semibold",
+      "body": "text-base leading-relaxed text-slate-300",
+      "labels": "text-xs uppercase tracking-[0.2em] text-slate-400 font-bold"
+    }
+  },
+  "colors": {
+    "background": "#050505",
+    "surface": "#111111",
+    "surface_glass": "rgba(17, 17, 17, 0.6)",
+    "border": "#262626",
+    "border_highlight": "#F59E0B",
+    "primary": "#F59E0B",
+    "primary_hover": "#D97706",
+    "text_main": "#F8FAFC",
+    "text_muted": "#94A3B8",
+    "accent_success": "#10B981",
+    "accent_danger": "#EF4444"
+  },
+  "layout_and_spacing": {
+    "grid_system": "bento_tetris",
+    "container_padding": "p-8",
+    "section_spacing": "py-24",
+    "border_radius": "rounded-none",
+    "card_style": "flat background, 1px border-border, no shadow, sharp corners",
+    "glassmorphism": "backdrop-blur-xl bg-black/60 border-b border-white/10"
+  },
+  "components": {
+    "header": "Sticky nav with crystal glassmorphism (`backdrop-blur-xl bg-black/60`), 1px white/10 bottom border. High-contrast typography.",
+    "hero": "Asymmetrical layout. Large Display heading. Search input for 'True Verdict' takes center stage. Use `image_urls.hero_bg` with heavy black/60 overlay to ensure text contrast.",
+    "car_comparison": "Split-pane bento box. 1px borders (`border-border`). On AI verdict, animate an amber glow (`shadow-[0_0_15px_rgba(245,158,11,0.5)]`).",
+    "ai_chat": "Terminal/Futuristic look. Pure black background (`#000000`). User messages in muted surface color. AI messages highlighted with amber left-border (`border-l-2 border-primary`).",
+    "emi_calculator": "Minimalist sliders (Shadcn customized). Track in dark gray, thumb in amber. Large data typography for EMI value (`text-5xl font-light`).",
+    "buttons": "Sharp corners. Primary: `bg-primary text-black hover:bg-primary_hover`. Secondary: `border border-white/20 bg-transparent hover:bg-white/5`.",
+    "forms": "Inputs use Shadcn but customized: `bg-[#0A0A0A] border-white/10 rounded-none focus:border-primary`."
+  },
+  "motion": {
+    "hover": "Subtle border color change and -translate-y-1. Do not use scale transformations on large cards.",
+    "transitions": "transition-all duration-300 ease-out",
+    "page_load": "Staggered fade-up for bento grid items."
+  },
+  "image_urls": {
+    "hero_bg": {
+      "url": "https://images.unsplash.com/photo-1760713170685-b67abc3be5ad?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTJ8MHwxfHNlYXJjaHwyfHxzbGVlayUyMGRhcmslMjBTVVZ8ZW58MHx8fHwxNzc2NjM5MDY1fDA&ixlib=rb-4.1.0&q=85",
+      "description": "Dark blue SUV parked in a studio with spotlights, perfect for cinematic hero background with an overlay."
+    },
+    "ai_abstract": {
+      "url": "https://images.unsplash.com/photo-1760978632114-0939f0d60045?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTB8MHwxfHNlYXJjaHwzfHxkYXJrJTIwZnV0dXJpc3RpYyUyMHRlY2hub2xvZ3klMjBhYnN0cmFjdHxlbnwwfHx8fDE3NzY2MzkwNzV8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Abstract metallic wave pattern representing AI data flow."
+    },
+    "car_thar": {
+      "url": "https://images.pexels.com/photos/34940284/pexels-photo-34940284.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Mahindra Thar at sunset, for car database card."
+    },
+    "car_hyundai": {
+      "url": "https://images.unsplash.com/photo-1700093692456-056527c63d37?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1ODB8MHwxfHNlYXJjaHwyfHxoeXVuZGFpJTIwc3V2JTIwZGFya3xlbnwwfHx8fDE3NzY2MzkwNzl8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Front of a dark SUV, for comparison card."
+    },
+    "dashboard_macro": {
+      "url": "https://images.unsplash.com/photo-1708063784259-7dd71e306651?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2ODh8MHwxfHNlYXJjaHwyfHxsdXh1cnklMjBjYXIlMjBpbnRlcmlvciUyMGRhcmslMjBzdGVlcmluZyUyMHdoZWVsfGVufDB8fHx8MTc3NjYzOTA3NXww&ixlib=rb-4.1.0&q=85",
+      "description": "Interior of car dashboard, for AI recommendation engine background."
+    }
+  },
+  "icons": {
+    "library": "lucide-react",
+    "stroke_width": 1.5
+  },
+  "instructions_to_main_agent": [
+    "Install and use Google Fonts: 'Outfit' (for headings) and 'Manrope' (for body text).",
+    "Strictly follow the color palette. DO NOT use Shadcn's default slate/zinc colors if they conflict with pure black (#050505) and surface (#111111).",
+    "Build a custom asymmetrical bento-grid for the car comparison section, avoiding standard equal-width columns.",
+    "The hero section MUST use 'image_urls.hero_bg' with a heavy black overlay (e.g. `bg-black/70`) to ensure the 'True Verdict' search bar pops.",
+    "Use 1px sharp borders (`border-[#262626]`) and square corners (`rounded-none` or `rounded-sm` at max) to maintain the premium, high-tech 'Obsidian Trust' aesthetic.",
+    "The AI Chat UI should look like a high-end command center, not a standard iMessage clone. Use terminal-like aesthetics with amber accents.",
+    "All interactive elements MUST include `data-testid` attributes (e.g., `data-testid='compare-cars-btn'`).",
+    "Implement the EMI calculator using Shadcn Slider but override styles to match the dark amber theme."
+  ]
+}
