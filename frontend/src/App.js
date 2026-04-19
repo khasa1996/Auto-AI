@@ -1,52 +1,40 @@
-import { useEffect } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
-
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
-
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
-
-  return (
-    <div>
-      <header className="App-header">
-        <a
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
-};
+import Navbar from "./components/Navbar";
+import Footer from "./components/Footer";
+import ChatDrawer from "./components/ChatDrawer";
+import Home from "./pages/Home";
+import Compare from "./pages/Compare";
+import Recommend from "./pages/Recommend";
+import Cars from "./pages/Cars";
+import EMI from "./pages/EMI";
+import News from "./pages/News";
+import BookCar from "./pages/BookCar";
+import { Toaster } from "./components/ui/sonner";
+import { I18nProvider } from "./lib/i18n";
 
 function App() {
   return (
-    <div className="App">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
+    <div className="App bg-[#050505] text-white">
+      <I18nProvider>
+        <BrowserRouter>
+          <Navbar />
+          <main>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/compare" element={<Compare />} />
+              <Route path="/recommend" element={<Recommend />} />
+              <Route path="/cars" element={<Cars />} />
+              <Route path="/emi" element={<EMI />} />
+              <Route path="/news" element={<News />} />
+              <Route path="/book/:carId" element={<BookCar />} />
+            </Routes>
+          </main>
+          <Footer />
+          <ChatDrawer />
+          <Toaster />
+        </BrowserRouter>
+      </I18nProvider>
     </div>
   );
 }
