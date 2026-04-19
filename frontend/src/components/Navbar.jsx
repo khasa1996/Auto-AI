@@ -63,9 +63,12 @@ export default function Navbar() {
           data-testid="nav-mobile-toggle"
           aria-label="Toggle menu"
         >
-          <LanguageToggle compact />
           <Menu size={22} />
         </button>
+      </div>
+
+      <div className="lg:hidden absolute top-3 right-16">
+        <LanguageToggle compact />
       </div>
 
       {open && (

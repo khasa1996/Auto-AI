@@ -71,7 +71,7 @@ export default function ChatDrawer() {
       <button
         onClick={() => setOpen(true)}
         data-testid="chat-open-btn"
-        className="fixed bottom-6 right-6 z-40 bg-[#F59E0B] text-black px-5 py-3 flex items-center gap-2 font-semibold text-sm uppercase tracking-[0.15em] pulse-amber hover:bg-[#D97706] transition-colors"
+        className="fixed bottom-6 right-6 z-[60] bg-[#F59E0B] text-black px-5 py-3 flex items-center gap-2 font-semibold text-sm uppercase tracking-[0.15em] pulse-amber hover:bg-[#D97706] transition-colors"
       >
         <Sparkles size={16} strokeWidth={2.5} />
         {t("ask_ai")}
