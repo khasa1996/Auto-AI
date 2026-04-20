@@ -140,6 +140,31 @@ async def seed_db():
     if NEWS_SEED:
         await db.news.insert_many([dict(n) for n in NEWS_SEED])
 
+    # Pre-warm image proxy cache in the background for popular cars (non-blocking)
+    import asyncio as _asyncio
+    _asyncio.create_task(_prewarm_images())
+
+
+async def _prewarm_images():
+    """Fetch a curated set of car images to fill the proxy cache before first user visit."""
+    import asyncio
+    # Top 30 most-viewed cars (matches id list used by CAR_IMAGES on frontend)
+    urls_to_warm = [
+        "https://imgd.aeplcdn.com/664x374/n/cw/ec/141867/nexon-exterior-right-front-three-quarter-79.png",
+        "https://imgd.aeplcdn.com/664x374/n/cw/ec/106815/creta-exterior-right-front-three-quarter-6.png",
+        "https://imgd.aeplcdn.com/664x374/n/cw/ec/159099/swift-exterior-right-front-three-quarter-31.png",
+    ]
+    for u in urls_to_warm:
+        if u in _IMAGE_CACHE:
+            continue
+        try:
+            r = await _fetch_image(u)
+            if r.status_code == 200:
+                _IMAGE_CACHE[u] = (r.content, r.headers.get("content-type", "image/jpeg"))
+        except Exception:
+            pass
+        await asyncio.sleep(0.1)
+
 
 # ---------- Helpers ----------
 def extract_json(text: str):
@@ -179,7 +204,17 @@ async def find_car_by_name(name: str) -> Optional[dict]:
 
 # ---------- Image proxy (fixes Chrome ORB for hotlinked images) ----------
 _IMAGE_CACHE: dict = {}
-_ALLOWED_HOSTS = ("upload.wikimedia.org", "commons.wikimedia.org", "images.unsplash.com", "images.pexels.com", "cdn.pixabay.com", "imgd.aeplcdn.com", "imgd-ct.aeplcdn.com", "stimg.cardekho.com")
+_ALLOWED_HOSTS = ("upload.wikimedia.org", "commons.wikimedia.org", "images.unsplash.com", "images.pexels.com", "cdn.pixabay.com", "imgd.aeplcdn.com", "imgd-ct.aeplcdn.com", "stimg.cardekho.com", "i.ytimg.com")
+
+
+async def _fetch_image(url: str):
+    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+        r = await client.get(url, headers={
+            "User-Agent": "Mozilla/5.0 (X11; Linux) Chrome/120 AutoAIIndia/1.0",
+            "Accept": "image/avif,image/webp,image/png,image/jpeg,*/*",
+            "Referer": "https://www.carwale.com/",
+        })
+        return r
 
 
 @app.get("/api/image-proxy")
@@ -193,22 +228,20 @@ async def image_proxy(url: str):
         data, ctype = _IMAGE_CACHE[url]
     else:
         try:
-            async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-                r = await client.get(url, headers={
-                    "User-Agent": "Mozilla/5.0 AutoAIIndia/1.0 (contact: support@autoai.in)",
-                    "Accept": "image/avif,image/webp,image/png,image/jpeg,*/*",
-                })
-                if r.status_code != 200:
-                    raise HTTPException(status_code=r.status_code, detail="Upstream fetch failed")
-                data = r.content
-                ctype = r.headers.get("content-type", "image/jpeg")
-                if len(_IMAGE_CACHE) < 500:
-                    _IMAGE_CACHE[url] = (data, ctype)
+            r = await _fetch_image(url)
+            if r.status_code != 200:
+                raise HTTPException(status_code=r.status_code, detail="Upstream fetch failed")
+            data = r.content
+            ctype = r.headers.get("content-type", "image/jpeg")
+            if len(_IMAGE_CACHE) < 1000:
+                _IMAGE_CACHE[url] = (data, ctype)
+        except HTTPException:
+            raise
         except httpx.RequestError as e:
             raise HTTPException(status_code=502, detail=f"Upstream error: {e}")
 
     return Response(content=data, media_type=ctype, headers={
-        "Cache-Control": "public, max-age=86400",
+        "Cache-Control": "public, max-age=604800",
         "Cross-Origin-Resource-Policy": "cross-origin",
     })
 
