@@ -75,9 +75,9 @@ export default function Home() {
             </div>
 
             <div className="mt-12 grid grid-cols-3 gap-6 max-w-lg">
-              <Metric k="29+" v="cars indexed" />
-              <Metric k="0%" v="brand bias" />
-              <Metric k="24/7" v="AI expert" />
+              <Metric k="100+" v={t("cars_indexed")} />
+              <Metric k="0%" v={t("brand_bias")} />
+              <Metric k="24/7" v={t("ai_expert")} />
             </div>
           </div>
 
