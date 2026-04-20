@@ -2,6 +2,7 @@ import { formatINR } from "../lib/api";
 import { Shield, Fuel, Clock, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
+import CarVisual from "./CarVisual";
 
 export default function CarCard({ car }) {
   const { t } = useI18n();
@@ -10,14 +11,7 @@ export default function CarCard({ car }) {
       data-testid={`car-card-${car.id}`}
       className="group relative border border-[#262626] bg-[#0D0D0D] hover:border-[#F59E0B] hover:-translate-y-1 transition-all duration-300 flex flex-col"
     >
-      <div className="aspect-[16/10] overflow-hidden bg-black">
-        <img
-          src={car.image}
-          alt={`${car.brand} ${car.model}`}
-          className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"
-          onError={(e) => (e.currentTarget.src = "https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=800")}
-        />
-      </div>
+      <CarVisual car={car} className="aspect-[16/10] group-hover:scale-[1.02] transition-transform duration-500" />
       <div className="p-5 flex flex-col flex-1">
         <div className="flex items-start justify-between mb-2">
           <div>
@@ -39,13 +33,22 @@ export default function CarCard({ car }) {
           <Stat icon={<Clock size={12} />} label="wait wk" value={car.waiting_weeks} />
         </div>
 
-        <Link
-          to={`/book/${car.id}`}
-          data-testid={`book-btn-${car.id}`}
-          className="mt-4 border border-[#F59E0B] text-[#F59E0B] text-center text-xs uppercase tracking-[0.25em] font-bold py-2.5 hover:bg-[#F59E0B] hover:text-black transition-colors"
-        >
-          {t("book_now")} →
-        </Link>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <Link
+            to={`/showroom/${car.id}`}
+            data-testid={`showroom-btn-${car.id}`}
+            className="border border-white/15 text-center text-[10px] uppercase tracking-[0.2em] font-bold py-2.5 text-slate-300 hover:border-[#F59E0B] hover:text-[#F59E0B] transition-colors"
+          >
+            360° Explore
+          </Link>
+          <Link
+            to={`/book/${car.id}`}
+            data-testid={`book-btn-${car.id}`}
+            className="bg-[#F59E0B] text-black text-center text-[10px] uppercase tracking-[0.25em] font-bold py-2.5 hover:bg-[#D97706] transition-colors"
+          >
+            {t("book_now")} →
+          </Link>
+        </div>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api, formatINR } from "../lib/api";
 import { Sparkles, Loader2, Zap } from "lucide-react";
 import { Slider } from "../components/ui/slider";
+import CarVisual from "../components/CarVisual";
 
 export default function Recommend() {
   const [budget, setBudget] = useState([800000, 1800000]);
@@ -140,9 +141,7 @@ export default function Recommend() {
               {(result.top_picks || []).map((p, i) => (
                 <div key={i} className="border border-[#262626] bg-[#0D0D0D] overflow-hidden hover:border-[#F59E0B] transition-colors" data-testid={`pick-${i}`}>
                   {p.car && (
-                    <div className="aspect-[16/9] bg-black overflow-hidden">
-                      <img src={p.car.image} alt={p.car.model} className="w-full h-full object-cover opacity-80" />
-                    </div>
+                    <CarVisual car={p.car} className="aspect-[16/9]" />
                   )}
                   <div className="p-5">
                     <div className="flex items-center gap-2 mb-2">

@@ -31,12 +31,10 @@ export default function Home() {
       <section className="relative min-h-[85vh] overflow-hidden hero-grid" data-testid="hero-section">
         <div className="absolute inset-0 grain pointer-events-none" />
         <div className="absolute inset-0">
-          <img
-            src="https://images.unsplash.com/photo-1760713170685-b67abc3be5ad?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTJ8MHwxfHNlYXJjaHwyfHxzbGVlayUyMGRhcmslMjBTVVZ8ZW58MHx8fHwxNzc2NjM5MDY1fDA&ixlib=rb-4.1.0&q=85"
-            alt="hero"
-            className="w-full h-full object-cover opacity-30"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-[#050505]" />
+          <div className="w-full h-full" style={{
+            background: "radial-gradient(1000px 500px at 70% 30%, rgba(245,158,11,0.18), transparent 60%), radial-gradient(700px 400px at 20% 70%, rgba(59,130,246,0.12), transparent 60%)",
+          }} />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/50 to-[#050505]" />
         </div>
 
         <div className="relative max-w-7xl mx-auto px-6 lg:px-10 pt-20 lg:pt-28 pb-16 grid lg:grid-cols-12 gap-10">
@@ -142,7 +140,6 @@ export default function Home() {
             kicker="01 · AI Comparison"
             title="Two cars enter. One walks out."
             desc="Claude-powered engine analyses safety, mileage, power, space, waiting & real cost-of-ownership — and exposes the cons brands hide."
-            img="https://images.unsplash.com/photo-1760978632114-0939f0d60045?w=800"
           />
           <Feature
             to="/recommend"
@@ -265,16 +262,17 @@ function Metric({ k, v }) {
   );
 }
 
-function Feature({ to, span, icon, kicker, title, desc, img }) {
+function Feature({ to, span, icon, kicker, title, desc }) {
   return (
     <Link
       to={to}
       data-testid={`feature-${kicker.split("·")[0].trim()}`}
       className={`${span} group relative border border-[#262626] bg-[#0A0A0A] p-8 hover:border-[#F59E0B] transition-all duration-300 overflow-hidden`}
     >
-      {img && (
-        <img src={img} alt="" className="absolute right-0 top-0 h-full w-1/2 object-cover opacity-15 group-hover:opacity-25 transition-opacity" />
-      )}
+      <div
+        className="absolute -right-20 -top-20 w-80 h-80 rounded-full opacity-10 group-hover:opacity-20 transition-opacity blur-2xl"
+        style={{ background: "#F59E0B" }}
+      />
       <div className="relative">
         <div className="text-[#F59E0B] mb-5">{icon}</div>
         <div className="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-mono mb-3">{kicker}</div>

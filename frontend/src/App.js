@@ -10,6 +10,8 @@ import Cars from "./pages/Cars";
 import EMI from "./pages/EMI";
 import News from "./pages/News";
 import BookCar from "./pages/BookCar";
+import Showroom from "./pages/Showroom";
+import Premium from "./pages/Premium";
 import { Toaster } from "./components/ui/sonner";
 import { I18nProvider } from "./lib/i18n";
 
@@ -28,6 +30,8 @@ function App() {
               <Route path="/emi" element={<EMI />} />
               <Route path="/news" element={<News />} />
               <Route path="/book/:carId" element={<BookCar />} />
+              <Route path="/showroom/:carId" element={<Showroom />} />
+              <Route path="/premium" element={<Premium />} />
             </Routes>
           </main>
           <Footer />

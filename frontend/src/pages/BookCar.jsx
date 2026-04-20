@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { api, formatINR } from "../lib/api";
 import { Check, ChevronLeft, Loader2, Phone, CheckCircle2 } from "lucide-react";
 import { useI18n } from "../lib/i18n";
+import CarVisual from "../components/CarVisual";
 
 const CITIES = ["Mumbai", "Delhi", "Bengaluru", "Hyderabad", "Pune", "Chennai", "Kolkata", "Ahmedabad", "Jaipur", "Lucknow", "Chandigarh"];
 
@@ -108,9 +109,7 @@ export default function BookCar() {
           {/* Car card */}
           <div className="lg:col-span-5">
             <div className="border border-[#262626] bg-[#0D0D0D] overflow-hidden sticky top-24">
-              <div className="aspect-[16/9] bg-black overflow-hidden">
-                <img src={car.image} alt={car.model} className="w-full h-full object-cover opacity-90" />
-              </div>
+              <CarVisual car={car} className="aspect-[16/9]" />
               <div className="p-6">
                 <div className="text-[10px] uppercase tracking-[0.25em] text-slate-500">{car.brand}</div>
                 <div className="font-display text-3xl font-medium mt-1">{car.model}</div>

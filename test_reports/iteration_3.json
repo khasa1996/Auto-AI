@@ -1,0 +1,60 @@
+{
+  "summary": "Tested iteration 3 new features: Partner commission pipeline (loan/insurance partners + leads aggregation), AI CRM chat (booking lookup by phone), 360° Premium Showroom, Premium subscription page, CarVisual/NewsVisual replacing <img> site-wide. Backend 6/6 new pytest pass. Frontend verified on /cars, /book/:id, /compare, /recommend, /news, /premium, /showroom/:id, /.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Home hero stats",
+        "issue": "Still shows '29+ CARS INDEXED' despite DB having 106 cars (flagged in iteration 2, NOT fixed). Should read '106+' or '100+'.",
+        "selector": "main section (home stats)",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Compare / any page with Select dropdown",
+        "issues": [
+          "React hydration error in console: 'In HTML, <span> cannot be a child of <option>.' — a Select component is rendering decorative <span> (likely an icon) inside native <option>. Likely Compare page car-select dropdown. Should move icon outside <option> or use shadcn Select with SelectItem instead of native <option>."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration3.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/iteration3_results.xml"
+  ],
+  "action_items": [
+    "Fix Home '29+ CARS INDEXED' to '106+' (still stale from iteration 2).",
+    "Fix hydration error: <span> inside <option> in Select component (Compare page dropdown). Use a shadcn Select with SelectItem + inline icon OR strip span from native <option>.",
+    "[Optional] Consider adding a way to skip/shorten trial timer in dev/test builds — 180s trial is hard to automate end-to-end for lock-overlay testing."
+  ],
+  "critical_code_review_comments": [
+    "server.py now ~620 lines — partners + bookings + AI all in one file. Recommend splitting into routers/partners.py, routers/bookings.py, routers/ai.py before it grows further.",
+    "_assign_partners_to_booking() always picks LOAN_PARTNERS[0] / INSURANCE_PARTNERS[0] — round-robin comment in code is aspirational, not implemented. Future commissions will pile up on HDFC/Bajaj Allianz only. Add a real round-robin using partner_leads count per partner.",
+    "/api/partners and /api/partners/leads have no auth — anyone can scrape commission pipeline and partner configuration. For CRM, at minimum require a shared admin token via env.",
+    "Commission math is silent (loan_amount = car_price * 0.85 hardcoded LTV; insurance premium_pct hardcoded per partner). OK for MVP, but document assumption in response so dealers can verify.",
+    "AI chat BOOKING_CONTEXT is injected via .replace() on the system prompt — if a booking field contains '{LANGUAGE}' or '{BOOKING_CONTEXT}' literally, substitution can go wrong. Use safe templating.",
+    "/api/ai/chat searches bookings by phone regex '\\b(\\d{10})\\b' — correct; however, if no phone and no CRM keywords, falls through. Already guarded. Fine.",
+    "Showroom.jsx trial timer is client-only (not enforced server-side). A user can refresh or tamper localStorage to bypass. MVP-OK, but add server-side entitlement before real billing.",
+    "Frontend: every /cars card renders a full SVG silhouette (106 cards × multiple <svg>) → 538 SVGs in DOM on /cars page. Consider <use> + <symbol> sprite or lazy-render below the fold to reduce paint cost on low-end phones.",
+    "Booking still returns 200 (should be 201 Created) — flagged in iteration 2, not fixed.",
+    "No pydantic validator on phone in BookingRequest (flagged iteration 2, not fixed) — accepts any string."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration3.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (6/6 new pytest + 8/8 prior = 14/14 overall)",
+    "frontend": "95% (all 12 frontend criteria verified; one pre-existing hero stat and one new hydration warning)"
+  },
+  "seed_data_creation": "Created 3 test bookings during partner-lead tests (phone 9876543210 x2, phone 9000000088 x1) with TEST_ prefixed names. Created 4 partner_leads in DB (2x HDFC Bank loan, 2x Bajaj Allianz insurance). No cleanup endpoint; harmless.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration-3 tests in /app/backend/tests/test_iteration3.py cover partners listing+filter, booking->auto-lead creation, AI CRM phone lookup. Reuse phone 9876543210 for CRM testing (already has bookings). Showroom trial timer is hardcoded 180s (setInterval in Showroom.jsx) — lock overlay exists as conditional render with data-testid='showroom-lock-overlay' but cannot be automated quickly unless you mock timer. Cars page has 0 <img> tags, 538 SVGs (CarVisual). News page has 0 <img>, NewsVisual is inline in News.jsx (not a separate file). Home page still has stale '29+' text.",
+  "rca_of_the_issue": "Hydration warning '<span> cannot be a child of <option>': some native HTML <select>/<option> element has a nested <span> (likely a lucide icon rendered inside <option>). Most likely in Compare.jsx car-picker selects or a shared dropdown. Fix: either use shadcn Select/SelectItem which uses <div role=option> (accepts children), or strip icon span from <option>."
+}

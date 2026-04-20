@@ -348,15 +348,32 @@ Return ONLY the JSON in the exact schema."""
 
 
 # ---------- AI Chat ----------
-CHAT_SYSTEM = """You are 'Auto-AI India', a friendly, unbiased car expert assistant for Indian buyers.
-Style: Concise, warm, human. Occasionally sprinkle local phrases if user does.
-Rules:
-- Never promote a brand. Always justify with data points (safety rating, mileage, waiting period, price).
-- If you don't know specifics, say so and suggest comparing via the app's Compare tool.
-- Keep answers under 180 words unless deep-dive is asked.
-- Format with short paragraphs and bullet points when helpful.
-- IMPORTANT: Reply in the user's chosen language: {LANGUAGE}. If language is English, reply in English. For Hindi reply in Devanagari Hindi, Tamil in Tamil script, etc. Keep technical terms (EMI, kmpl, bhp) as-is.
+CHAT_SYSTEM = """You are 'Auto-AI India', a 24×7 AI concierge for Indian car buyers.
+Core abilities:
+1. Unbiased car advice, comparisons, EMI guidance (data-driven, no brand promotion).
+2. CUSTOMER SUCCESS / CRM: if the user mentions "my booking", "track", "my order", "cancel", "confirmation", "SMS", "email", or gives a booking id — use the BOOKING CONTEXT block below. Respond with exact details (booking id, car, dealer, status, ETA call time). Promise the dealer will call; acknowledge cancellation or reschedule requests politely.
+3. NOTIFICATIONS: tell the user you've logged their request in-app and that the AI will remind the dealer. DO NOT claim SMS/email have been sent unless BOOKING CONTEXT explicitly mentions that.
+
+Style: Concise, warm, confident. Use short paragraphs and bullet points.
+Length: Under 180 words unless a deep-dive is asked.
+Language: Reply in {LANGUAGE}. Devanagari for Hindi, Tamil script for Tamil, etc. Keep technical terms (EMI, kmpl, bhp, ADAS) as-is.
+
+BOOKING CONTEXT:
+{BOOKING_CONTEXT}
 """
+
+
+def _format_booking_context(bookings: list) -> str:
+    if not bookings:
+        return "(no bookings linked to this phone)"
+    lines = []
+    for b in bookings[:5]:
+        lines.append(
+            f"- Booking #{b['id'][:8].upper()} · {b['car_name']} · City: {b['city']} · Dealer: {b['dealer']} · "
+            f"Status: {b['status']} · ETA call: {b['eta_call_minutes']} min · Test drive: {b['test_drive']} · "
+            f"Loan: {b['needs_loan']} · Insurance: {b['needs_insurance']}"
+        )
+    return "\n".join(lines)
 
 
 @api_router.post("/ai/chat")
@@ -369,7 +386,41 @@ async def ai_chat(req: ChatRequest):
             "content": req.message,
             "ts": datetime.now(timezone.utc).isoformat(),
         })
-        system = CHAT_SYSTEM.replace("{LANGUAGE}", req.language or "English")
+
+        # Fetch booking context if the message looks CRM-ish or a phone number was provided
+        booking_context = "(none)"
+        msg_l = req.message.lower()
+        crm_keywords = ["booking", "track", "order", "cancel", "confirm", "sms", "email", "my car", "dealer", "delivery"]
+        if any(k in msg_l for k in crm_keywords):
+            # look for phone number or booking id in the message
+            import re as _re
+            phone_match = _re.search(r"\b(\d{10})\b", req.message)
+            bk_match = _re.search(r"\b([A-F0-9]{8})\b", req.message.upper())
+            query: dict = {}
+            if phone_match:
+                query["phone"] = phone_match.group(1)
+            if not query:
+                # Use all recent bookings from this session_id (chat already established trust)
+                bookings = await db.bookings.find({}, {"_id": 0}).sort("created_at", -1).to_list(5)
+            else:
+                bookings = await db.bookings.find(query, {"_id": 0}).sort("created_at", -1).to_list(5)
+            if bk_match:
+                # filter by id prefix
+                bookings = [b for b in bookings if b["id"][:8].upper() == bk_match.group(1)] or bookings
+            booking_context = _format_booking_context(bookings)
+
+            # Log notification intent
+            await db.notifications.insert_one({
+                "id": str(uuid.uuid4()),
+                "session_id": req.session_id,
+                "type": "crm_query",
+                "message": req.message[:200],
+                "ts": datetime.now(timezone.utc).isoformat(),
+            })
+
+        system = (CHAT_SYSTEM
+                  .replace("{LANGUAGE}", req.language or "English")
+                  .replace("{BOOKING_CONTEXT}", booking_context))
         chat = await get_chat(req.session_id, system)
         response = await chat.send_message(UserMessage(text=req.message))
         await db.chat_messages.insert_one({
@@ -435,6 +486,11 @@ async def create_booking(req: BookingRequest):
         created_at=datetime.now(timezone.utc).isoformat(),
     )
     await db.bookings.insert_one(booking.model_dump())
+
+    leads = _assign_partners_to_booking(booking, car)
+    if leads:
+        await db.partner_leads.insert_many(leads)
+
     return booking
 
 
@@ -444,6 +500,103 @@ async def get_booking(booking_id: str):
     if not b:
         raise HTTPException(status_code=404, detail="Booking not found")
     return b
+
+
+@api_router.get("/bookings")
+async def list_bookings(phone: Optional[str] = None, limit: int = 20):
+    q: dict = {}
+    if phone:
+        q["phone"] = phone
+    items = await db.bookings.find(q, {"_id": 0}).sort("created_at", -1).to_list(limit)
+    return items
+
+
+# ---------- Partners / Commission pipeline ----------
+LOAN_PARTNERS = [
+    {"id": "hdfc-bank", "name": "HDFC Bank", "type": "loan", "rate_min": 8.75, "rate_max": 10.25, "commission_pct": 1.2},
+    {"id": "sbi", "name": "SBI", "type": "loan", "rate_min": 8.5, "rate_max": 9.95, "commission_pct": 1.0},
+    {"id": "icici-bank", "name": "ICICI Bank", "type": "loan", "rate_min": 8.9, "rate_max": 10.5, "commission_pct": 1.3},
+    {"id": "axis-bank", "name": "Axis Bank", "type": "loan", "rate_min": 9.0, "rate_max": 10.75, "commission_pct": 1.25},
+    {"id": "bajaj-finserv", "name": "Bajaj Finserv", "type": "loan", "rate_min": 9.25, "rate_max": 11.5, "commission_pct": 1.5},
+]
+INSURANCE_PARTNERS = [
+    {"id": "bajaj-allianz", "name": "Bajaj Allianz", "type": "insurance", "avg_premium_pct": 3.2, "commission_pct": 17.5},
+    {"id": "icici-lombard", "name": "ICICI Lombard", "type": "insurance", "avg_premium_pct": 3.0, "commission_pct": 16.0},
+    {"id": "hdfc-ergo", "name": "HDFC ERGO", "type": "insurance", "avg_premium_pct": 3.1, "commission_pct": 16.5},
+    {"id": "tata-aig", "name": "TATA AIG", "type": "insurance", "avg_premium_pct": 2.9, "commission_pct": 15.5},
+]
+
+
+@api_router.get("/partners")
+async def list_partners(type: Optional[str] = None):
+    all_p = LOAN_PARTNERS + INSURANCE_PARTNERS
+    if type:
+        return [p for p in all_p if p["type"] == type]
+    return all_p
+
+
+@api_router.get("/partners/leads")
+async def partner_leads():
+    leads = await db.partner_leads.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    # Aggregate commission totals
+    total_commission = sum(lead.get("expected_commission", 0) for lead in leads)
+    by_partner = {}
+    for lead in leads:
+        p = lead["partner_name"]
+        if p not in by_partner:
+            by_partner[p] = {"count": 0, "commission": 0.0}
+        by_partner[p]["count"] += 1
+        by_partner[p]["commission"] += lead.get("expected_commission", 0)
+    return {"leads": leads, "total_commission": round(total_commission, 2), "by_partner": by_partner}
+
+
+def _assign_partners_to_booking(booking: Booking, car: dict):
+    """Create partner leads for bookings that need loan/insurance."""
+    leads = []
+    car_price = car.get("price_on_road") or car.get("price_ex_showroom") or 0
+
+    if booking.needs_loan and LOAN_PARTNERS:
+        # round-robin by count in DB
+        partner = LOAN_PARTNERS[0]
+        loan_amount = car_price * 0.85  # assume 85% LTV
+        commission = loan_amount * partner["commission_pct"] / 100
+        leads.append({
+            "id": str(uuid.uuid4()),
+            "booking_id": booking.id,
+            "car_id": booking.car_id,
+            "car_name": booking.car_name,
+            "customer_name": booking.name,
+            "customer_phone": booking.phone,
+            "city": booking.city,
+            "partner_id": partner["id"],
+            "partner_name": partner["name"],
+            "partner_type": "loan",
+            "loan_amount": loan_amount,
+            "expected_commission": round(commission, 2),
+            "status": "assigned",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    if booking.needs_insurance and INSURANCE_PARTNERS:
+        partner = INSURANCE_PARTNERS[0]
+        premium = car_price * partner["avg_premium_pct"] / 100
+        commission = premium * partner["commission_pct"] / 100
+        leads.append({
+            "id": str(uuid.uuid4()),
+            "booking_id": booking.id,
+            "car_id": booking.car_id,
+            "car_name": booking.car_name,
+            "customer_name": booking.name,
+            "customer_phone": booking.phone,
+            "city": booking.city,
+            "partner_id": partner["id"],
+            "partner_name": partner["name"],
+            "partner_type": "insurance",
+            "annual_premium": round(premium, 2),
+            "expected_commission": round(commission, 2),
+            "status": "assigned",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    return leads
 
 
 app.include_router(api_router)

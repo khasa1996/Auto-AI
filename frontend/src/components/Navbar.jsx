@@ -49,6 +49,13 @@ export default function Navbar() {
         <div className="hidden lg:flex items-center gap-3">
           <LanguageToggle />
           <Link
+            to="/premium"
+            data-testid="nav-premium"
+            className="flex items-center gap-1.5 text-xs uppercase tracking-[0.2em] text-[#F59E0B] border border-[#F59E0B]/40 px-4 py-2 hover:bg-[#F59E0B]/10 transition-colors"
+          >
+            <Zap size={12} strokeWidth={2.5} /> Premium
+          </Link>
+          <Link
             to="/compare"
             data-testid="cta-compare-top"
             className="bg-[#F59E0B] text-black text-xs uppercase tracking-[0.2em] font-bold px-5 py-2.5 hover:bg-[#D97706] transition-colors"

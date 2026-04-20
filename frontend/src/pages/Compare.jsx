@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api, formatINR } from "../lib/api";
 import { Scale, Check, X, Loader2, Trophy, Zap } from "lucide-react";
+import CarVisual from "../components/CarVisual";
 
 export default function Compare() {
   const [carA, setCarA] = useState("");
@@ -156,10 +157,10 @@ function Verdict({ result }) {
 function CarPanel({ car, pros, cons, isWinner, side }) {
   return (
     <div className={`border bg-[#0D0D0D] overflow-hidden ${isWinner ? "border-[#F59E0B]" : "border-[#262626]"}`} data-testid={`verdict-panel-${side}`}>
-      <div className="aspect-[16/9] bg-black overflow-hidden relative">
-        <img src={car.image} alt={car.model} className="w-full h-full object-cover opacity-80" />
+      <div className="relative">
+        <CarVisual car={car} className="aspect-[16/9]" />
         {isWinner && (
-          <div className="absolute top-3 left-3 bg-[#F59E0B] text-black text-[10px] uppercase tracking-[0.25em] font-bold px-2 py-1">
+          <div className="absolute top-3 left-3 bg-[#F59E0B] text-black text-[10px] uppercase tracking-[0.25em] font-bold px-2 py-1 z-20">
             Winner
           </div>
         )}
