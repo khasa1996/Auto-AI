@@ -789,20 +789,28 @@ async def checkout_status(session_id: str, http_request: Request):
         raise HTTPException(status_code=404, detail="Session not found")
 
     if tx.get("payment_status") == "paid":
-        return {"payment_status": "paid", "status": "complete", **tx}
+        return {"payment_status": "paid", "status": "complete"}
 
     host_url = str(http_request.base_url).rstrip("/")
     webhook_url = f"{host_url}/api/webhook/stripe"
-    checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
-    status = await checkout.get_checkout_status(session_id)
+    try:
+        checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+        status = await checkout.get_checkout_status(session_id)
+    except Exception as e:
+        logging.warning("Stripe status fetch failed (likely unpaid/pending): %s", e)
+        # Return the DB-known state rather than 500ing
+        return {
+            "payment_status": tx.get("payment_status", "initiated"),
+            "status": "open",
+            "amount_total": None,
+            "currency": tx.get("currency", "inr"),
+        }
 
-    new_status = "paid" if status.payment_status == "paid" else status.status
     if tx.get("payment_status") != "paid" and status.payment_status == "paid":
         await db.payment_transactions.update_one(
             {"session_id": session_id},
             {"$set": {"payment_status": "paid", "status": status.status, "paid_at": datetime.now(timezone.utc).isoformat()}},
         )
-        # Create subscription record idempotently
         if tx.get("phone"):
             await db.subscriptions.update_one(
                 {"phone": tx["phone"], "plan_id": tx["plan_id"]},

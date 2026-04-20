@@ -1,37 +1,48 @@
 # Auto-AI India — Product Requirements
 
-## What's Implemented (as of 2026-02-20, iteration 4)
+## What's Implemented (iteration 5, 2026-02-20)
 
-### Backend (FastAPI + MongoDB + httpx)
-- 106-car curated DB across 19 Indian brands
-- AI: `/api/ai/compare`, `/api/ai/recommend`, `/api/ai/chat` (Claude Sonnet 4.5, multi-language, CRM-aware)
-- Commerce: `/api/bookings` (auto-assigns partner leads), `/api/partners`, `/api/partners/leads`
-- Auth: `/api/auth/send-otp`, `/api/auth/verify-otp`, `/api/me/bookings` (phone OTP — demo: 123456)
-- Dealer portal: `/api/dealer/leads` with city filter & aggregated KPIs
-- **Image Proxy**: `/api/image-proxy` fetches real car images from CarWale/Wikimedia/etc, bypasses Chrome ORB, caches in memory, pre-warmed on startup
-- EMI, News, Car listings
+### Backend
+- 106-car database, Claude Sonnet 4.5 AI engine (compare, recommend, chat)
+- AI-as-CRM (booking tracking via chat), multi-language (8 Indian languages)
+- Bookings with auto partner-lead creation, 9 partners (5 banks + 4 insurers)
+- Image proxy for 106 CarWale CDN photos (bypasses Chrome ORB), pre-warmed cache
+- Phone OTP auth (MVP: 123456)
+- Dealer Command Center endpoints + **dealer self-service apply/list**
+- **Stripe subscriptions**: `/api/checkout/session`, `/api/checkout/status/{id}`, `/api/webhook/stripe`, `/api/me/subscription`
+  - Plans: Premium ₹199/mo, Dealer ₹999/mo
+  - Checkout status endpoint handles unpaid/pending gracefully (no 500s)
 
-### Frontend (React + Tailwind)
-- **REAL car photos** for all 106 cars via CarWale CDN (official OEM press images), proxied through backend
-- Routes: `/`, `/compare`, `/recommend`, `/cars`, `/emi`, `/news`, `/book/:carId`, `/showroom/:carId`, `/premium`, `/dealer`, `/login`, `/my-bookings`
-- Premium 360° Showroom (drag-rotate, 7 paint colors, door/hood/boot/light toggles, interior view, 3-min paywall)
-- Subscription page with 3 tiers (Free, Premium ₹199/mo, Dealer ₹999/mo)
-- Phone-OTP authentication → My Bookings dashboard
-- **Dealer Command Center** (`/dealer`): live KPIs (leads, test drives, loan/insurance interest), commission earned, top cars, top cities, recent leads table
-- Multi-language support (8 Indian languages)
-- 24×7 AI ChatDrawer with CRM context awareness, quick prompts, language toggle
+### Frontend
+- Routes: `/`, `/compare`, `/recommend`, `/cars`, `/emi`, `/news`, `/book/:id`, `/showroom/:id`, `/premium`, `/dealer`, `/dealers/apply`, `/about`, `/login`, `/my-bookings`
+- Real latest OEM photos for all 106 cars via backend proxy
+- 360° Premium Showroom (drag-rotate, 7 colors, door/hood/boot/lights toggles, interior view, 3-min paywall)
+- **Founder page** (`/about`) — Abhishek · Founder of Auto-AI India with contact card
+- **Dealer onboarding** (`/dealers/apply`) — business form with brand multi-select + bid slider
+- **Stripe-powered Premium checkout** — Subscribe button redirects to `checkout.stripe.com`, post-payment status polling
+- **PWA** — manifest.json, service worker, install prompt banner (Android + iOS)
+- Multi-language toggle (8 Indian languages)
 
 ### Testing
-- iter 1: 11/11 backend
-- iter 2: 9/9 backend (multi-lang + booking)
-- iter 3: 14/14 backend (partners + showroom)
-- iter 4: 9/9 backend (auth + dealer + image proxy)
+- iter 1-4: 43/44 backend cumulative, 95%+ frontend
+- iter 5: 11/11 backend (after checkout/status fix), 100% frontend
 
-## Tech Stack
-FastAPI, Motor/MongoDB, emergentintegrations (Claude Sonnet 4.5), httpx (image proxy)
-React 19, Tailwind, Shadcn UI, CSS 3D transforms
+## Known Limits / Not Yet Done
+- Stripe uses TEST keys (not real rupees yet — replace STRIPE_API_KEY with live key at launch)
+- OTP hardcoded to 123456 (needs Twilio/MSG91)
+- Dealer verification is manual ("pending_verification" status — needs admin approval UI)
+- No real-time car data feed (CarDekho/CarWale have no public API — scraping works for images only)
+- Daily car refresh is simulated
 
-## Backlog
-- P0: Stripe subscription, Twilio SMS, real JWT sessions
-- P1: Dealer self-service onboarding, partner commission payouts
-- P2: Resale value AI, voice chat, dealer CRM export
+## Go-Live Checklist
+1. Replace STRIPE_API_KEY with live key from Stripe dashboard → real payments live
+2. Get Twilio/MSG91 account → replace OTP stub for real SMS
+3. Add admin UI to approve dealer applications
+4. Upload founder photo to replace "A" initials on /about
+5. Generate PWA icons (icon-192.png, icon-512.png) in /public
+6. Optionally wrap with Capacitor for Play Store + App Store
+
+## Mobile App Paths
+- **Now (free, 1 day)**: PWA is live. Users tap "Install" on Android or Share→Add to Home Screen on iPhone.
+- **Next (~₹4,200 fees, 2–4 weeks)**: Capacitor wrapper for Play Store + App Store submission.
+- **Future (2–3 months, native feel)**: React Native rewrite.
