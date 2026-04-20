@@ -12,6 +12,9 @@ import News from "./pages/News";
 import BookCar from "./pages/BookCar";
 import Showroom from "./pages/Showroom";
 import Premium from "./pages/Premium";
+import Dealer from "./pages/Dealer";
+import Login from "./pages/Login";
+import MyBookings from "./pages/MyBookings";
 import { Toaster } from "./components/ui/sonner";
 import { I18nProvider } from "./lib/i18n";
 
@@ -32,6 +35,9 @@ function App() {
               <Route path="/book/:carId" element={<BookCar />} />
               <Route path="/showroom/:carId" element={<Showroom />} />
               <Route path="/premium" element={<Premium />} />
+              <Route path="/dealer" element={<Dealer />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/my-bookings" element={<MyBookings />} />
             </Routes>
           </main>
           <Footer />

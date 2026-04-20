@@ -1,5 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -7,6 +7,7 @@ import os
 import json
 import logging
 import re
+import httpx
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional
@@ -174,6 +175,42 @@ async def find_car_by_name(name: str) -> Optional[dict]:
         if c['model'].lower() in name or any(tok in c['model'].lower() for tok in name.split()):
             return c
     return None
+
+
+# ---------- Image proxy (fixes Chrome ORB for hotlinked images) ----------
+_IMAGE_CACHE: dict = {}
+_ALLOWED_HOSTS = ("upload.wikimedia.org", "commons.wikimedia.org", "images.unsplash.com", "images.pexels.com", "cdn.pixabay.com", "imgd.aeplcdn.com", "imgd-ct.aeplcdn.com", "stimg.cardekho.com")
+
+
+@app.get("/api/image-proxy")
+async def image_proxy(url: str):
+    from urllib.parse import urlparse
+    host = urlparse(url).netloc
+    if not any(host.endswith(h) for h in _ALLOWED_HOSTS):
+        raise HTTPException(status_code=400, detail="Host not allowed")
+
+    if url in _IMAGE_CACHE:
+        data, ctype = _IMAGE_CACHE[url]
+    else:
+        try:
+            async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+                r = await client.get(url, headers={
+                    "User-Agent": "Mozilla/5.0 AutoAIIndia/1.0 (contact: support@autoai.in)",
+                    "Accept": "image/avif,image/webp,image/png,image/jpeg,*/*",
+                })
+                if r.status_code != 200:
+                    raise HTTPException(status_code=r.status_code, detail="Upstream fetch failed")
+                data = r.content
+                ctype = r.headers.get("content-type", "image/jpeg")
+                if len(_IMAGE_CACHE) < 500:
+                    _IMAGE_CACHE[url] = (data, ctype)
+        except httpx.RequestError as e:
+            raise HTTPException(status_code=502, detail=f"Upstream error: {e}")
+
+    return Response(content=data, media_type=ctype, headers={
+        "Cache-Control": "public, max-age=86400",
+        "Cross-Origin-Resource-Policy": "cross-origin",
+    })
 
 
 # ---------- Car routes ----------
@@ -548,6 +585,74 @@ async def partner_leads():
         by_partner[p]["count"] += 1
         by_partner[p]["commission"] += lead.get("expected_commission", 0)
     return {"leads": leads, "total_commission": round(total_commission, 2), "by_partner": by_partner}
+
+
+# ---------- Phone OTP Auth ----------
+class OtpSendReq(BaseModel):
+    phone: str
+
+
+class OtpVerifyReq(BaseModel):
+    phone: str
+    otp: str
+
+
+@api_router.post("/auth/send-otp")
+async def send_otp(req: OtpSendReq):
+    # MVP: OTP is always 123456. Replace with Twilio/MSG91 integration when keys available.
+    await db.otps.insert_one({
+        "phone": req.phone, "otp": "123456",
+        "ts": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"sent": True, "message": "OTP sent (MVP: use 123456)", "demo_otp": "123456"}
+
+
+@api_router.post("/auth/verify-otp")
+async def verify_otp(req: OtpVerifyReq):
+    if req.otp != "123456":
+        raise HTTPException(status_code=401, detail="Invalid OTP")
+    token = f"autoai_{req.phone}_{uuid.uuid4().hex[:12]}"
+    await db.user_sessions.insert_one({
+        "token": token, "phone": req.phone,
+        "ts": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"token": token, "phone": req.phone}
+
+
+@api_router.get("/me/bookings")
+async def my_bookings(phone: str):
+    bookings = await db.bookings.find({"phone": phone}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return bookings
+
+
+# ---------- Dealer Portal ----------
+@api_router.get("/dealer/leads")
+async def dealer_leads(city: Optional[str] = None):
+    q: dict = {}
+    if city:
+        q["city"] = city
+    bookings = await db.bookings.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
+    total = len(bookings)
+    by_car: dict = {}
+    by_city: dict = {}
+    test_drive_count = sum(1 for b in bookings if b.get("test_drive"))
+    loan_count = sum(1 for b in bookings if b.get("needs_loan"))
+    insurance_count = sum(1 for b in bookings if b.get("needs_insurance"))
+    for b in bookings:
+        by_car[b.get("car_name", "Unknown")] = by_car.get(b.get("car_name", "Unknown"), 0) + 1
+        by_city[b.get("city", "Unknown")] = by_city.get(b.get("city", "Unknown"), 0) + 1
+    top_cars = sorted(by_car.items(), key=lambda x: -x[1])[:10]
+    top_cities = sorted(by_city.items(), key=lambda x: -x[1])[:10]
+    return {
+        "total_leads": total,
+        "test_drive_requests": test_drive_count,
+        "loan_interest": loan_count,
+        "insurance_interest": insurance_count,
+        "top_cars": [{"car": c, "count": n} for c, n in top_cars],
+        "top_cities": [{"city": c, "count": n} for c, n in top_cities],
+        "recent": bookings[:20],
+    }
+
 
 
 def _assign_partners_to_booking(booking: Booking, car: dict):

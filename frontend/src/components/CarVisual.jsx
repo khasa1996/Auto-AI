@@ -1,8 +1,10 @@
 /**
- * CarVisual — a premium, brand-themed "designed" car card that replaces photos.
- * Each brand has its own gradient palette. A segment-based car silhouette SVG
- * is layered on top. Inspired by CRED's illustrated car cards.
+ * CarVisual — shows REAL Indian car photos (Wikimedia Commons CC-licensed)
+ * when available, with a premium brand-themed fallback card for cars without photos.
  */
+import { useState } from "react";
+import { getCarImage } from "../lib/carImages";
+import { API } from "../lib/api";
 
 const BRAND_THEMES = {
   "Maruti Suzuki": { bg: "linear-gradient(135deg, #0B2545 0%, #13315C 100%)", accent: "#EFF6FF", glow: "#3B82F6" },
@@ -92,6 +94,47 @@ function Silhouette({ segment, color }) {
 
 export default function CarVisual({ car, className = "", showLabel = true, tall = false }) {
   const theme = BRAND_THEMES[car.brand] || DEFAULT_THEME;
+  const realUrl = getCarImage(car.id);
+  const [imgFailed, setImgFailed] = useState(false);
+  const useRealImage = realUrl && !imgFailed;
+  const proxiedUrl = realUrl ? `${API}/image-proxy?url=${encodeURIComponent(realUrl)}` : null;
+
+  if (useRealImage) {
+    return (
+      <div className={`relative overflow-hidden bg-black ${className}`} data-testid={`car-visual-${car.id}`}>
+        <img
+          src={proxiedUrl}
+          alt={`${car.brand} ${car.model}`}
+          loading="lazy"
+          onError={() => setImgFailed(true)}
+          className="w-full h-full object-cover opacity-95 group-hover:opacity-100 transition-opacity"
+        />
+        {/* Bottom gradient for label legibility */}
+        <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none" />
+        {showLabel && (
+          <>
+            <div className="absolute top-3 left-4 text-[9px] uppercase tracking-[0.3em] font-bold text-white/90">
+              {car.brand}
+            </div>
+            <div className="absolute top-3 right-3 text-[9px] uppercase tracking-[0.25em] font-bold px-2 py-0.5 border border-white/30 text-white bg-black/40 backdrop-blur-sm">
+              {car.fuel}
+            </div>
+            <div className="absolute bottom-3 left-4 right-4">
+              <div
+                className="font-display font-medium leading-none text-white drop-shadow-lg"
+                style={{ fontSize: tall ? "2rem" : "1.3rem" }}
+              >
+                {car.model}
+              </div>
+              <div className="text-[9px] uppercase tracking-[0.25em] text-white/70 mt-1">
+                {car.variant} · {car.segment}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div

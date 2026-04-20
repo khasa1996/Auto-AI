@@ -49,6 +49,13 @@ export default function Navbar() {
         <div className="hidden lg:flex items-center gap-3">
           <LanguageToggle />
           <Link
+            to="/login"
+            data-testid="nav-login"
+            className="text-xs uppercase tracking-[0.2em] text-slate-300 border border-white/10 px-4 py-2 hover:border-[#F59E0B] hover:text-[#F59E0B] transition-colors"
+          >
+            Login
+          </Link>
+          <Link
             to="/premium"
             data-testid="nav-premium"
             className="flex items-center gap-1.5 text-xs uppercase tracking-[0.2em] text-[#F59E0B] border border-[#F59E0B]/40 px-4 py-2 hover:bg-[#F59E0B]/10 transition-colors"
