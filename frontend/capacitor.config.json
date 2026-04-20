@@ -1,0 +1,33 @@
+{
+  "appId": "com.autoai.india",
+  "appName": "Auto-AI India",
+  "webDir": "build",
+  "server": {
+    "url": "https://zero-wait-cars.preview.emergentagent.com",
+    "cleartext": false,
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#050505"
+  },
+  "ios": {
+    "backgroundColor": "#050505",
+    "contentInset": "always"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1400,
+      "backgroundColor": "#050505",
+      "androidScaleType": "CENTER_CROP",
+      "showSpinner": false,
+      "splashFullScreen": true,
+      "splashImmersive": true
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#050505",
+      "overlaysWebView": false
+    }
+  }
+}

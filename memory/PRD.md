@@ -53,12 +53,22 @@
 - No real-time car data feed (CarDekho/CarWale have no public API)
 - Daily car refresh is simulated
 
+### **NEW — Capacitor Mobile Wrapper (iter 8, 2026-02-20)**
+- Installed `@capacitor/core@7`, `cli@7`, `android@7`, `ios@7`, `app@7`, `splash-screen@7`, `status-bar@7`
+- Created `/app/frontend/capacitor.config.json`:
+  - appId `com.autoai.india`, appName `Auto-AI India`
+  - **Live Web Wrapper mode** — `server.url` points to deployed site; any web update instantly reflects in mobile app with no APK re-release
+  - Dark splash (`#050505`), dark status bar
+- Added `yarn` scripts: `mobile:init:android`, `mobile:init:ios`, `mobile:sync`, `mobile:open:android`, `mobile:open:ios`
+- Wrote **`/app/MOBILE_APP_GUIDE.md`** — full step-by-step for Android Studio + Xcode build, Play Store + App Store submission, icon/splash generation (@capacitor/assets), cost summary ($25 Play + $99/yr Apple), troubleshooting
+- User must run native builds on their own Mac/PC (Android Studio or Xcode required — can't run in cloud container)
+
 ## Go-Live Checklist
 1. Replace STRIPE_API_KEY with live key → real payments live
 2. Get Twilio/MSG91 account → replace OTP stub for real SMS
 3. Upload founder photo to replace "A" initials on /about
-4. Generate PWA icons (icon-192.png, icon-512.png) in /public
-5. Optionally wrap with Capacitor for Play Store + App Store
+4. Generate PWA + mobile app icons (`resources/icon.png` + `resources/splash.png` 1024+2732px) then `npx @capacitor/assets generate`
+5. Follow `/app/MOBILE_APP_GUIDE.md` to ship Android + iOS apps
 
 ## Backlog (ROADMAP)
 - **P1** Real SMS OTP via Twilio/MSG91
