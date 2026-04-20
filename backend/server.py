@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -15,6 +15,7 @@ import uuid
 from datetime import datetime, timezone
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest
 from cars_data import CARS_SEED, NEWS_SEED
 
 ROOT_DIR = Path(__file__).parent
@@ -685,6 +686,185 @@ async def dealer_leads(city: Optional[str] = None):
         "top_cities": [{"city": c, "count": n} for c, n in top_cities],
         "recent": bookings[:20],
     }
+
+
+# ---------- Dealer self-service onboarding + lead bidding ----------
+class DealerApplication(BaseModel):
+    business_name: str
+    owner_name: str
+    phone: str
+    email: Optional[str] = ""
+    city: str
+    brands: List[str] = []
+    bid_per_lead: float = 500.0  # how much they'll pay per qualified lead
+
+
+@api_router.post("/dealers/apply")
+async def dealer_apply(app: DealerApplication):
+    record = {
+        "id": str(uuid.uuid4()),
+        "business_name": app.business_name,
+        "owner_name": app.owner_name,
+        "phone": app.phone,
+        "email": app.email or "",
+        "city": app.city,
+        "brands": app.brands,
+        "bid_per_lead": app.bid_per_lead,
+        "status": "pending_verification",
+        "verified": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.dealer_partners.insert_one(record.copy())
+    record.pop("_id", None)
+    return record
+
+
+@api_router.get("/dealers")
+async def list_dealers(city: Optional[str] = None):
+    q: dict = {}
+    if city:
+        q["city"] = city
+    items = await db.dealer_partners.find(q, {"_id": 0}).sort("bid_per_lead", -1).to_list(200)
+    return items
+
+
+# ---------- Stripe subscriptions ----------
+STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY")
+
+PLANS = {
+    "premium": {"name": "Premium", "amount": 199.00, "currency": "inr"},
+    "dealer": {"name": "Dealer", "amount": 999.00, "currency": "inr"},
+}
+
+
+class CheckoutRequest(BaseModel):
+    plan_id: str
+    origin_url: str
+    customer_phone: Optional[str] = ""
+
+
+@api_router.post("/checkout/session")
+async def create_checkout(req: CheckoutRequest, http_request: Request):
+    if req.plan_id not in PLANS:
+        raise HTTPException(status_code=400, detail="Invalid plan")
+    if not STRIPE_API_KEY:
+        raise HTTPException(status_code=503, detail="Stripe not configured")
+
+    plan = PLANS[req.plan_id]
+    host_url = str(http_request.base_url).rstrip("/")
+    webhook_url = f"{host_url}/api/webhook/stripe"
+    checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+
+    success_url = f"{req.origin_url}/premium?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{req.origin_url}/premium"
+
+    ck_req = CheckoutSessionRequest(
+        amount=plan["amount"],
+        currency=plan["currency"],
+        success_url=success_url,
+        cancel_url=cancel_url,
+        metadata={"plan_id": req.plan_id, "phone": req.customer_phone or "anonymous"},
+    )
+    session = await checkout.create_checkout_session(ck_req)
+
+    await db.payment_transactions.insert_one({
+        "id": str(uuid.uuid4()),
+        "session_id": session.session_id,
+        "plan_id": req.plan_id,
+        "amount": plan["amount"],
+        "currency": plan["currency"],
+        "phone": req.customer_phone or "",
+        "payment_status": "initiated",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"url": session.url, "session_id": session.session_id}
+
+
+@api_router.get("/checkout/status/{session_id}")
+async def checkout_status(session_id: str, http_request: Request):
+    if not STRIPE_API_KEY:
+        raise HTTPException(status_code=503, detail="Stripe not configured")
+    tx = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
+    if not tx:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if tx.get("payment_status") == "paid":
+        return {"payment_status": "paid", "status": "complete", **tx}
+
+    host_url = str(http_request.base_url).rstrip("/")
+    webhook_url = f"{host_url}/api/webhook/stripe"
+    checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+    status = await checkout.get_checkout_status(session_id)
+
+    new_status = "paid" if status.payment_status == "paid" else status.status
+    if tx.get("payment_status") != "paid" and status.payment_status == "paid":
+        await db.payment_transactions.update_one(
+            {"session_id": session_id},
+            {"$set": {"payment_status": "paid", "status": status.status, "paid_at": datetime.now(timezone.utc).isoformat()}},
+        )
+        # Create subscription record idempotently
+        if tx.get("phone"):
+            await db.subscriptions.update_one(
+                {"phone": tx["phone"], "plan_id": tx["plan_id"]},
+                {"$setOnInsert": {
+                    "id": str(uuid.uuid4()),
+                    "phone": tx["phone"],
+                    "plan_id": tx["plan_id"],
+                    "session_id": session_id,
+                    "status": "active",
+                    "started_at": datetime.now(timezone.utc).isoformat(),
+                }},
+                upsert=True,
+            )
+    return {
+        "payment_status": status.payment_status,
+        "status": status.status,
+        "amount_total": status.amount_total,
+        "currency": status.currency,
+    }
+
+
+@app.post("/api/webhook/stripe")
+async def stripe_webhook(request: Request):
+    if not STRIPE_API_KEY:
+        return {"ok": False}
+    body = await request.body()
+    sig = request.headers.get("Stripe-Signature", "")
+    host_url = str(request.base_url).rstrip("/")
+    webhook_url = f"{host_url}/api/webhook/stripe"
+    checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+    try:
+        evt = await checkout.handle_webhook(body, sig)
+    except Exception as e:
+        logging.exception("webhook error")
+        return JSONResponse({"ok": False, "err": str(e)}, status_code=400)
+
+    if evt.payment_status == "paid" and evt.session_id:
+        await db.payment_transactions.update_one(
+            {"session_id": evt.session_id},
+            {"$set": {"payment_status": "paid", "webhook_event": evt.event_type, "paid_at": datetime.now(timezone.utc).isoformat()}},
+        )
+        meta = evt.metadata or {}
+        if meta.get("phone") and meta.get("plan_id"):
+            await db.subscriptions.update_one(
+                {"phone": meta["phone"], "plan_id": meta["plan_id"]},
+                {"$setOnInsert": {
+                    "id": str(uuid.uuid4()),
+                    "phone": meta["phone"],
+                    "plan_id": meta["plan_id"],
+                    "session_id": evt.session_id,
+                    "status": "active",
+                    "started_at": datetime.now(timezone.utc).isoformat(),
+                }},
+                upsert=True,
+            )
+    return {"ok": True}
+
+
+@api_router.get("/me/subscription")
+async def my_subscription(phone: str):
+    sub = await db.subscriptions.find_one({"phone": phone, "status": "active"}, {"_id": 0})
+    return sub or {"status": "none"}
 
 
 

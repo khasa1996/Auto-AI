@@ -8,7 +8,7 @@ export default function Navbar() {
   const [open, setOpen] = useState(false);
   const { t } = useI18n();
 
-  const links = [
+const links = [
     { to: "/", key: "nav_home" },
     { to: "/compare", key: "nav_compare" },
     { to: "/recommend", key: "nav_recommend" },

@@ -1,22 +1,19 @@
-import { Link } from "react-router-dom";
-import { Crown, Check, Sparkles, Zap, Headphones, Gift, TrendingUp } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { api } from "../lib/api";
+import { Crown, Check, Sparkles, Zap, Headphones, Gift, TrendingUp, Loader2, CheckCircle2, XCircle } from "lucide-react";
 
 const PLANS = [
   {
+    id: "free",
     name: "Free",
     price: 0,
     tag: "Always free",
-    features: [
-      "AI Car Comparison (3 / day)",
-      "AI Recommendations",
-      "EMI Calculator",
-      "Basic chatbot",
-      "3-min 360° preview",
-    ],
-    cta: "Current plan",
+    features: ["AI Comparison (3 / day)", "AI Recommendations", "EMI Calculator", "Basic chatbot", "3-min 360° preview"],
     disabled: true,
   },
   {
+    id: "premium",
     name: "Premium",
     price: 199,
     tag: "Most popular",
@@ -30,9 +27,9 @@ const PLANS = [
       "Zero-wait dealer booking priority",
       "Exclusive loan & insurance rates",
     ],
-    cta: "Unlock Premium →",
   },
   {
+    id: "dealer",
     name: "Dealer / Business",
     price: 999,
     tag: "For dealerships",
@@ -43,7 +40,6 @@ const PLANS = [
       "Branded customer reports",
       "API access",
     ],
-    cta: "Talk to sales",
   },
 ];
 
@@ -56,6 +52,49 @@ const PERKS = [
 ];
 
 export default function Premium() {
+  const [buyingId, setBuyingId] = useState(null);
+  const [params] = useSearchParams();
+  const [paymentState, setPaymentState] = useState(null); // 'pending' | 'paid' | 'failed'
+  const sessionId = params.get("session_id");
+
+  // Poll for payment status on return from Stripe
+  useEffect(() => {
+    if (!sessionId) return;
+    let attempts = 0;
+    setPaymentState("pending");
+    const poll = async () => {
+      attempts++;
+      try {
+        const { data } = await api.get(`/checkout/status/${sessionId}`);
+        if (data.payment_status === "paid") { setPaymentState("paid"); return; }
+        if (data.status === "expired") { setPaymentState("failed"); return; }
+        if (attempts < 10) setTimeout(poll, 2500);
+        else setPaymentState("failed");
+      } catch {
+        if (attempts < 10) setTimeout(poll, 2500);
+        else setPaymentState("failed");
+      }
+    };
+    poll();
+  }, [sessionId]);
+
+  const subscribe = async (planId) => {
+    setBuyingId(planId);
+    try {
+      const phone = localStorage.getItem("autoai_phone") || "";
+      const { data } = await api.post("/checkout/session", {
+        plan_id: planId,
+        origin_url: window.location.origin,
+        customer_phone: phone,
+      });
+      if (data.url) window.location.href = data.url;
+    } catch (e) {
+      alert("Could not start checkout. Try again.");
+    } finally {
+      setBuyingId(null);
+    }
+  };
+
   return (
     <div className="bg-[#050505] min-h-screen" data-testid="premium-page">
       <div className="max-w-7xl mx-auto px-6 lg:px-10 py-16">
@@ -70,22 +109,36 @@ export default function Premium() {
           Premium unlocks the full AI showroom, priority bookings, and insights normally reserved for dealer insiders.
         </p>
 
-        {/* Plans */}
+        {/* Payment state banner */}
+        {paymentState === "pending" && (
+          <div className="mt-10 border border-[#F59E0B] bg-[#F59E0B]/10 p-5 flex items-center gap-3" data-testid="payment-pending-banner">
+            <Loader2 size={18} className="text-[#F59E0B] animate-spin" />
+            <span className="text-slate-200">Confirming your payment… please wait.</span>
+          </div>
+        )}
+        {paymentState === "paid" && (
+          <div className="mt-10 border border-[#10B981] bg-[#10B981]/10 p-5 flex items-center gap-3" data-testid="payment-success-banner">
+            <CheckCircle2 size={18} className="text-[#10B981]" />
+            <span className="text-slate-200"><strong className="text-[#10B981]">You're Premium!</strong> All features unlocked.</span>
+          </div>
+        )}
+        {paymentState === "failed" && (
+          <div className="mt-10 border border-[#EF4444] bg-[#EF4444]/10 p-5 flex items-center gap-3" data-testid="payment-failed-banner">
+            <XCircle size={18} className="text-[#EF4444]" />
+            <span className="text-slate-200">Payment could not be confirmed. Please try again.</span>
+          </div>
+        )}
+
         <div className="mt-14 grid md:grid-cols-3 gap-4">
           {PLANS.map((p) => (
             <div
-              key={p.name}
-              data-testid={`plan-${p.name.toLowerCase().replace(" / ", "-").replace(" ", "-")}`}
+              key={p.id}
+              data-testid={`plan-${p.id}`}
               className={`border p-8 flex flex-col ${p.featured ? "border-[#F59E0B] bg-gradient-to-br from-[#F59E0B]/10 to-transparent" : "border-[#262626] bg-[#0A0A0A]"}`}
             >
-              {p.featured && (
-                <div className="text-[10px] uppercase tracking-[0.3em] text-[#F59E0B] font-bold mb-4 flex items-center gap-2">
-                  <Sparkles size={12} /> {p.tag}
-                </div>
-              )}
-              {!p.featured && (
-                <div className="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-bold mb-4">{p.tag}</div>
-              )}
+              <div className={`text-[10px] uppercase tracking-[0.3em] font-bold mb-4 ${p.featured ? "text-[#F59E0B]" : "text-slate-500"} flex items-center gap-2`}>
+                {p.featured && <Sparkles size={12} />} {p.tag}
+              </div>
               <div className="font-display text-3xl font-light">{p.name}</div>
               <div className="mt-4 flex items-baseline gap-2">
                 <span className="font-display text-5xl">₹{p.price}</span>
@@ -100,9 +153,10 @@ export default function Premium() {
                 ))}
               </ul>
               <button
-                disabled={p.disabled}
-                data-testid={`plan-cta-${p.name.toLowerCase().replace(" / ", "-").replace(" ", "-")}`}
-                className={`mt-8 py-3.5 text-xs uppercase tracking-[0.25em] font-bold ${
+                disabled={p.disabled || buyingId === p.id}
+                onClick={() => !p.disabled && subscribe(p.id)}
+                data-testid={`plan-cta-${p.id}`}
+                className={`mt-8 py-3.5 text-xs uppercase tracking-[0.25em] font-bold flex items-center justify-center gap-2 ${
                   p.disabled
                     ? "border border-[#262626] text-slate-500 cursor-not-allowed"
                     : p.featured
@@ -110,13 +164,12 @@ export default function Premium() {
                       : "border border-white/20 text-white hover:bg-white/5"
                 }`}
               >
-                {p.cta}
+                {buyingId === p.id ? <><Loader2 size={14} className="animate-spin" />Redirecting</> : p.disabled ? "Current plan" : `Subscribe ₹${p.price}/mo →`}
               </button>
             </div>
           ))}
         </div>
 
-        {/* Perks */}
         <div className="mt-24">
           <div className="text-[10px] uppercase tracking-[0.35em] text-[#F59E0B] font-bold font-mono mb-4">/// why go premium</div>
           <h2 className="font-display text-4xl lg:text-5xl tracking-tight font-light max-w-3xl">
@@ -133,18 +186,17 @@ export default function Premium() {
           </div>
         </div>
 
-        {/* CTA strip */}
         <div className="mt-20 border border-[#262626] bg-gradient-to-br from-[#0A0A0A] to-black p-10 lg:p-16 relative overflow-hidden">
           <div className="absolute -top-20 -right-20 w-80 h-80 bg-[#F59E0B]/15 blur-3xl rounded-full" />
           <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-6">
             <div>
               <div className="font-display text-3xl md:text-4xl tracking-tight font-light max-w-2xl">
-                First 14 days free. <span className="text-[#F59E0B]">Cancel anytime.</span>
+                Powered by Stripe. <span className="text-[#F59E0B]">Cancel anytime.</span>
               </div>
-              <p className="text-sm text-slate-400 mt-2">No card locked at sign-up. Just an honest trial.</p>
+              <p className="text-sm text-slate-400 mt-2">Secure payments · No card locked at sign-up · PCI compliant</p>
             </div>
             <Link to="/cars" data-testid="premium-cta-trial" className="bg-[#F59E0B] text-black px-7 py-4 font-semibold text-xs uppercase tracking-[0.25em] hover:bg-[#D97706]">
-              Start Free Trial →
+              Browse Cars →
             </Link>
           </div>
         </div>
