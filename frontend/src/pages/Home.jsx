@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Scale, Sparkles, Calculator, Newspaper, Gauge, ShieldCheck, Zap, Cpu, Radar } from "lucide-react";
 import { useEffect, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
-import { api } from "../lib/api";
+import { api, API } from "../lib/api";
 import CarCard from "../components/CarCard";
 import { useI18n } from "../lib/i18n";
 
@@ -20,6 +20,10 @@ const tickerItems = [
 
 const HERO_CAR =
   "https://images.unsplash.com/photo-1763165561886-a9391b2132c1?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2MzR8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBjYXIlMjBzaG93cm9vbSUyMGRhcmt8ZW58MHx8fHwxNzc2Njg1NzQzfDA&ixlib=rb-4.1.0&q=85";
+
+// Indian highway / NH-48 style driving reel (Pexels — proxied through backend to avoid hotlink 403)
+const HERO_VIDEO_URL =
+  "https://videos.pexels.com/video-files/2034115/2034115-hd_1920_1080_30fps.mp4";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -49,43 +53,58 @@ export default function Home() {
     <div className="bg-[#050505] text-white overflow-hidden">
       {/* ============== HERO ============== */}
       <section className="relative min-h-[100vh] overflow-hidden hero-grid" data-testid="hero-section">
-        {/* background layers */}
-        <div className="absolute inset-0 grain pointer-events-none z-[1]" />
+        {/* VIDEO BACKGROUND — Indian highway driving reel */}
         <motion.div
           style={{ y: heroY, opacity: heroOpacity }}
           className="absolute inset-0 z-[0]"
         >
+          <video
+            autoPlay
+            loop
+            muted
+            playsInline
+            preload="auto"
+            poster={HERO_CAR}
+            data-testid="hero-video"
+            className="absolute inset-0 w-full h-full object-cover opacity-55"
+          >
+            <source src={`${API}/video-proxy?url=${encodeURIComponent(HERO_VIDEO_URL)}`} type="video/mp4" />
+          </video>
+          {/* darkening + warm tint overlays */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/55 to-[#050505]" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#050505] via-[#050505]/70 to-transparent" />
           <div
             className="absolute inset-0"
             style={{
               background:
-                "radial-gradient(1200px 600px at 78% 30%, rgba(245,158,11,0.22), transparent 55%), radial-gradient(800px 500px at 15% 75%, rgba(197,131,43,0.12), transparent 60%)",
+                "radial-gradient(1200px 600px at 78% 30%, rgba(245,158,11,0.28), transparent 55%), radial-gradient(800px 500px at 15% 75%, rgba(197,131,43,0.14), transparent 60%)",
             }}
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/30 to-[#050505]" />
         </motion.div>
+
+        {/* grain */}
+        <div className="absolute inset-0 grain pointer-events-none z-[1]" />
 
         {/* scanning line */}
         <div className="pointer-events-none absolute left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#F59E0B]/40 to-transparent scan-line z-[2]" />
 
-        {/* hero car image — right side, large */}
+        {/* hero car image — right side, large (overlays on video) */}
         <motion.div
           initial={{ opacity: 0, scale: 1.08, x: 40 }}
-          animate={{ opacity: 0.85, scale: 1, x: 0 }}
+          animate={{ opacity: 0.65, scale: 1, x: 0 }}
           transition={{ duration: 1.4, ease: [0.22, 1, 0.36, 1] }}
           className="absolute right-[-6%] top-[10%] w-[72%] md:w-[62%] lg:w-[58%] aspect-[16/10] z-[2] pointer-events-none"
         >
           <div
-            className="w-full h-full bg-cover bg-center"
+            className="w-full h-full bg-cover bg-center mix-blend-screen"
             style={{
               backgroundImage: `url(${HERO_CAR})`,
               maskImage:
-                "radial-gradient(circle at 60% 55%, #000 45%, transparent 78%)",
+                "radial-gradient(circle at 60% 55%, #000 35%, transparent 72%)",
               WebkitMaskImage:
-                "radial-gradient(circle at 60% 55%, #000 45%, transparent 78%)",
+                "radial-gradient(circle at 60% 55%, #000 35%, transparent 72%)",
             }}
           />
-          <div className="absolute inset-0 bg-gradient-to-l from-transparent via-transparent to-[#050505]/80" />
         </motion.div>
 
         {/* content */}

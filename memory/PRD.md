@@ -25,12 +25,23 @@
 ### **NEW — Premium Visual Redesign (iter 6, 2026-02-20)**
 - **framer-motion** installed, all hero/section reveals use spring + stagger motion
 - Overhauled `index.css`: added grain, tracing-beam, glass-strong, dot-grid, corner-notch, btn-shine, breathe, scan-line, shimmer, gradient-amber-text utilities + Outfit/Manrope/Bebas Neue fonts
-- **Home.jsx**: new massive editorial hero with luxury car background image, parallax scroll, italic amber gradient headline, HUD glass card with live zero-wait tracker, floating "AI LIVE" badge, scanning line accent, bento-grid with tilt cards, new pledge section, tracing-beam final CTA
-- **Navbar**: scroll-responsive glass with border glow, animated `layoutId` underline on active link, mobile staggered reveal, gradient logo badge with hover rotate
-- **CarCard**: glass-chip segment badge, floating Bebas-Neue price chip, Framer-Motion hover lift, glow overlay, arrow-up-right action icon, corner-notch, gradient-button
-- **ChatDrawer**: replaced boxy FAB with breathing gradient amber orb + tooltip; drawer now slides in with spring animation on glass-strong surface
-- **Premium.jsx**: tracing-beam animated conic-gradient border on ₹199 plan, MOST POPULAR pill, Framer-Motion plan-card stagger, Bebas-Neue big prices
-- **Footer**: dot-grid bg, gradient logo, social icons, "Made in Bharat" sign-off
+- **Home.jsx**: hero now has **looping Pexels driving reel video background** (proxied via backend `/api/video-proxy` with HTTP Range support) + luxury car poster fallback + parallax scroll + italic amber gradient headline + HUD glass card with live zero-wait tracker + floating "AI LIVE" badge
+- **Navbar**: scroll-responsive glass with border glow, animated `layoutId` underline, gradient logo, mobile staggered reveal
+- **CarCard**: glass-chip segment badge, Bebas-Neue price chip, Framer-Motion hover lift, glow overlay, gradient CTA
+- **ChatDrawer**: breathing gradient amber orb FAB + tooltip; drawer slides in with spring on glass-strong surface
+- **Premium.jsx**: tracing-beam animated conic-gradient border on ₹199 plan + MOST POPULAR pill + Bebas-Neue big prices + motion stagger
+
+### **NEW — 360° Showroom Fix (iter 7, 2026-02-20)**
+- Previously the Showroom rendered a generic hand-drawn SVG instead of the real car. Now it uses the **actual CarWale OEM photo** (same source as listings, via `getCarImage` + `/api/image-proxy`).
+- Added **3D sway rotation** (Framer Motion rotateY + translateX + perspective) driven by drag/slider/auto-spin — car appears to rotate, flips horizontally past 90° to suggest the rear side.
+- **Paint customization**: color wash overlays (mix-blend-overlay + soft-light) let users preview 7 paint colors on the real photo.
+- **State chips**: Doors Open / Hood Up / Boot Open / Lights ON appear as visible amber chips on the viewer when toggled.
+- **Angle slider** at bottom + touch/swipe support for mobile.
+- **Studio spotlight + floor reflection ring** + paint name readout + FRONT/REAR readout.
+- Interior view renders a luxury SVG cabin diagram.
+
+### **NEW — Video Proxy Endpoint (iter 7)**
+- `/api/video-proxy` streams from `videos.pexels.com` with full HTTP Range-request passthrough (required for HTML5 `<video>` seeking/buffering). Returns 206 Partial Content on Range, supports HEAD for preflight.
 
 ### Testing
 - iter 1-5: backend + frontend comprehensive (~100% pass)

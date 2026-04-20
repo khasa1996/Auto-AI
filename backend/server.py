@@ -205,7 +205,7 @@ async def find_car_by_name(name: str) -> Optional[dict]:
 
 # ---------- Image proxy (fixes Chrome ORB for hotlinked images) ----------
 _IMAGE_CACHE: dict = {}
-_ALLOWED_HOSTS = ("upload.wikimedia.org", "commons.wikimedia.org", "images.unsplash.com", "images.pexels.com", "cdn.pixabay.com", "imgd.aeplcdn.com", "imgd-ct.aeplcdn.com", "stimg.cardekho.com", "i.ytimg.com")
+_ALLOWED_HOSTS = ("upload.wikimedia.org", "commons.wikimedia.org", "images.unsplash.com", "images.pexels.com", "videos.pexels.com", "cdn.pixabay.com", "imgd.aeplcdn.com", "imgd-ct.aeplcdn.com", "stimg.cardekho.com", "i.ytimg.com")
 
 
 async def _fetch_image(url: str):
@@ -245,6 +245,67 @@ async def image_proxy(url: str):
         "Cache-Control": "public, max-age=604800",
         "Cross-Origin-Resource-Policy": "cross-origin",
     })
+
+
+@app.api_route("/api/video-proxy", methods=["GET", "HEAD"])
+async def video_proxy(url: str, request: Request):
+    """Stream video from allowed hosts (Pexels) with Range-request passthrough for HTML5 <video>."""
+    from urllib.parse import urlparse
+    from fastapi.responses import StreamingResponse
+    host = urlparse(url).netloc
+    if not any(host.endswith(h) for h in _ALLOWED_HOSTS):
+        raise HTTPException(status_code=400, detail="Host not allowed")
+
+    # Forward Range header from browser to upstream so video can seek/buffer properly
+    forward_headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "video/mp4,video/*,*/*",
+        "Referer": "https://www.pexels.com/",
+    }
+    range_header = request.headers.get("range")
+    if range_header:
+        forward_headers["Range"] = range_header
+
+    client = httpx.AsyncClient(timeout=30.0, follow_redirects=True)
+    try:
+        method = "HEAD" if request.method == "HEAD" else "GET"
+        req = client.build_request(method, url, headers=forward_headers)
+        r = await client.send(req, stream=True)
+        if r.status_code not in (200, 206):
+            await r.aclose()
+            await client.aclose()
+            raise HTTPException(status_code=r.status_code, detail="Upstream fetch failed")
+
+        ctype = r.headers.get("content-type", "video/mp4")
+        resp_headers = {
+            "Cache-Control": "public, max-age=86400",
+            "Cross-Origin-Resource-Policy": "cross-origin",
+            "Accept-Ranges": "bytes",
+        }
+        for h in ("content-length", "content-range"):
+            if h in r.headers:
+                resp_headers[h.title()] = r.headers[h]
+
+        if request.method == "HEAD":
+            await r.aclose()
+            await client.aclose()
+            return Response(status_code=r.status_code, media_type=ctype, headers=resp_headers)
+
+        async def iterator():
+            try:
+                async for chunk in r.aiter_bytes(chunk_size=64 * 1024):
+                    yield chunk
+            finally:
+                await r.aclose()
+                await client.aclose()
+
+        return StreamingResponse(iterator(), status_code=r.status_code, media_type=ctype, headers=resp_headers)
+    except HTTPException:
+        await client.aclose()
+        raise
+    except httpx.RequestError as e:
+        await client.aclose()
+        raise HTTPException(status_code=502, detail=f"Upstream error: {e}")
 
 
 # ---------- Car routes ----------
