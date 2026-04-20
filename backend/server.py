@@ -728,6 +728,85 @@ async def list_dealers(city: Optional[str] = None):
     return items
 
 
+# ---------- Admin Panel (PIN-gated) ----------
+ADMIN_PIN = os.environ.get("ADMIN_PIN", "108108")  # default demo PIN
+
+
+def _check_admin(pin: str):
+    if pin != ADMIN_PIN:
+        raise HTTPException(status_code=401, detail="Invalid admin PIN")
+
+
+class AdminPinReq(BaseModel):
+    pin: str
+
+
+@api_router.post("/admin/verify")
+async def admin_verify(req: AdminPinReq):
+    _check_admin(req.pin)
+    return {"ok": True, "token": f"admin_{uuid.uuid4().hex}"}
+
+
+@api_router.get("/admin/dealers")
+async def admin_list_dealers(pin: str, status: Optional[str] = None):
+    _check_admin(pin)
+    q: dict = {}
+    if status:
+        q["status"] = status
+    items = await db.dealer_partners.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    # Stats
+    all_items = await db.dealer_partners.find({}, {"_id": 0, "status": 1, "bid_per_lead": 1}).to_list(500)
+    stats = {
+        "total": len(all_items),
+        "pending": sum(1 for d in all_items if d.get("status") == "pending_verification"),
+        "approved": sum(1 for d in all_items if d.get("status") == "approved"),
+        "rejected": sum(1 for d in all_items if d.get("status") == "rejected"),
+        "avg_bid": round(sum(d.get("bid_per_lead", 0) for d in all_items) / max(1, len(all_items)), 2),
+    }
+    return {"dealers": items, "stats": stats}
+
+
+class AdminActionReq(BaseModel):
+    pin: str
+    note: Optional[str] = ""
+
+
+@api_router.post("/admin/dealers/{dealer_id}/approve")
+async def admin_approve_dealer(dealer_id: str, req: AdminActionReq):
+    _check_admin(req.pin)
+    result = await db.dealer_partners.update_one(
+        {"id": dealer_id},
+        {"$set": {
+            "status": "approved",
+            "verified": True,
+            "approved_at": datetime.now(timezone.utc).isoformat(),
+            "admin_note": req.note or "",
+        }},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Dealer not found")
+    updated = await db.dealer_partners.find_one({"id": dealer_id}, {"_id": 0})
+    return updated
+
+
+@api_router.post("/admin/dealers/{dealer_id}/reject")
+async def admin_reject_dealer(dealer_id: str, req: AdminActionReq):
+    _check_admin(req.pin)
+    result = await db.dealer_partners.update_one(
+        {"id": dealer_id},
+        {"$set": {
+            "status": "rejected",
+            "verified": False,
+            "rejected_at": datetime.now(timezone.utc).isoformat(),
+            "admin_note": req.note or "",
+        }},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Dealer not found")
+    updated = await db.dealer_partners.find_one({"id": dealer_id}, {"_id": 0})
+    return updated
+
+
 # ---------- Stripe subscriptions ----------
 STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY")
 

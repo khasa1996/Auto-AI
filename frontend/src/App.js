@@ -14,6 +14,7 @@ import Showroom from "./pages/Showroom";
 import Premium from "./pages/Premium";
 import Dealer from "./pages/Dealer";
 import DealerApply from "./pages/DealerApply";
+import Admin from "./pages/Admin";
 import About from "./pages/About";
 import Login from "./pages/Login";
 import MyBookings from "./pages/MyBookings";
@@ -40,6 +41,7 @@ function App() {
               <Route path="/premium" element={<Premium />} />
               <Route path="/dealer" element={<Dealer />} />
               <Route path="/dealers/apply" element={<DealerApply />} />
+              <Route path="/admin" element={<Admin />} />
               <Route path="/about" element={<About />} />
               <Route path="/login" element={<Login />} />
               <Route path="/my-bookings" element={<MyBookings />} />
