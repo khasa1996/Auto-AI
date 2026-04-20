@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { X, Send, Sparkles, Trash2, ChevronDown } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { api } from "../lib/api";
 import { useI18n, LANGUAGES } from "../lib/i18n";
 
@@ -68,19 +69,47 @@ export default function ChatDrawer() {
 
   return (
     <>
-      <button
+      {/* Floating orb FAB */}
+      <motion.button
+        initial={{ opacity: 0, scale: 0.5 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 1.2, type: "spring", stiffness: 260, damping: 20 }}
+        whileHover={{ scale: 1.06 }}
+        whileTap={{ scale: 0.95 }}
         onClick={() => setOpen(true)}
         data-testid="chat-open-btn"
-        className="fixed bottom-6 right-6 z-[60] bg-[#F59E0B] text-black px-5 py-3 flex items-center gap-2 font-semibold text-sm uppercase tracking-[0.15em] pulse-amber hover:bg-[#D97706] transition-colors"
+        className="fixed bottom-6 right-6 z-[60] group"
       >
-        <Sparkles size={16} strokeWidth={2.5} />
-        {t("ask_ai")}
-      </button>
+        <div className="relative">
+          {/* glowing orb */}
+          <div className="relative w-16 h-16 rounded-full bg-gradient-to-br from-[#F59E0B] to-[#C5832B] breathe flex items-center justify-center overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.5),transparent_50%)]" />
+            <Sparkles size={22} strokeWidth={2.5} className="text-black relative z-[1]" />
+          </div>
+          {/* text tooltip */}
+          <div className="absolute right-20 top-1/2 -translate-y-1/2 glass-strong border border-white/10 px-3 py-2 whitespace-nowrap opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all pointer-events-none">
+            <span className="text-[10px] uppercase tracking-[0.22em] font-bold text-[#F59E0B]">{t("ask_ai")}</span>
+          </div>
+        </div>
+      </motion.button>
 
+      <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-50 flex justify-end" data-testid="chat-drawer">
-          <div className="absolute inset-0 bg-black/70" onClick={() => setOpen(false)} />
-          <div className="relative w-full max-w-lg h-full bg-black border-l border-[#262626] flex flex-col">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setOpen(false)}
+          />
+          <motion.div
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            className="relative w-full max-w-lg h-full glass-strong border-l border-white/10 flex flex-col"
+          >
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#262626]">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-[#10B981] rounded-full pulse-amber" />
@@ -156,14 +185,15 @@ export default function ChatDrawer() {
                 onClick={() => send()}
                 disabled={busy}
                 data-testid="chat-send-btn"
-                className="bg-[#F59E0B] text-black px-4 disabled:opacity-50 hover:bg-[#D97706]"
+                className="bg-gradient-to-r from-[#F59E0B] to-[#D97706] text-black px-4 disabled:opacity-50 hover:shadow-[0_0_20px_-4px_rgba(245,158,11,0.6)] transition-all"
               >
                 <Send size={16} />
               </button>
             </div>
-          </div>
+          </motion.div>
         </div>
       )}
+      </AnimatePresence>
     </>
   );
 }

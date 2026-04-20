@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { motion } from "framer-motion";
 import { api } from "../lib/api";
 import { Crown, Check, Sparkles, Zap, Headphones, Gift, TrendingUp, Loader2, CheckCircle2, XCircle } from "lucide-react";
 
@@ -96,18 +97,28 @@ export default function Premium() {
   };
 
   return (
-    <div className="bg-[#050505] min-h-screen" data-testid="premium-page">
-      <div className="max-w-7xl mx-auto px-6 lg:px-10 py-16">
-        <div className="flex items-center gap-3 mb-4">
-          <Crown size={16} className="text-[#F59E0B]" />
-          <span className="text-[10px] uppercase tracking-[0.35em] text-[#F59E0B] font-bold font-mono">/// auto-ai premium</span>
-        </div>
-        <h1 className="font-display text-5xl lg:text-7xl tracking-tighter font-light uppercase max-w-4xl">
-          Every car. Every angle. <span className="text-[#F59E0B]">Zero limits.</span>
-        </h1>
-        <p className="text-slate-400 mt-6 max-w-2xl text-lg">
-          Premium unlocks the full AI showroom, priority bookings, and insights normally reserved for dealer insiders.
-        </p>
+    <div className="bg-[#050505] min-h-screen relative" data-testid="premium-page">
+      <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-[#F59E0B]/10 blur-3xl rounded-full pointer-events-none" />
+      <div className="absolute top-40 left-0 w-[400px] h-[400px] bg-[#C5832B]/8 blur-3xl rounded-full pointer-events-none" />
+
+      <div className="relative max-w-7xl mx-auto px-6 lg:px-10 py-20">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7 }}
+        >
+          <div className="flex items-center gap-3 mb-5">
+            <Crown size={16} className="text-[#F59E0B]" />
+            <span className="chip">/// auto-ai premium</span>
+          </div>
+          <h1 className="font-display text-5xl lg:text-7xl tracking-tighter font-light uppercase max-w-4xl leading-[0.95]">
+            Every car. Every angle.{" "}
+            <span className="text-gradient-amber italic font-semibold">Zero limits.</span>
+          </h1>
+          <p className="text-slate-400 mt-7 max-w-2xl text-lg leading-relaxed">
+            Premium unlocks the full AI showroom, priority bookings, and insights normally reserved for dealer insiders.
+          </p>
+        </motion.div>
 
         {/* Payment state banner */}
         {paymentState === "pending" && (
@@ -130,21 +141,34 @@ export default function Premium() {
         )}
 
         <div className="mt-14 grid md:grid-cols-3 gap-4">
-          {PLANS.map((p) => (
-            <div
+          {PLANS.map((p, idx) => (
+            <motion.div
               key={p.id}
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 + idx * 0.12, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+              whileHover={{ y: -4 }}
               data-testid={`plan-${p.id}`}
-              className={`border p-8 flex flex-col ${p.featured ? "border-[#F59E0B] bg-gradient-to-br from-[#F59E0B]/10 to-transparent" : "border-[#262626] bg-[#0A0A0A]"}`}
+              className={`relative p-8 flex flex-col ${
+                p.featured
+                  ? "tracing-beam"
+                  : "border border-white/10 bg-[#0A0A0A] hover:border-white/20 transition-colors"
+              }`}
             >
+              {p.featured && (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-[#F59E0B] text-black text-[9px] uppercase tracking-[0.3em] font-bold px-3 py-1 amber-glow z-[2]">
+                  Most Popular
+                </div>
+              )}
               <div className={`text-[10px] uppercase tracking-[0.3em] font-bold mb-4 ${p.featured ? "text-[#F59E0B]" : "text-slate-500"} flex items-center gap-2`}>
                 {p.featured && <Sparkles size={12} />} {p.tag}
               </div>
               <div className="font-display text-3xl font-light">{p.name}</div>
               <div className="mt-4 flex items-baseline gap-2">
-                <span className="font-display text-5xl">₹{p.price}</span>
+                <span className="font-num text-6xl text-white leading-none">₹{p.price}</span>
                 {p.price > 0 && <span className="text-sm text-slate-400">/ month</span>}
               </div>
-              <ul className="mt-6 space-y-3 flex-1">
+              <ul className="mt-7 space-y-3 flex-1">
                 {p.features.map((f) => (
                   <li key={f} className="flex gap-2 text-sm text-slate-300">
                     <Check size={14} className={`mt-1 flex-shrink-0 ${p.featured ? "text-[#F59E0B]" : "text-[#10B981]"}`} />
@@ -156,17 +180,17 @@ export default function Premium() {
                 disabled={p.disabled || buyingId === p.id}
                 onClick={() => !p.disabled && subscribe(p.id)}
                 data-testid={`plan-cta-${p.id}`}
-                className={`mt-8 py-3.5 text-xs uppercase tracking-[0.25em] font-bold flex items-center justify-center gap-2 ${
+                className={`mt-8 py-3.5 text-xs uppercase tracking-[0.25em] font-bold flex items-center justify-center gap-2 transition-all ${
                   p.disabled
-                    ? "border border-[#262626] text-slate-500 cursor-not-allowed"
+                    ? "border border-white/10 text-slate-500 cursor-not-allowed"
                     : p.featured
-                      ? "bg-[#F59E0B] text-black hover:bg-[#D97706]"
-                      : "border border-white/20 text-white hover:bg-white/5"
+                      ? "btn-shine bg-gradient-to-r from-[#F59E0B] to-[#D97706] text-black hover:shadow-[0_0_30px_-4px_rgba(245,158,11,0.7)]"
+                      : "border border-white/20 text-white hover:bg-white/5 hover:border-[#F59E0B]/40"
                 }`}
               >
                 {buyingId === p.id ? <><Loader2 size={14} className="animate-spin" />Redirecting</> : p.disabled ? "Current plan" : `Subscribe ₹${p.price}/mo →`}
               </button>
-            </div>
+            </motion.div>
           ))}
         </div>
 
@@ -204,3 +228,4 @@ export default function Premium() {
     </div>
   );
 }
+
