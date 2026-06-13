@@ -933,12 +933,22 @@ async def checkout_status(session_id: str, http_request: Request):
 
     host_url = str(http_request.base_url).rstrip("/")
     webhook_url = f"{host_url}/api/webhook/stripe"
+    status = None
     try:
         checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
         status = await checkout.get_checkout_status(session_id)
     except Exception as e:
         logging.warning("Stripe status fetch failed (likely unpaid/pending): %s", e)
         # Return the DB-known state rather than 500ing
+        return {
+            "payment_status": tx.get("payment_status", "initiated"),
+            "status": "open",
+            "amount_total": None,
+            "currency": tx.get("currency", "inr"),
+        }
+
+    if status is None:
+        # Defensive guard — should not reach here since except returns above
         return {
             "payment_status": tx.get("payment_status", "initiated"),
             "status": "open",

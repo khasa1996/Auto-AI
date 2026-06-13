@@ -29,6 +29,9 @@ export default function Login() {
     setLoading(true); setError("");
     try {
       const { data } = await api.post("/auth/verify-otp", { phone, otp });
+      // NOTE: MVP auth — token is a mock session id. Real auth (Twilio + JWT in
+      // httpOnly cookie) is on the P1 backlog. localStorage is acceptable here
+      // because no real secret is issued yet.
       localStorage.setItem("autoai_token", data.token);
       localStorage.setItem("autoai_phone", data.phone);
       nav("/my-bookings");
