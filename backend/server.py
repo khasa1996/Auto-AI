@@ -40,6 +40,20 @@ AI_MODELS = {
         "family": "Anthropic",
         "strength": "Balanced reasoning · unbiased",
     },
+    "gpt-flagship": {
+        "provider": "openai",
+        "model": "gpt-5.4",
+        "label": "GPT-5.4",
+        "family": "OpenAI",
+        "strength": "Flagship reasoning · versatile",
+    },
+    "gpt-mini": {
+        "provider": "openai",
+        "model": "gpt-5.4-mini",
+        "label": "GPT-5.4 Mini",
+        "family": "OpenAI",
+        "strength": "Fast & efficient",
+    },
     "gemini-pro": {
         "provider": "gemini",
         "model": "gemini-3.1-pro-preview",

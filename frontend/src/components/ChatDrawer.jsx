@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { X, Send, Sparkles, Trash2, ChevronDown, Cpu, Zap } from "lucide-react";
+import { X, Send, Sparkles, Trash2, ChevronDown, Cpu, Zap, Brain } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "../lib/api";
 import { useI18n, LANGUAGES } from "../lib/i18n";
@@ -62,7 +62,7 @@ export default function ChatDrawer() {
   // Update greeting on language change (only if conversation hasn't started)
   useEffect(() => {
     setMessages((m) => (m.length === 1 && m[0].role === "assistant" ? [{ role: "assistant", content: greetings[lang] || greetings.en }] : m));
-  }, [lang]); // eslint-disable-line
+  }, [lang]);
 
   const send = async (text) => {
     const msg = (text ?? input).trim();

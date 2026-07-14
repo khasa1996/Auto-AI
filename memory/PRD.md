@@ -53,6 +53,14 @@
 - No real-time car data feed (CarDekho/CarWale have no public API)
 - Daily car refresh is simulated
 
+### **NEW — OpenAI Chat Models added (iter 10, 2026-02-20)**
+- Extended `AI_MODELS` registry with two OpenAI GPT models via Emergent LLM Key:
+  - `gpt-flagship` → `gpt-5.4` (OpenAI · Flagship reasoning · versatile)
+  - `gpt-mini` → `gpt-5.4-mini` (OpenAI · Fast & efficient)
+- Chat drawer picker now shows **5 models total**: Claude Sonnet 4.6 · GPT-5.4 · GPT-5.4 Mini · Gemini 3.1 Pro · Gemini 3.5 Flash
+- Added distinct `Brain` icon for OpenAI models in the picker (vs `Zap` for Gemini, `Sparkles` for Claude)
+- All 5 models verified via curl — respond correctly with model label returned in response.
+
 ### **NEW — Gemini Chat Models Integration (iter 9, 2026-02-20)**
 - Added Google Gemini as a selectable chat brain alongside Claude via Emergent LLM Key (`emergentintegrations.LlmChat`)
 - Registry `AI_MODELS` in `server.py`:
