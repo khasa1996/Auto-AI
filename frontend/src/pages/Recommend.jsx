@@ -28,8 +28,9 @@ export default function Recommend() {
         notes,
       });
       setResult(data);
-    } catch {
-      // noop
+    } catch (err) {
+      console.error("AI recommend failed:", err);
+      setResult({ error: "Could not fetch recommendations. Please try again." });
     } finally {
       setLoading(false);
     }
