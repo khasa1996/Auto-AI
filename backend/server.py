@@ -29,6 +29,34 @@ db = client[os.environ['DB_NAME']]
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 CLAUDE_MODEL = ("anthropic", "claude-sonnet-4-5-20250929")
 
+# ---------- AI Model Registry ----------
+# Models available for the 24/7 chatbot. Compare/Recommend continue to use
+# CLAUDE_MODEL for deep, unbiased analysis.
+AI_MODELS = {
+    "claude": {
+        "provider": "anthropic",
+        "model": "claude-sonnet-4-6",
+        "label": "Claude Sonnet 4.6",
+        "family": "Anthropic",
+        "strength": "Balanced reasoning · unbiased",
+    },
+    "gemini-pro": {
+        "provider": "gemini",
+        "model": "gemini-3.1-pro-preview",
+        "label": "Gemini 3.1 Pro",
+        "family": "Google",
+        "strength": "Deep analysis · latest",
+    },
+    "gemini-flash": {
+        "provider": "gemini",
+        "model": "gemini-3.5-flash",
+        "label": "Gemini 3.5 Flash",
+        "family": "Google",
+        "strength": "Blazing fast · concise",
+    },
+}
+DEFAULT_CHAT_MODEL = "claude"
+
 app = FastAPI(title="Auto-AI India API")
 api_router = APIRouter(prefix="/api")
 
@@ -84,9 +112,12 @@ class RecommendRequest(BaseModel):
 
 
 class ChatRequest(BaseModel):
+    model_config = {"protected_namespaces": ()}
+
     session_id: str
     message: str
     language: Optional[str] = "English"
+    model: Optional[str] = None  # "claude" | "gemini-pro" | "gemini-flash"
 
 
 class BookingRequest(BaseModel):
@@ -179,12 +210,15 @@ def extract_json(text: str):
         return None
 
 
-async def get_chat(session_id: str, system_message: str) -> LlmChat:
+async def get_chat(session_id: str, system_message: str, model_key: Optional[str] = None) -> LlmChat:
+    """Return an LlmChat pinned to the requested model (default: Claude Sonnet)."""
+    m = AI_MODELS.get(model_key) if model_key else None
+    provider_model = (m["provider"], m["model"]) if m else CLAUDE_MODEL
     chat = LlmChat(
         api_key=EMERGENT_LLM_KEY,
         session_id=session_id,
         system_message=system_message,
-    ).with_model(*CLAUDE_MODEL)
+    ).with_model(*provider_model)
     return chat
 
 
@@ -479,6 +513,18 @@ Return ONLY the JSON in the exact schema."""
         raise HTTPException(status_code=500, detail=f"AI error: {str(e)}")
 
 
+@api_router.get("/ai/models")
+async def list_ai_models():
+    """Return the list of chat models the user can pick from."""
+    return {
+        "default": DEFAULT_CHAT_MODEL,
+        "models": [
+            {"id": k, "label": v["label"], "family": v["family"], "strength": v["strength"]}
+            for k, v in AI_MODELS.items()
+        ],
+    }
+
+
 # ---------- AI Chat ----------
 CHAT_SYSTEM = """You are 'Auto-AI India', a 24×7 AI concierge for Indian car buyers.
 Core abilities:
@@ -553,16 +599,18 @@ async def ai_chat(req: ChatRequest):
         system = (CHAT_SYSTEM
                   .replace("{LANGUAGE}", req.language or "English")
                   .replace("{BOOKING_CONTEXT}", booking_context))
-        chat = await get_chat(req.session_id, system)
+        chat = await get_chat(req.session_id, system, req.model)
         response = await chat.send_message(UserMessage(text=req.message))
+        chosen = AI_MODELS.get(req.model or DEFAULT_CHAT_MODEL, AI_MODELS[DEFAULT_CHAT_MODEL])
         await db.chat_messages.insert_one({
             "id": str(uuid.uuid4()),
             "session_id": req.session_id,
             "role": "assistant",
             "content": response,
+            "model": chosen["label"],
             "ts": datetime.now(timezone.utc).isoformat(),
         })
-        return {"reply": response}
+        return {"reply": response, "model": chosen["label"]}
     except Exception as e:
         logging.exception("chat failure")
         raise HTTPException(status_code=500, detail=f"AI error: {str(e)}")

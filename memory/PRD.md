@@ -53,6 +53,19 @@
 - No real-time car data feed (CarDekho/CarWale have no public API)
 - Daily car refresh is simulated
 
+### **NEW — Gemini Chat Models Integration (iter 9, 2026-02-20)**
+- Added Google Gemini as a selectable chat brain alongside Claude via Emergent LLM Key (`emergentintegrations.LlmChat`)
+- Registry `AI_MODELS` in `server.py`:
+  - `claude` → `claude-sonnet-4-6` (Anthropic · Balanced reasoning · unbiased) — DEFAULT
+  - `gemini-pro` → `gemini-3.1-pro-preview` (Google · Deep analysis · latest)
+  - `gemini-flash` → `gemini-3.5-flash` (Google · Blazing fast · concise)
+- New endpoint `GET /api/ai/models` — lists all pickable models with label + family + strength
+- `POST /api/ai/chat` now accepts optional `model` field; reply includes `model` label so UI shows which brain answered
+- `ChatRequest.model_config = {"protected_namespaces": ()}` added so Pydantic v2 doesn't reserve the `model` field name
+- Compare/Recommend endpoints unchanged (still use Claude for deep unbiased analysis)
+- **UI**: `ChatDrawer.jsx` gets a sleek model picker bar under the header — shows Active AI with dropdown of all 3 models, each with family + strength tagline. Choice persists in localStorage. Switching models opens a fresh session so history stays clean. Each assistant message shows a small `· Gemini 3.5 Flash` badge.
+- Verified all 3 models respond correctly via curl.
+
 ### **NEW — Capacitor Mobile Wrapper (iter 8, 2026-02-20)**
 - Installed `@capacitor/core@7`, `cli@7`, `android@7`, `ios@7`, `app@7`, `splash-screen@7`, `status-bar@7`
 - Created `/app/frontend/capacitor.config.json`:
