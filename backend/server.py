@@ -40,6 +40,20 @@ AI_MODELS = {
         "family": "Anthropic",
         "strength": "Balanced reasoning · unbiased",
     },
+    "claude-opus": {
+        "provider": "anthropic",
+        "model": "claude-opus-4-7",
+        "label": "Claude Opus 4.7",
+        "family": "Anthropic",
+        "strength": "Deepest reasoning · premium",
+    },
+    "claude-haiku": {
+        "provider": "anthropic",
+        "model": "claude-haiku-4-5-20251001",
+        "label": "Claude Haiku 4.5",
+        "family": "Anthropic",
+        "strength": "Ultra-fast · lightweight",
+    },
     "gpt-flagship": {
         "provider": "openai",
         "model": "gpt-5.4",
