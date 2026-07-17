@@ -27,6 +27,7 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
+ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY')
 CLAUDE_MODEL = ("anthropic", "claude-sonnet-4-5-20250929")
 
 # ---------- AI Model Registry ----------
@@ -551,6 +552,84 @@ async def list_ai_models():
             for k, v in AI_MODELS.items()
         ],
     }
+
+
+# ---------- Text-to-Speech (ElevenLabs) ----------
+# Voice IDs are ElevenLabs' well-known public voices (multilingual_v2 handles Indian English pronunciation).
+TTS_VOICES = {
+    "female": {
+        "voice_id": "EXAVITQu4vr4xnSDxMaL",  # Sarah — clear, warm female
+        "label": "Sarah",
+        "gender": "Female",
+    },
+    "male": {
+        "voice_id": "IKne3meq5aSn9XLyUdCD",  # Charlie — confident, versatile male
+        "label": "Charlie",
+        "gender": "Male",
+    },
+}
+DEFAULT_TTS_VOICE = "female"
+_TTS_CHAR_LIMIT = 1200  # keep clips short — free tier is 10k chars/month
+
+
+@api_router.get("/tts/voices")
+async def tts_list_voices():
+    return {
+        "default": DEFAULT_TTS_VOICE,
+        "voices": [
+            {"id": k, "label": v["label"], "gender": v["gender"]}
+            for k, v in TTS_VOICES.items()
+        ],
+    }
+
+
+class TTSRequest(BaseModel):
+    text: str
+    voice: Optional[str] = None  # "female" | "male"
+
+
+@api_router.post("/tts/speak")
+async def tts_speak(req: TTSRequest):
+    """Generate MP3 audio for given text using ElevenLabs. Returns audio/mpeg bytes."""
+    if not ELEVENLABS_API_KEY:
+        raise HTTPException(status_code=503, detail="TTS not configured")
+    text = (req.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Empty text")
+    if len(text) > _TTS_CHAR_LIMIT:
+        text = text[:_TTS_CHAR_LIMIT] + "…"
+
+    voice_key = req.voice if req.voice in TTS_VOICES else DEFAULT_TTS_VOICE
+    voice_id = TTS_VOICES[voice_key]["voice_id"]
+
+    try:
+        # Local import so a missing pkg doesn't crash server startup
+        from elevenlabs import ElevenLabs
+        client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
+        audio_iter = client.text_to_speech.convert(
+            text=text,
+            voice_id=voice_id,
+            model_id="eleven_multilingual_v2",
+            output_format="mp3_44100_128",
+        )
+        # audio_iter is a byte generator; drain to bytes
+        audio_bytes = b"".join(chunk for chunk in audio_iter if chunk)
+        if not audio_bytes:
+            raise HTTPException(status_code=502, detail="Empty audio from provider")
+        return Response(
+            content=audio_bytes,
+            media_type="audio/mpeg",
+            headers={
+                "Cache-Control": "public, max-age=3600",
+                "Cross-Origin-Resource-Policy": "cross-origin",
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.exception("TTS failure")
+        raise HTTPException(status_code=502, detail=f"TTS error: {e}")
+
 
 
 # ---------- AI Chat ----------
