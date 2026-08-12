@@ -17,7 +17,7 @@
 - Routes: `/`, `/compare`, `/recommend`, `/cars`, `/emi`, `/news`, `/book/:id`, `/showroom/:id`, `/premium`, `/dealer`, `/dealers/apply`, `/admin`, `/about`, `/login`, `/my-bookings`
 - Real latest OEM photos for all 106 cars via backend proxy
 - 360° Premium Showroom (drag-rotate, 7 colors, interior toggles, 3-min paywall)
-- Founder page, Dealer onboarding, Admin panel (PIN 108108)
+- Founder page, Dealer onboarding, Admin panel (PIN from the `ADMIN_PIN` env var)
 - Stripe-powered Premium checkout + post-payment status polling
 - PWA (manifest + service worker + install prompt)
 - Multi-language toggle (8 Indian languages)

@@ -1,5 +1,4 @@
 """Backend tests for Auto-AI India API - iteration 2 (bookings, languages, enhanced chat)."""
-import os
 import re
 import uuid
 import pytest
@@ -7,15 +6,9 @@ import requests
 from dotenv import load_dotenv
 from pathlib import Path
 
-load_dotenv(Path(__file__).resolve().parents[1] / '.env')
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
-if not BASE_URL:
-    fe = Path('/app/frontend/.env')
-    for line in fe.read_text().splitlines():
-        if line.startswith('REACT_APP_BACKEND_URL='):
-            BASE_URL = line.split('=', 1)[1].strip().rstrip('/')
+from conftest import API, USER_PHONE
 
-API = f"{BASE_URL}/api"
+load_dotenv(Path(__file__).resolve().parents[1] / '.env')
 
 
 @pytest.fixture(scope="module")
@@ -61,11 +54,11 @@ def test_get_car_tata_nexon(client):
 
 
 # ---- Bookings ----
-def test_create_booking_and_get(client):
+def test_create_booking_and_get(client, user_client):
     payload = {
         "car_id": "tata-nexon",
         "name": "Test User",
-        "phone": "9999999999",
+        "phone": USER_PHONE,
         "city": "Mumbai",
         "test_drive": True,
     }
@@ -75,7 +68,7 @@ def test_create_booking_and_get(client):
     # Structural assertions
     assert b["car_id"] == "tata-nexon"
     assert b["name"] == "Test User"
-    assert b["phone"] == "9999999999"
+    assert b["phone"] == USER_PHONE
     assert b["city"] == "Mumbai"
     assert b["test_drive"] is True
     assert b["dealer"] == "Auto-AI Partner — Andheri Hub"
@@ -84,8 +77,9 @@ def test_create_booking_and_get(client):
     # UUID id
     uuid.UUID(b["id"])  # raises if invalid
     assert "_id" not in b
-    # Persistence: GET by id
-    g = client.get(f"{API}/bookings/{b['id']}", timeout=15)
+    # Persistence: GET by id — only the owner's session can read it back
+    assert client.get(f"{API}/bookings/{b['id']}", timeout=15).status_code == 404
+    g = user_client.get(f"{API}/bookings/{b['id']}", timeout=15)
     assert g.status_code == 200
     fetched = g.json()
     assert fetched["id"] == b["id"]

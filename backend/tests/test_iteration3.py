@@ -1,16 +1,9 @@
 """Backend tests for iteration 3: Partners (commission pipeline) + AI CRM chat."""
-import os
 import uuid
 import pytest
 import requests
-from pathlib import Path
 
-BASE_URL = ""
-fe = Path('/app/frontend/.env')
-for line in fe.read_text().splitlines():
-    if line.startswith('REACT_APP_BACKEND_URL='):
-        BASE_URL = line.split('=', 1)[1].strip().rstrip('/')
-API = f"{BASE_URL}/api"
+from conftest import API, USER_PHONE
 
 
 @pytest.fixture(scope="module")
@@ -53,9 +46,13 @@ def test_partners_filter_insurance(client):
 
 
 # ---- Bookings auto-generate partner leads ----
-def test_booking_with_loan_and_insurance_creates_leads(client):
+def test_partner_leads_requires_admin(client):
+    assert client.get(f"{API}/partners/leads", timeout=15).status_code == 401
+
+
+def test_booking_with_loan_and_insurance_creates_leads(client, admin_client):
     # Get current leads count first
-    r0 = client.get(f"{API}/partners/leads", timeout=15)
+    r0 = admin_client.get(f"{API}/partners/leads", timeout=15)
     assert r0.status_code == 200
     before = len(r0.json().get("leads", []))
 
@@ -73,7 +70,7 @@ def test_booking_with_loan_and_insurance_creates_leads(client):
     booking = r.json()
     booking_id = booking["id"]
 
-    r2 = client.get(f"{API}/partners/leads", timeout=15)
+    r2 = admin_client.get(f"{API}/partners/leads", timeout=15)
     assert r2.status_code == 200
     out = r2.json()
     assert "leads" in out and "total_commission" in out and "by_partner" in out
@@ -98,8 +95,8 @@ def test_booking_with_loan_and_insurance_creates_leads(client):
     assert out["by_partner"]["HDFC Bank"]["count"] >= 1
 
 
-def test_booking_without_finance_no_leads(client):
-    r0 = client.get(f"{API}/partners/leads", timeout=15)
+def test_booking_without_finance_no_leads(client, admin_client):
+    r0 = admin_client.get(f"{API}/partners/leads", timeout=15)
     before_ids = {l["booking_id"] for l in r0.json().get("leads", [])}
 
     payload = {
@@ -114,15 +111,33 @@ def test_booking_without_finance_no_leads(client):
     assert r.status_code == 200
     bid = r.json()["id"]
 
-    r2 = client.get(f"{API}/partners/leads", timeout=15)
+    r2 = admin_client.get(f"{API}/partners/leads", timeout=15)
     after = r2.json().get("leads", [])
     assert bid not in {l["booking_id"] for l in after}
 
 
 # ---- AI CRM chat: booking context ----
-def test_ai_chat_track_booking_by_phone(client):
-    # Seed a booking with specific phone
-    phone = "9876543210"
+def test_ai_chat_track_booking_requires_own_session(client):
+    """An anonymous caller naming a phone number must not receive that user's booking."""
+    phone = USER_PHONE
+    rb = client.post(f"{API}/bookings", json={
+        "car_id": "tata-nexon", "name": "TEST_CRM Leak", "phone": phone, "city": "Pune",
+    }, timeout=20)
+    assert rb.status_code == 200
+    id_prefix = rb.json()["id"][:8].upper()
+
+    r = client.post(f"{API}/ai/chat", json={
+        "session_id": f"test-crm-anon-{uuid.uuid4()}",
+        "message": f"track my booking {phone}",
+    }, timeout=120)
+    assert r.status_code == 200, r.text
+    assert id_prefix not in r.json().get("reply", "").upper()
+
+
+def test_ai_chat_track_booking_by_phone(user_client):
+    # Seed a booking for the signed-in phone
+    client = user_client
+    phone = USER_PHONE
     bp = {
         "car_id": "tata-nexon",
         "name": "TEST_CRM User",

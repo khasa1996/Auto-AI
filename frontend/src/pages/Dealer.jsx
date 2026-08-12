@@ -1,17 +1,20 @@
 import { useState, useEffect } from "react";
-import { api, formatINR } from "../lib/api";
-import { Briefcase, TrendingUp, Users, IndianRupee, Phone, Car, MapPin, Loader2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { adminApi, formatINR } from "../lib/api";
+import { Briefcase, TrendingUp, Users, IndianRupee, Phone, Car, MapPin, Loader2, Lock } from "lucide-react";
 
 export default function Dealer() {
   const [data, setData] = useState(null);
   const [partnerData, setPartnerData] = useState(null);
   const [city, setCity] = useState("");
   const [loading, setLoading] = useState(true);
+  const [denied, setDenied] = useState(false);
 
   useEffect(() => {
     const params = city ? `?city=${encodeURIComponent(city)}` : "";
-    Promise.all([api.get(`/dealer/leads${params}`), api.get("/partners/leads")])
-      .then(([d, p]) => { setData(d.data); setPartnerData(p.data); })
+    Promise.all([adminApi.get(`/dealer/leads${params}`), adminApi.get("/partners/leads")])
+      .then(([d, p]) => { setData(d.data); setPartnerData(p.data); setDenied(false); })
+      .catch((e) => { if ([401, 503].includes(e?.response?.status)) setDenied(true); })
       .finally(() => setLoading(false));
   }, [city]);
 
@@ -19,6 +22,23 @@ export default function Dealer() {
     return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-slate-400">
       <Loader2 className="animate-spin text-[#F59E0B]" size={32} />
     </div>;
+  }
+
+  // Lead data contains customer names and phone numbers, so the server requires
+  // an admin session before it hands any of it over.
+  if (denied) {
+    return (
+      <div className="min-h-screen bg-[#050505] flex items-center justify-center px-6" data-testid="dealer-locked">
+        <div className="max-w-md text-center">
+          <Lock size={22} className="text-[#F59E0B] mx-auto mb-4" />
+          <h1 className="font-display text-3xl tracking-tighter font-light uppercase">Sign in required</h1>
+          <p className="text-slate-400 mt-3 text-sm">The lead pipeline holds customer contact details. Sign in to the owner console to view it.</p>
+          <Link to="/admin" className="mt-6 inline-flex bg-[#F59E0B] text-black px-6 py-3 text-xs uppercase tracking-[0.25em] font-bold hover:bg-[#D97706]">
+            Go to Admin →
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   return (

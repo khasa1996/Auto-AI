@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { api } from "../lib/api";
+import { api, USER_TOKEN_KEY } from "../lib/api";
 import { Crown, Check, Sparkles, Zap, Headphones, Gift, TrendingUp, Loader2, CheckCircle2, XCircle } from "lucide-react";
 
 const PLANS = [
@@ -57,6 +57,7 @@ export default function Premium() {
   const [params] = useSearchParams();
   const [paymentState, setPaymentState] = useState(null); // 'pending' | 'paid' | 'failed'
   const sessionId = params.get("session_id");
+  const nav = useNavigate();
 
   // Poll for payment status on return from Stripe
   useEffect(() => {
@@ -79,14 +80,14 @@ export default function Premium() {
     poll();
   }, [sessionId]);
 
+  // Checkout is tied to the signed-in phone server-side, so a session is required.
   const subscribe = async (planId) => {
+    if (!localStorage.getItem(USER_TOKEN_KEY)) { nav("/login"); return; }
     setBuyingId(planId);
     try {
-      const phone = localStorage.getItem("autoai_phone") || "";
       const { data } = await api.post("/checkout/session", {
         plan_id: planId,
         origin_url: window.location.origin,
-        customer_phone: phone,
       });
       if (data.url) window.location.href = data.url;
     } catch (e) {
