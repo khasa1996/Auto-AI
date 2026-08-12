@@ -116,11 +116,14 @@ def server_module():
     _install_emergentintegrations_stub()
     motor.motor_asyncio.AsyncIOMotorClient = AsyncMongoMockClient
 
+    # Forced, not setdefault: server.py reads these at import time, so a value
+    # inherited from the machine would make the suite non-hermetic (a real
+    # mongodb+srv:// URL would even trigger a DNS lookup).
     import os
-    os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
-    os.environ.setdefault("DB_NAME", "autoai_test")
-    os.environ.setdefault("EMERGENT_LLM_KEY", "test-llm-key")
-    os.environ.setdefault("ADMIN_PIN", "108108")
+    os.environ["MONGO_URL"] = "mongodb://localhost:27017"
+    os.environ["DB_NAME"] = "autoai_test"
+    os.environ["EMERGENT_LLM_KEY"] = "test-llm-key"
+    os.environ["ADMIN_PIN"] = "108108"
 
     import server
 
