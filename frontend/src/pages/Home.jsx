@@ -1,9 +1,10 @@
 import { Link } from "react-router-dom";
 import { ArrowRight, Scale, Sparkles, Calculator, Newspaper, Gauge, ShieldCheck, Zap, Cpu, Radar } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
-import { api, API } from "../lib/api";
+import { api, API, apiError } from "../lib/api";
 import CarCard from "../components/CarCard";
+import ErrorBanner from "../components/ErrorBanner";
 import { useI18n } from "../lib/i18n";
 
 const tickerItems = [
@@ -40,14 +41,23 @@ const stagger = {
 
 export default function Home() {
   const [cars, setCars] = useState([]);
+  const [carsError, setCarsError] = useState("");
   const { t } = useI18n();
   const { scrollY } = useScroll();
   const heroY = useTransform(scrollY, [0, 600], [0, 100]);
   const heroOpacity = useTransform(scrollY, [0, 400], [1, 0.4]);
 
-  useEffect(() => {
-    api.get("/cars").then((r) => setCars(r.data.slice(0, 6))).catch(() => {});
+  const loadCars = useCallback(async () => {
+    setCarsError("");
+    try {
+      const { data } = await api.get("/cars");
+      setCars(data.slice(0, 6));
+    } catch (err) {
+      setCarsError(apiError(err, "Could not load trending cars."));
+    }
   }, []);
+
+  useEffect(() => { loadCars(); }, [loadCars]);
 
   return (
     <div className="bg-[#050505] text-white overflow-hidden">
@@ -370,6 +380,8 @@ export default function Home() {
             <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
           </Link>
         </motion.div>
+
+        <ErrorBanner message={carsError} onRetry={loadCars} className="mb-6" testId="home-cars-error" />
 
         <motion.div
           className="grid md:grid-cols-2 lg:grid-cols-3 gap-4"

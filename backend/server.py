@@ -21,6 +21,9 @@ from cars_data import CARS_SEED, NEWS_SEED
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
@@ -203,7 +206,17 @@ async def seed_db():
 
     # Pre-warm image proxy cache in the background for popular cars (non-blocking)
     import asyncio as _asyncio
-    _asyncio.create_task(_prewarm_images())
+    task = _asyncio.create_task(_prewarm_images())
+    task.add_done_callback(_log_task_exception)
+
+
+def _log_task_exception(task):
+    """Surface exceptions from fire-and-forget background tasks in the logs."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        logger.error("background task %s failed: %s", task.get_name(), exc, exc_info=exc)
 
 
 async def _prewarm_images():
@@ -222,25 +235,41 @@ async def _prewarm_images():
             r = await _fetch_image(u)
             if r.status_code == 200:
                 _IMAGE_CACHE[u] = (r.content, r.headers.get("content-type", "image/jpeg"))
-        except Exception:
-            pass
+            else:
+                logger.warning("image prewarm for %s returned HTTP %s", u, r.status_code)
+        except Exception as e:
+            # Prewarming is best-effort: never fail startup, but never hide the reason either.
+            logger.warning("image prewarm for %s failed: %s", u, e)
         await asyncio.sleep(0.1)
 
 
 # ---------- Helpers ----------
 def extract_json(text: str):
     """Extract first JSON object from an LLM text response."""
-    match = re.search(r"\{[\s\S]*\}", text)
+    match = re.search(r"\{[\s\S]*\}", text or "")
     if not match:
+        logger.warning("LLM response contained no JSON object: %s", (text or "")[:500])
         return None
     try:
         return json.loads(match.group(0))
-    except Exception:
+    except json.JSONDecodeError as e:
+        logger.warning("LLM response was not valid JSON (%s): %s", e, match.group(0)[:500])
         return None
+
+
+AI_UNAVAILABLE_DETAIL = "The AI service is unavailable right now. Please try again in a moment."
+
+
+def _ai_unavailable(context: str, exc: Exception) -> HTTPException:
+    """Log the real cause and return a client-safe 502 for upstream AI failures."""
+    logger.exception("%s failed: %s", context, exc)
+    return HTTPException(status_code=502, detail=AI_UNAVAILABLE_DETAIL)
 
 
 async def get_chat(session_id: str, system_message: str, model_key: Optional[str] = None) -> LlmChat:
     """Return an LlmChat pinned to the requested model (default: Claude Sonnet)."""
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(status_code=503, detail="AI is not configured on this server")
     m = AI_MODELS.get(model_key) if model_key else None
     provider_model = (m["provider"], m["model"]) if m else CLAUDE_MODEL
     chat = LlmChat(
@@ -302,7 +331,8 @@ async def image_proxy(url: str):
         except HTTPException:
             raise
         except httpx.RequestError as e:
-            raise HTTPException(status_code=502, detail=f"Upstream error: {e}")
+            logger.warning("image proxy fetch failed for %s: %s", url, e)
+            raise HTTPException(status_code=502, detail="Upstream image fetch failed") from e
 
     return Response(content=data, media_type=ctype, headers={
         "Cache-Control": "public, max-age=604800",
@@ -368,7 +398,12 @@ async def video_proxy(url: str, request: Request):
         raise
     except httpx.RequestError as e:
         await client.aclose()
-        raise HTTPException(status_code=502, detail=f"Upstream error: {e}")
+        logger.warning("video proxy fetch failed for %s: %s", url, e)
+        raise HTTPException(status_code=502, detail="Upstream video fetch failed") from e
+    except Exception:
+        # Never leak the upstream connection on unexpected failures.
+        await client.aclose()
+        raise
 
 
 # ---------- Car routes ----------
@@ -481,13 +516,12 @@ Return ONLY the JSON in the exact schema."""
         response = await chat.send_message(UserMessage(text=prompt))
         parsed = extract_json(response)
         if not parsed:
-            raise HTTPException(status_code=500, detail="AI did not return valid JSON")
+            raise HTTPException(status_code=502, detail="The AI returned an unreadable comparison. Please retry.")
         return {"car_a": car_a, "car_b": car_b, "analysis": parsed}
     except HTTPException:
         raise
     except Exception as e:
-        logging.exception("compare failure")
-        raise HTTPException(status_code=500, detail=f"AI error: {str(e)}")
+        raise _ai_unavailable("compare", e) from e
 
 
 # ---------- AI Recommend ----------
@@ -530,7 +564,7 @@ Return ONLY the JSON in the exact schema."""
         response = await chat.send_message(UserMessage(text=prompt))
         parsed = extract_json(response)
         if not parsed:
-            raise HTTPException(status_code=500, detail="AI did not return valid JSON")
+            raise HTTPException(status_code=502, detail="The AI returned unreadable recommendations. Please retry.")
         id_map = {c["id"]: c for c in candidates}
         for pick in parsed.get("top_picks", []):
             pick["car"] = id_map.get(pick.get("car_id"))
@@ -538,8 +572,7 @@ Return ONLY the JSON in the exact schema."""
     except HTTPException:
         raise
     except Exception as e:
-        logging.exception("recommend failure")
-        raise HTTPException(status_code=500, detail=f"AI error: {str(e)}")
+        raise _ai_unavailable("recommend", e) from e
 
 
 @api_router.get("/ai/models")
@@ -605,6 +638,11 @@ async def tts_speak(req: TTSRequest):
     try:
         # Local import so a missing pkg doesn't crash server startup
         from elevenlabs import ElevenLabs
+    except ImportError as e:
+        logger.error("TTS unavailable — elevenlabs package is not installed: %s", e)
+        raise HTTPException(status_code=503, detail="TTS not available on this server") from e
+
+    try:
         client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
         audio_iter = client.text_to_speech.convert(
             text=text,
@@ -627,8 +665,8 @@ async def tts_speak(req: TTSRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logging.exception("TTS failure")
-        raise HTTPException(status_code=502, detail=f"TTS error: {e}")
+        logger.exception("TTS failure: %s", e)
+        raise HTTPException(status_code=502, detail="Voice generation failed. Please try again.") from e
 
 
 
@@ -671,30 +709,33 @@ async def ai_chat(req: ChatRequest):
             "content": req.message,
             "ts": datetime.now(timezone.utc).isoformat(),
         })
+    except Exception as e:
+        # Transcript persistence is not worth failing the user's question over.
+        logger.exception("failed to persist user message for session %s: %s", req.session_id, e)
 
-        # Fetch booking context if the message looks CRM-ish or a phone number was provided
-        booking_context = "(none)"
-        msg_l = req.message.lower()
-        crm_keywords = ["booking", "track", "order", "cancel", "confirm", "sms", "email", "my car", "dealer", "delivery"]
-        if any(k in msg_l for k in crm_keywords):
-            # look for phone number or booking id in the message
-            import re as _re
-            phone_match = _re.search(r"\b(\d{10})\b", req.message)
-            bk_match = _re.search(r"\b([A-F0-9]{8})\b", req.message.upper())
-            query: dict = {}
-            if phone_match:
-                query["phone"] = phone_match.group(1)
-            if not query:
-                # Use all recent bookings from this session_id (chat already established trust)
-                bookings = await db.bookings.find({}, {"_id": 0}).sort("created_at", -1).to_list(5)
-            else:
-                bookings = await db.bookings.find(query, {"_id": 0}).sort("created_at", -1).to_list(5)
+    # Fetch booking context if the message looks CRM-ish or a phone number was provided
+    booking_context = "(none)"
+    msg_l = req.message.lower()
+    crm_keywords = ["booking", "track", "order", "cancel", "confirm", "sms", "email", "my car", "dealer", "delivery"]
+    if any(k in msg_l for k in crm_keywords):
+        # look for phone number or booking id in the message
+        phone_match = re.search(r"\b(\d{10})\b", req.message)
+        bk_match = re.search(r"\b([A-F0-9]{8})\b", req.message.upper())
+        query: dict = {}
+        if phone_match:
+            query["phone"] = phone_match.group(1)
+        try:
+            bookings = await db.bookings.find(query, {"_id": 0}).sort("created_at", -1).to_list(5)
             if bk_match:
                 # filter by id prefix
                 bookings = [b for b in bookings if b["id"][:8].upper() == bk_match.group(1)] or bookings
             booking_context = _format_booking_context(bookings)
+        except Exception as e:
+            # Answer without CRM context rather than failing the whole conversation.
+            logger.exception("failed to load booking context for session %s: %s", req.session_id, e)
 
-            # Log notification intent
+        # Log notification intent
+        try:
             await db.notifications.insert_one({
                 "id": str(uuid.uuid4()),
                 "session_id": req.session_id,
@@ -702,13 +743,20 @@ async def ai_chat(req: ChatRequest):
                 "message": req.message[:200],
                 "ts": datetime.now(timezone.utc).isoformat(),
             })
+        except Exception as e:
+            logger.exception("failed to log crm_query notification for session %s: %s", req.session_id, e)
 
-        system = (CHAT_SYSTEM
-                  .replace("{LANGUAGE}", req.language or "English")
-                  .replace("{BOOKING_CONTEXT}", booking_context))
-        chat = await get_chat(req.session_id, system, req.model)
+    system = (CHAT_SYSTEM
+              .replace("{LANGUAGE}", req.language or "English")
+              .replace("{BOOKING_CONTEXT}", booking_context))
+    chat = await get_chat(req.session_id, system, req.model)
+    try:
         response = await chat.send_message(UserMessage(text=req.message))
-        chosen = AI_MODELS.get(req.model or DEFAULT_CHAT_MODEL, AI_MODELS[DEFAULT_CHAT_MODEL])
+    except Exception as e:
+        raise _ai_unavailable("chat", e) from e
+
+    chosen = AI_MODELS.get(req.model or DEFAULT_CHAT_MODEL, AI_MODELS[DEFAULT_CHAT_MODEL])
+    try:
         await db.chat_messages.insert_one({
             "id": str(uuid.uuid4()),
             "session_id": req.session_id,
@@ -717,10 +765,11 @@ async def ai_chat(req: ChatRequest):
             "model": chosen["label"],
             "ts": datetime.now(timezone.utc).isoformat(),
         })
-        return {"reply": response, "model": chosen["label"]}
     except Exception as e:
-        logging.exception("chat failure")
-        raise HTTPException(status_code=500, detail=f"AI error: {str(e)}")
+        # The reply is already generated — persist failures must not lose it for the user.
+        logger.exception("failed to persist assistant message for session %s: %s", req.session_id, e)
+
+    return {"reply": response, "model": chosen["label"]}
 
 
 @api_router.get("/ai/chat/{session_id}/history")
@@ -776,7 +825,12 @@ async def create_booking(req: BookingRequest):
 
     leads = _assign_partners_to_booking(booking, car)
     if leads:
-        await db.partner_leads.insert_many(leads)
+        try:
+            await db.partner_leads.insert_many(leads)
+        except Exception as e:
+            # The booking itself is already stored; a lead-routing failure must not
+            # fail the customer's request, but it must be visible in the logs.
+            logger.exception("failed to create partner leads for booking %s: %s", booking.id, e)
 
     return booking
 
@@ -1060,18 +1114,28 @@ async def create_checkout(req: CheckoutRequest, http_request: Request):
         cancel_url=cancel_url,
         metadata={"plan_id": req.plan_id, "phone": req.customer_phone or "anonymous"},
     )
-    session = await checkout.create_checkout_session(ck_req)
+    try:
+        session = await checkout.create_checkout_session(ck_req)
+    except Exception as e:
+        logger.exception("stripe checkout session creation failed for plan %s: %s", req.plan_id, e)
+        raise HTTPException(status_code=502, detail="Could not start checkout with the payment provider") from e
 
-    await db.payment_transactions.insert_one({
-        "id": str(uuid.uuid4()),
-        "session_id": session.session_id,
-        "plan_id": req.plan_id,
-        "amount": plan["amount"],
-        "currency": plan["currency"],
-        "phone": req.customer_phone or "",
-        "payment_status": "initiated",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    })
+    try:
+        await db.payment_transactions.insert_one({
+            "id": str(uuid.uuid4()),
+            "session_id": session.session_id,
+            "plan_id": req.plan_id,
+            "amount": plan["amount"],
+            "currency": plan["currency"],
+            "phone": req.customer_phone or "",
+            "payment_status": "initiated",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception as e:
+        # The Stripe session already exists, so keep the checkout usable; the webhook
+        # will reconcile the transaction. Log loudly so the gap is traceable.
+        logger.exception("failed to record payment transaction for stripe session %s: %s", session.session_id, e)
+
     return {"url": session.url, "session_id": session.session_id}
 
 
@@ -1088,28 +1152,26 @@ async def checkout_status(session_id: str, http_request: Request):
 
     host_url = str(http_request.base_url).rstrip("/")
     webhook_url = f"{host_url}/api/webhook/stripe"
-    status = None
     try:
         checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
         status = await checkout.get_checkout_status(session_id)
     except Exception as e:
-        logging.warning("Stripe status fetch failed (likely unpaid/pending): %s", e)
-        # Return the DB-known state rather than 500ing
+        # A pending session legitimately has no terminal status yet, so fall back to the
+        # DB-known state instead of 500ing — but log the cause and tell the client the
+        # status could not be refreshed so it can keep polling / show a warning.
+        logger.warning("Stripe status fetch failed for %s: %s", session_id, e, exc_info=True)
         return {
             "payment_status": tx.get("payment_status", "initiated"),
             "status": "open",
             "amount_total": None,
             "currency": tx.get("currency", "inr"),
+            "stale": True,
+            "error": "Could not refresh payment status from the provider",
         }
 
     if status is None:
-        # Defensive guard — should not reach here since except returns above
-        return {
-            "payment_status": tx.get("payment_status", "initiated"),
-            "status": "open",
-            "amount_total": None,
-            "currency": tx.get("currency", "inr"),
-        }
+        logger.error("Stripe returned no status for session %s", session_id)
+        raise HTTPException(status_code=502, detail="Payment provider returned no status")
 
     if tx.get("payment_status") != "paid" and status.payment_status == "paid":
         await db.payment_transactions.update_one(
@@ -1140,7 +1202,8 @@ async def checkout_status(session_id: str, http_request: Request):
 @app.post("/api/webhook/stripe")
 async def stripe_webhook(request: Request):
     if not STRIPE_API_KEY:
-        return {"ok": False}
+        logger.error("received Stripe webhook but STRIPE_API_KEY is not configured")
+        return JSONResponse({"ok": False, "err": "Stripe not configured"}, status_code=503)
     body = await request.body()
     sig = request.headers.get("Stripe-Signature", "")
     host_url = str(request.base_url).rstrip("/")
@@ -1149,8 +1212,8 @@ async def stripe_webhook(request: Request):
     try:
         evt = await checkout.handle_webhook(body, sig)
     except Exception as e:
-        logging.exception("webhook error")
-        return JSONResponse({"ok": False, "err": str(e)}, status_code=400)
+        logger.exception("stripe webhook verification/parsing failed: %s", e)
+        return JSONResponse({"ok": False, "err": "Invalid webhook payload"}, status_code=400)
 
     if evt.payment_status == "paid" and evt.session_id:
         await db.payment_transactions.update_one(
@@ -1239,9 +1302,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
 
 
 @app.on_event("shutdown")

@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from "react";
-import { Volume2, VolumeX, Loader2 } from "lucide-react";
+import { Volume2, VolumeX, Loader2, AlertTriangle } from "lucide-react";
 import { API } from "../lib/api";
 
 /**
@@ -28,6 +28,7 @@ function _notify() {
 export function useTTS() {
   const [busy, setBusy] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [error, setError] = useState("");
   const ownerRef = useRef(Symbol("tts-owner"));
 
   const speak = useCallback(
@@ -54,13 +55,17 @@ export function useTTS() {
       }
 
       setBusy(true);
+      setError("");
       try {
         const resp = await fetch(`${API}/tts/speak`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text, voice: voice || getVoicePref() }),
         });
-        if (!resp.ok) throw new Error(`TTS ${resp.status}`);
+        if (!resp.ok) {
+          const detail = await resp.json().then((b) => b?.detail).catch(() => null);
+          throw new Error(detail || `Voice service returned HTTP ${resp.status}`);
+        }
         const blob = await resp.blob();
         const url = URL.createObjectURL(blob);
         const audio = new Audio(url);
@@ -79,12 +84,15 @@ export function useTTS() {
         };
         audio.onerror = () => {
           URL.revokeObjectURL(url);
+          console.error("TTS playback failed", audio.error);
+          setError("Audio playback failed on this device.");
           setPlaying(false);
         };
         await audio.play();
         setPlaying(true);
       } catch (err) {
         console.error("TTS failed:", err);
+        setError(err?.message || "Could not play this text.");
       } finally {
         setBusy(false);
       }
@@ -98,14 +106,14 @@ export function useTTS() {
   }, []);
   if (!_listeners.has(_sync)) _listeners.add(_sync);
 
-  return { speak, busy, playing };
+  return { speak, busy, playing, error };
 }
 
 /**
  * <SpeakButton /> — click to hear `text` spoken. Icon-only, small.
  */
 export function SpeakButton({ text, voice, className = "", testId }) {
-  const { speak, busy, playing } = useTTS();
+  const { speak, busy, playing, error } = useTTS();
   const onClick = (e) => {
     e.stopPropagation();
     speak(text, voice);
@@ -114,13 +122,15 @@ export function SpeakButton({ text, voice, className = "", testId }) {
     <button
       onClick={onClick}
       data-testid={testId || "speak-btn"}
-      title={playing ? "Stop" : "Read aloud"}
+      title={error || (playing ? "Stop" : "Read aloud")}
       className={`inline-flex items-center justify-center w-6 h-6 rounded-sm border border-white/10 hover:border-[#F59E0B]/60 hover:text-[#F59E0B] text-slate-400 transition-all ${
         playing ? "text-[#F59E0B] border-[#F59E0B]/60 bg-[#F59E0B]/10" : ""
-      } ${className}`}
+      } ${error ? "text-[#EF4444] border-[#EF4444]/60" : ""} ${className}`}
     >
       {busy ? (
         <Loader2 size={11} className="animate-spin" />
+      ) : error ? (
+        <AlertTriangle size={11} />
       ) : playing ? (
         <VolumeX size={11} />
       ) : (

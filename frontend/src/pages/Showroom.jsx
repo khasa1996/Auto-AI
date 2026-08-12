@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { api, formatINR, API } from "../lib/api";
+import { api, apiError, formatINR, API } from "../lib/api";
+import ErrorBanner from "../components/ErrorBanner";
 import {
   ChevronLeft, Lock, Palette, DoorOpen, Lightbulb,
   Package, Zap, Sparkles, Crown, Gauge, RotateCw, Car, Eye,
@@ -23,6 +24,7 @@ const LUXURY_SEGMENTS = ["Luxury SUV", "Luxury Sedan", "Luxury EV", "Luxury Hatc
 export default function Showroom() {
   const { carId } = useParams();
   const [car, setCar] = useState(null);
+  const [loadError, setLoadError] = useState("");
   const [angle, setAngle] = useState(0);
   const [autoSpin, setAutoSpin] = useState(true);
   const [color, setColor] = useState(COLORS[0]);
@@ -36,7 +38,12 @@ export default function Showroom() {
   const dragRef = useRef({ active: false, startX: 0, startAngle: 0 });
 
   useEffect(() => {
-    api.get(`/cars/${carId}`).then((r) => setCar(r.data));
+    let active = true;
+    setLoadError("");
+    api.get(`/cars/${carId}`)
+      .then((r) => { if (active) setCar(r.data); })
+      .catch((err) => { if (active) setLoadError(apiError(err, "Could not load this car.")); });
+    return () => { active = false; };
   }, [carId]);
 
   useEffect(() => {
@@ -79,6 +86,17 @@ export default function Showroom() {
     setAngle((dragRef.current.startAngle + dx * 0.8 + 3600) % 360);
   };
   const onTouchEnd = () => { dragRef.current.active = false; };
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center px-6">
+        <div className="w-full max-w-lg space-y-4">
+          <ErrorBanner message={loadError} testId="showroom-error" />
+          <Link to="/cars" className="inline-flex text-xs uppercase tracking-[0.25em] text-[#F59E0B]">← Back to all cars</Link>
+        </div>
+      </div>
+    );
+  }
 
   if (!car) return <div className="min-h-screen bg-black flex items-center justify-center text-slate-400">Loading showroom…</div>;
 

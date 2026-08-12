@@ -17,7 +17,9 @@ export default function InstallPWA() {
 
     // Register service worker
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/service-worker.js").catch(() => {});
+      navigator.serviceWorker
+        .register("/service-worker.js")
+        .catch((err) => console.error("[pwa] service worker registration failed", err));
     }
 
     const handler = (e) => {
@@ -40,8 +42,12 @@ export default function InstallPWA() {
 
   const install = async () => {
     if (deferred) {
-      deferred.prompt();
-      await deferred.userChoice;
+      try {
+        deferred.prompt();
+        await deferred.userChoice;
+      } catch (err) {
+        console.error("[pwa] install prompt failed", err);
+      }
       setDeferred(null);
     }
     setShow(false);

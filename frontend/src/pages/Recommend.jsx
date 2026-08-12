@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { api, formatINR } from "../lib/api";
+import { api, apiError, formatINR } from "../lib/api";
+import ErrorBanner from "../components/ErrorBanner";
 import { Sparkles, Loader2, Zap } from "lucide-react";
 import { Slider } from "../components/ui/slider";
 import CarVisual from "../components/CarVisual";
@@ -12,12 +13,14 @@ export default function Recommend() {
   const [usage, setUsage] = useState("city");
   const [notes, setNotes] = useState("");
   const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const run = async (e) => {
     e?.preventDefault();
     setLoading(true);
     setResult(null);
+    setError("");
     try {
       const { data } = await api.post("/ai/recommend", {
         budget_min: budget[0],
@@ -29,8 +32,7 @@ export default function Recommend() {
       });
       setResult(data);
     } catch (err) {
-      console.error("AI recommend failed:", err);
-      setResult({ error: "Could not fetch recommendations. Please try again." });
+      setError(apiError(err, "Could not fetch recommendations. Please try again."));
     } finally {
       setLoading(false);
     }
@@ -130,6 +132,8 @@ export default function Recommend() {
             </button>
           </div>
         </form>
+
+        <ErrorBanner message={error} onRetry={run} className="mt-8" testId="recommend-error" />
 
         {result && (
           <div className="mt-10 fade-up" data-testid="recommend-result">

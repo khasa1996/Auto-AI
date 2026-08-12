@@ -1,17 +1,27 @@
-import { useEffect, useMemo, useState } from "react";
-import { api } from "../lib/api";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { api, apiError } from "../lib/api";
 import CarCard from "../components/CarCard";
+import ErrorBanner from "../components/ErrorBanner";
 import { Search } from "lucide-react";
 
 export default function Cars() {
   const [cars, setCars] = useState([]);
+  const [error, setError] = useState("");
   const [q, setQ] = useState("");
   const [segment, setSegment] = useState("All");
   const [fuel, setFuel] = useState("All");
 
-  useEffect(() => {
-    api.get("/cars").then((r) => setCars(r.data));
+  const load = useCallback(async () => {
+    setError("");
+    try {
+      const { data } = await api.get("/cars");
+      setCars(data);
+    } catch (err) {
+      setError(apiError(err, "Could not load the car database."));
+    }
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const segments = useMemo(() => ["All", ...new Set(cars.map((c) => c.segment))], [cars]);
   const fuels = useMemo(() => ["All", ...new Set(cars.map((c) => c.fuel))], [cars]);
@@ -54,6 +64,8 @@ export default function Cars() {
             {fuels.map((f) => <option key={f} value={f}>{f}</option>)}
           </select>
         </div>
+
+        <ErrorBanner message={error} onRetry={load} className="mt-6" testId="cars-error" />
 
         <div className="mt-4 text-xs uppercase tracking-[0.2em] text-slate-500 font-mono">
           <span className="text-[#F59E0B]">{filtered.length}</span> cars · live

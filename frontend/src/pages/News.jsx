@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { api } from "../lib/api";
+import { useCallback, useEffect, useState } from "react";
+import { api, apiError } from "../lib/api";
+import ErrorBanner from "../components/ErrorBanner";
 import { Calendar, Tag, TrendingUp, AlertCircle, Award, IndianRupee } from "lucide-react";
 
 const CATEGORY_STYLE = {
@@ -36,10 +37,19 @@ function NewsVisual({ n, tall }) {
 
 export default function News() {
   const [items, setItems] = useState([]);
+  const [error, setError] = useState("");
 
-  useEffect(() => {
-    api.get("/news").then((r) => setItems(r.data));
+  const load = useCallback(async () => {
+    setError("");
+    try {
+      const { data } = await api.get("/news");
+      setItems(data);
+    } catch (err) {
+      setError(apiError(err, "Could not load the latest news."));
+    }
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   return (
     <div className="bg-[#050505] min-h-screen" data-testid="news-page">
@@ -52,6 +62,8 @@ export default function News() {
           Launches. Price drops. <span className="text-[#F59E0B]">Real changes.</span>
         </h1>
         <p className="text-slate-400 mt-4 max-w-2xl">AI-curated. Refreshed daily. No press-release fluff.</p>
+
+        <ErrorBanner message={error} onRetry={load} className="mt-6" testId="news-error" />
 
         <div className="mt-10 grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           {items.map((n, i) => (

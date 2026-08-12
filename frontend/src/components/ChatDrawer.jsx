@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { X, Send, Sparkles, Trash2, ChevronDown, Cpu, Zap, Brain, Mic } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { api } from "../lib/api";
+import { api, apiError } from "../lib/api";
 import { useI18n, LANGUAGES } from "../lib/i18n";
 import { SpeakButton, getVoicePref, setVoicePref } from "../lib/tts";
 
@@ -46,7 +46,10 @@ export default function ChatDrawer() {
   const changeVoice = (v) => { setVoice(v); setVoicePref(v); };
 
   useEffect(() => {
-    api.get("/ai/models").then((r) => setModels(r.data.models || [])).catch(() => {});
+    api.get("/ai/models")
+      .then((r) => setModels(r.data.models || []))
+      // The picker falls back to the default model, so only log this.
+      .catch((err) => apiError(err));
   }, []);
 
   const activeModel = models.find((m) => m.id === modelId) || { label: "AI", family: "" };
@@ -78,8 +81,9 @@ export default function ChatDrawer() {
     try {
       const { data } = await api.post("/ai/chat", { session_id: sessionId, message: msg, language: langName, model: modelId });
       setMessages((m) => [...m, { role: "assistant", content: data.reply, model: data.model }]);
-    } catch {
-      setMessages((m) => [...m, { role: "assistant", content: "Sorry, my AI brain is offline. Please try again." }]);
+    } catch (err) {
+      const detail = apiError(err, "Sorry, my AI brain is offline. Please try again.");
+      setMessages((m) => [...m, { role: "assistant", content: detail, error: true }]);
     } finally {
       setBusy(false);
     }
@@ -228,7 +232,11 @@ export default function ChatDrawer() {
 
             <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-4 font-mono text-sm" data-testid="chat-messages">
               {messages.map((m, i) => (
-                <div key={i} className={m.role === "assistant" ? "chat-ai-msg text-slate-200" : "chat-user-msg ml-8 text-white"}>
+                <div
+                  key={i}
+                  data-testid={m.error ? "chat-error-msg" : undefined}
+                  className={`${m.role === "assistant" ? "chat-ai-msg text-slate-200" : "chat-user-msg ml-8 text-white"} ${m.error ? "border-l-2 border-[#EF4444] pl-3 text-[#EF4444]" : ""}`}
+                >
                   <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500 mb-1 flex items-center gap-2">
                     <span>{m.role === "assistant" ? "AI" : "You"}</span>
                     {m.role === "assistant" && m.model && (

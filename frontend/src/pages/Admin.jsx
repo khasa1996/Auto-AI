@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { api } from "../lib/api";
+import { api, apiError } from "../lib/api";
+import ErrorBanner from "../components/ErrorBanner";
 import { ShieldCheck, Check, X, Loader2, Users, Clock, AlertTriangle, Lock, LogOut, Phone, MapPin, IndianRupee } from "lucide-react";
 
 export default function Admin() {
@@ -11,6 +12,7 @@ export default function Admin() {
   const [data, setData] = useState(null);
   const [filter, setFilter] = useState("all");
   const [acting, setActing] = useState(null);
+  const [error, setError] = useState("");
 
   const tryAuth = useCallback(async (p) => {
     setLoading(true); setLoginError("");
@@ -19,8 +21,8 @@ export default function Admin() {
       setPin(p);
       localStorage.setItem("autoai_admin_pin", p);
       setAuthed(true);
-    } catch {
-      setLoginError("Invalid PIN");
+    } catch (err) {
+      setLoginError(apiError(err, "Invalid PIN"));
       localStorage.removeItem("autoai_admin_pin");
       setPin("");
     } finally { setLoading(false); }
@@ -34,10 +36,15 @@ export default function Admin() {
 
   const load = useCallback(async () => {
     if (!pin) return;
+    setError("");
     const params = new URLSearchParams({ pin });
     if (filter !== "all") params.set("status", filter === "pending" ? "pending_verification" : filter);
-    const { data: resp } = await api.get(`/admin/dealers?${params.toString()}`);
-    setData(resp);
+    try {
+      const { data: resp } = await api.get(`/admin/dealers?${params.toString()}`);
+      setData(resp);
+    } catch (err) {
+      setError(apiError(err, "Could not load dealer applications."));
+    }
   }, [pin, filter]);
 
   // Reload dealer list when auth state changes or filter is updated.
@@ -47,9 +54,12 @@ export default function Admin() {
 
   const act = async (dealerId, action) => {
     setActing(dealerId);
+    setError("");
     try {
       await api.post(`/admin/dealers/${dealerId}/${action}`, { pin });
       await load();
+    } catch (err) {
+      setError(apiError(err, `Could not ${action} this dealer.`));
     } finally { setActing(null); }
   };
 
@@ -120,6 +130,8 @@ export default function Admin() {
             <LogOut size={14} /> Lock
           </button>
         </div>
+
+        <ErrorBanner message={error} onRetry={load} className="mb-6" testId="admin-error" />
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">

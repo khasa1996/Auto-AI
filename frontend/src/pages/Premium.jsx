@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { api } from "../lib/api";
+import { api, apiError } from "../lib/api";
+import ErrorBanner from "../components/ErrorBanner";
 import { Crown, Check, Sparkles, Zap, Headphones, Gift, TrendingUp, Loader2, CheckCircle2, XCircle } from "lucide-react";
 
 const PLANS = [
@@ -56,6 +57,7 @@ export default function Premium() {
   const [buyingId, setBuyingId] = useState(null);
   const [params] = useSearchParams();
   const [paymentState, setPaymentState] = useState(null); // 'pending' | 'paid' | 'failed'
+  const [checkoutError, setCheckoutError] = useState("");
   const sessionId = params.get("session_id");
 
   // Poll for payment status on return from Stripe
@@ -63,6 +65,7 @@ export default function Premium() {
     if (!sessionId) return;
     let attempts = 0;
     setPaymentState("pending");
+    setCheckoutError("");
     const poll = async () => {
       attempts++;
       try {
@@ -71,9 +74,14 @@ export default function Premium() {
         if (data.status === "expired") { setPaymentState("failed"); return; }
         if (attempts < 10) setTimeout(poll, 2500);
         else setPaymentState("failed");
-      } catch {
-        if (attempts < 10) setTimeout(poll, 2500);
-        else setPaymentState("failed");
+      } catch (err) {
+        const message = apiError(err, "Could not confirm your payment status.");
+        if (attempts < 10) {
+          setTimeout(poll, 2500);
+        } else {
+          setCheckoutError(message);
+          setPaymentState("failed");
+        }
       }
     };
     poll();
@@ -81,6 +89,7 @@ export default function Premium() {
 
   const subscribe = async (planId) => {
     setBuyingId(planId);
+    setCheckoutError("");
     try {
       const phone = localStorage.getItem("autoai_phone") || "";
       const { data } = await api.post("/checkout/session", {
@@ -88,9 +97,10 @@ export default function Premium() {
         origin_url: window.location.origin,
         customer_phone: phone,
       });
-      if (data.url) window.location.href = data.url;
-    } catch (e) {
-      alert("Could not start checkout. Try again.");
+      if (!data.url) throw new Error("checkout session returned no redirect url");
+      window.location.href = data.url;
+    } catch (err) {
+      setCheckoutError(apiError(err, "Could not start checkout. Please try again."));
     } finally {
       setBuyingId(null);
     }
@@ -119,6 +129,8 @@ export default function Premium() {
             Premium unlocks the full AI showroom, priority bookings, and insights normally reserved for dealer insiders.
           </p>
         </motion.div>
+
+        <ErrorBanner message={checkoutError} className="mt-10" testId="premium-error" />
 
         {/* Payment state banner */}
         {paymentState === "pending" && (

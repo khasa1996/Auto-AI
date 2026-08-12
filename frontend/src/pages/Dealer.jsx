@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
-import { api, formatINR } from "../lib/api";
+import { useCallback, useState, useEffect } from "react";
+import { api, apiError, formatINR } from "../lib/api";
+import ErrorBanner from "../components/ErrorBanner";
 import { Briefcase, TrendingUp, Users, IndianRupee, Phone, Car, MapPin, Loader2 } from "lucide-react";
 
 export default function Dealer() {
@@ -7,13 +8,24 @@ export default function Dealer() {
   const [partnerData, setPartnerData] = useState(null);
   const [city, setCity] = useState("");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  useEffect(() => {
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
     const params = city ? `?city=${encodeURIComponent(city)}` : "";
-    Promise.all([api.get(`/dealer/leads${params}`), api.get("/partners/leads")])
-      .then(([d, p]) => { setData(d.data); setPartnerData(p.data); })
-      .finally(() => setLoading(false));
+    try {
+      const [d, p] = await Promise.all([api.get(`/dealer/leads${params}`), api.get("/partners/leads")]);
+      setData(d.data);
+      setPartnerData(p.data);
+    } catch (err) {
+      setError(apiError(err, "Could not load the dealer dashboard."));
+    } finally {
+      setLoading(false);
+    }
   }, [city]);
+
+  useEffect(() => { load(); }, [load]);
 
   if (loading) {
     return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-slate-400">
@@ -32,6 +44,8 @@ export default function Dealer() {
           Every lead. <span className="text-[#F59E0B]">Live.</span>
         </h1>
         <p className="text-slate-400 mt-4 max-w-xl">Real-time feed of bookings, test-drive requests, loan and insurance leads across your city.</p>
+
+        <ErrorBanner message={error} onRetry={load} className="mt-6" testId="dealer-error" />
 
         {/* KPI row */}
         <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-3">

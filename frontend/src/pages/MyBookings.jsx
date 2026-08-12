@@ -1,21 +1,35 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { api, formatINR } from "../lib/api";
+import { api, apiError, formatINR } from "../lib/api";
+import ErrorBanner from "../components/ErrorBanner";
 import { Phone, LogOut, Car, Clock, CheckCircle2 } from "lucide-react";
 import CarVisual from "../components/CarVisual";
 
 export default function MyBookings() {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const nav = useNavigate();
   const phone = localStorage.getItem("autoai_phone");
 
+  const load = useCallback(async () => {
+    if (!phone) return;
+    setLoading(true);
+    setError("");
+    try {
+      const { data } = await api.get(`/me/bookings?phone=${encodeURIComponent(phone)}`);
+      setBookings(data);
+    } catch (err) {
+      setError(apiError(err, "Could not load your bookings."));
+    } finally {
+      setLoading(false);
+    }
+  }, [phone]);
+
   useEffect(() => {
     if (!phone) { nav("/login"); return; }
-    api.get(`/me/bookings?phone=${encodeURIComponent(phone)}`)
-      .then((r) => setBookings(r.data))
-      .finally(() => setLoading(false));
-  }, [phone, nav]);
+    load();
+  }, [phone, nav, load]);
 
   const logout = () => {
     localStorage.removeItem("autoai_token");
@@ -39,9 +53,11 @@ export default function MyBookings() {
           </button>
         </div>
 
+        <ErrorBanner message={error} onRetry={load} className="mb-6" testId="my-bookings-error" />
+
         {loading ? (
           <div className="text-center text-slate-500 py-12">Loading…</div>
-        ) : bookings.length === 0 ? (
+        ) : error ? null : bookings.length === 0 ? (
           <div className="border border-[#262626] bg-[#0A0A0A] p-16 text-center">
             <Car size={40} className="text-slate-600 mx-auto mb-4" />
             <div className="font-display text-2xl">No bookings yet</div>

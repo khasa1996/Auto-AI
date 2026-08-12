@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { api } from "../lib/api";
+import { api, apiError } from "../lib/api";
+import ErrorBanner from "../components/ErrorBanner";
 import { Briefcase, Loader2, CheckCircle2, Sparkles, TrendingUp } from "lucide-react";
 
 const BRAND_OPTIONS = [
@@ -22,6 +23,7 @@ export default function DealerApply() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
 
   const update = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const toggleBrand = (b) => {
@@ -35,9 +37,12 @@ export default function DealerApply() {
     e.preventDefault();
     if (!form.business_name || !form.owner_name || !form.phone || !form.city) return;
     setSubmitting(true);
+    setError("");
     try {
       const { data } = await api.post("/dealers/apply", form);
       setResult(data);
+    } catch (err) {
+      setError(apiError(err, "Could not submit your application. Please try again."));
     } finally { setSubmitting(false); }
   };
 
@@ -97,6 +102,8 @@ export default function DealerApply() {
             </div>
           ))}
         </div>
+
+        <ErrorBanner message={error} className="mt-10" testId="dealer-apply-error" />
 
         {/* Form */}
         <form onSubmit={submit} className="mt-10 border border-[#262626] bg-[#0A0A0A] p-8 space-y-5">

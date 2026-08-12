@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, apiError } from "../lib/api";
 import { Phone, Loader2, Shield, ArrowRight } from "lucide-react";
 
 export default function Login() {
@@ -20,7 +20,7 @@ export default function Login() {
       const { data } = await api.post("/auth/send-otp", { phone });
       setDemoOtp(data.demo_otp || "");
       setStep(2);
-    } catch { setError("Could not send OTP, please try again"); }
+    } catch (err) { setError(apiError(err, "Could not send OTP, please try again")); }
     finally { setLoading(false); }
   };
 
@@ -35,7 +35,7 @@ export default function Login() {
       localStorage.setItem("autoai_token", data.token);
       localStorage.setItem("autoai_phone", data.phone);
       nav("/my-bookings");
-    } catch { setError("Invalid OTP"); }
+    } catch (err) { setError(apiError(err, "Invalid OTP")); }
     finally { setLoading(false); }
   };
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { api, formatINR } from "../lib/api";
+import { api, apiError, formatINR } from "../lib/api";
 import { Scale, Check, X, Loader2, Trophy, Zap } from "lucide-react";
 import CarVisual from "../components/CarVisual";
 
@@ -22,7 +22,7 @@ export default function Compare() {
       const { data } = await api.post("/ai/compare", { car_a: carA, car_b: carB, user_need: need });
       setResult(data);
     } catch (err) {
-      setError(err.response?.data?.detail || "Comparison failed. Please check the car names.");
+      setError(apiError(err, "Comparison failed. Please check the car names."));
     } finally {
       setLoading(false);
     }

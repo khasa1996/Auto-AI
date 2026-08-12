@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { api, formatINR } from "../lib/api";
+import { api, apiError, formatINR } from "../lib/api";
+import ErrorBanner from "../components/ErrorBanner";
 import { Check, ChevronLeft, Loader2, Phone, CheckCircle2 } from "lucide-react";
 import { useI18n } from "../lib/i18n";
 import CarVisual from "../components/CarVisual";
@@ -11,6 +12,8 @@ export default function BookCar() {
   const { carId } = useParams();
   const { t } = useI18n();
   const [car, setCar] = useState(null);
+  const [carError, setCarError] = useState("");
+  const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [booking, setBooking] = useState(null);
   const [form, setForm] = useState({
@@ -27,7 +30,16 @@ export default function BookCar() {
   });
 
   useEffect(() => {
-    api.get(`/cars/${carId}`).then((r) => setCar(r.data)).catch(() => setCar(null));
+    let active = true;
+    setCarError("");
+    api.get(`/cars/${carId}`)
+      .then((r) => { if (active) setCar(r.data); })
+      .catch((err) => {
+        if (!active) return;
+        setCar(null);
+        setCarError(apiError(err, "Could not load this car."));
+      });
+    return () => { active = false; };
   }, [carId]);
 
   const update = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -36,13 +48,27 @@ export default function BookCar() {
     e.preventDefault();
     if (!form.name.trim() || !form.phone.trim() || !form.city) return;
     setSubmitting(true);
+    setSubmitError("");
     try {
       const { data } = await api.post("/bookings", { car_id: carId, ...form });
       setBooking(data);
+    } catch (err) {
+      setSubmitError(apiError(err, "Booking failed. Please try again."));
     } finally {
       setSubmitting(false);
     }
   };
+
+  if (carError) {
+    return (
+      <div className="bg-[#050505] min-h-screen flex items-center justify-center px-6">
+        <div className="w-full max-w-lg space-y-4">
+          <ErrorBanner message={carError} testId="book-car-error" />
+          <Link to="/cars" className="inline-flex text-xs uppercase tracking-[0.25em] text-[#F59E0B]">← Back to all cars</Link>
+        </div>
+      </div>
+    );
+  }
 
   if (!car) {
     return (
@@ -137,6 +163,8 @@ export default function BookCar() {
               Book your <span className="text-[#F59E0B]">zero-wait</span> test drive
             </h1>
             <p className="text-slate-400 mt-3 max-w-xl">No commissions hidden in your invoice. No dealer markup. Our partner will call you within 15 minutes.</p>
+
+            <ErrorBanner message={submitError} className="mt-6" testId="book-submit-error" />
 
             <form onSubmit={submit} className="mt-8 space-y-5 border border-[#262626] bg-[#0A0A0A] p-8">
               <div className="grid md:grid-cols-2 gap-4">

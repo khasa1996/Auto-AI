@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, formatINR } from "../lib/api";
+import { api, apiError, formatINR } from "../lib/api";
 import { Slider } from "../components/ui/slider";
 import { Calculator } from "lucide-react";
 
@@ -15,6 +15,7 @@ export default function EMI() {
   const [rate, setRate] = useState([9.5]);
   const [tenure, setTenure] = useState([60]);
   const [result, setResult] = useState(() => computeEMI(800000, 9.5, 60));
+  const [offline, setOffline] = useState(false);
 
   useEffect(() => {
     setResult(computeEMI(principal[0], rate[0], tenure[0]));
@@ -23,7 +24,14 @@ export default function EMI() {
         principal: principal[0],
         annual_rate: rate[0],
         tenure_months: tenure[0],
-      }).then((r) => setResult(r.data)).catch(() => {});
+      })
+        .then((r) => { setResult(r.data); setOffline(false); })
+        .catch((err) => {
+          // The locally computed figures already shown stay valid; tell the user
+          // they are not server-confirmed instead of failing silently.
+          apiError(err);
+          setOffline(true);
+        });
     }, 200);
     return () => clearTimeout(t);
   }, [principal, rate, tenure]);
@@ -44,6 +52,12 @@ export default function EMI() {
         <h1 className="font-display text-5xl lg:text-6xl tracking-tighter font-light uppercase">
           Loan math, <span className="text-[#F59E0B]">demystified.</span>
         </h1>
+
+        {offline && (
+          <div className="mt-6 border border-[#F59E0B] bg-[#F59E0B]/10 text-[#F59E0B] p-3 text-xs" data-testid="emi-offline-notice" role="status">
+            Showing figures calculated in your browser — the EMI service is unreachable.
+          </div>
+        )}
 
         <div className="mt-12 grid lg:grid-cols-12 gap-6">
           <div className="lg:col-span-7 border border-[#262626] bg-[#0A0A0A] p-8 space-y-10">
