@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { api } from "../lib/api";
+import { STORAGE_KEYS, setStored } from "../lib/storage";
 import { Phone, Loader2, Shield, ArrowRight } from "lucide-react";
 
 export default function Login() {
@@ -32,8 +33,8 @@ export default function Login() {
       // NOTE: MVP auth — token is a mock session id. Real auth (Twilio + JWT in
       // httpOnly cookie) is on the P1 backlog. localStorage is acceptable here
       // because no real secret is issued yet.
-      localStorage.setItem("autoai_token", data.token);
-      localStorage.setItem("autoai_phone", data.phone);
+      setStored(STORAGE_KEYS.token, data.token);
+      setStored(STORAGE_KEYS.phone, data.phone);
       nav("/my-bookings");
     } catch { setError("Invalid OTP"); }
     finally { setLoading(false); }

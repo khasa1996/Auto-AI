@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { X, Send, Sparkles, Trash2, ChevronDown, Cpu, Zap, Brain, Mic } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "../lib/api";
+import { STORAGE_KEYS, getStored, setStored } from "../lib/storage";
 import { useI18n, LANGUAGES } from "../lib/i18n";
 import { SpeakButton, getVoicePref, setVoicePref } from "../lib/tts";
 
@@ -38,7 +39,7 @@ export default function ChatDrawer() {
 
   // AI model picker
   const [models, setModels] = useState([]);
-  const [modelId, setModelId] = useState(() => localStorage.getItem("autoai_chat_model") || "claude");
+  const [modelId, setModelId] = useState(() => getStored(STORAGE_KEYS.chatModel, "claude"));
   const [showPicker, setShowPicker] = useState(false);
 
   // Voice picker (ElevenLabs TTS)
@@ -53,7 +54,7 @@ export default function ChatDrawer() {
 
   const pickModel = (id) => {
     setModelId(id);
-    localStorage.setItem("autoai_chat_model", id);
+    setStored(STORAGE_KEYS.chatModel, id);
     setShowPicker(false);
     // Fresh session per model to keep chat history clean
     setSessionId(`chat-${Date.now()}-${Math.random().toString(36).slice(2)}`);

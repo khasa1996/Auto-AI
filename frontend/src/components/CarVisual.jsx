@@ -4,7 +4,7 @@
  */
 import { useState } from "react";
 import { getCarImage } from "../lib/carImages";
-import { API } from "../lib/api";
+import { imageProxyUrl } from "../lib/api";
 
 const BRAND_THEMES = {
   "Maruti Suzuki": { bg: "linear-gradient(135deg, #0B2545 0%, #13315C 100%)", accent: "#EFF6FF", glow: "#3B82F6" },
@@ -97,7 +97,7 @@ export default function CarVisual({ car, className = "", showLabel = true, tall 
   const realUrl = getCarImage(car.id);
   const [imgFailed, setImgFailed] = useState(false);
   const useRealImage = realUrl && !imgFailed;
-  const proxiedUrl = realUrl ? `${API}/image-proxy?url=${encodeURIComponent(realUrl)}` : null;
+  const proxiedUrl = imageProxyUrl(realUrl);
 
   if (useRealImage) {
     return (

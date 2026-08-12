@@ -1,23 +1,6 @@
 """Backend tests for iteration 3: Partners (commission pipeline) + AI CRM chat."""
-import os
 import uuid
-import pytest
-import requests
-from pathlib import Path
-
-BASE_URL = ""
-fe = Path('/app/frontend/.env')
-for line in fe.read_text().splitlines():
-    if line.startswith('REACT_APP_BACKEND_URL='):
-        BASE_URL = line.split('=', 1)[1].strip().rstrip('/')
-API = f"{BASE_URL}/api"
-
-
-@pytest.fixture(scope="module")
-def client():
-    s = requests.Session()
-    s.headers.update({"Content-Type": "application/json"})
-    return s
+from api_client import API
 
 
 # ---- Partners: list + filter ----

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { api, formatINR } from "../lib/api";
 import { Briefcase, TrendingUp, Users, IndianRupee, Phone, Car, MapPin, Loader2 } from "lucide-react";
+import { Pill } from "../components/Primitives";
 
 export default function Dealer() {
   const [data, setData] = useState(null);
@@ -156,10 +157,3 @@ function TopList({ title, items, labelKey, icon }) {
   );
 }
 
-function Pill({ children, c }) {
-  return (
-    <span className="text-[9px] uppercase tracking-wider px-2 py-0.5 border font-bold" style={{ color: c, borderColor: c + "50" }}>
-      {children}
-    </span>
-  );
-}

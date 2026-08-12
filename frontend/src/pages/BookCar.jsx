@@ -4,6 +4,7 @@ import { api, formatINR } from "../lib/api";
 import { Check, ChevronLeft, Loader2, Phone, CheckCircle2 } from "lucide-react";
 import { useI18n } from "../lib/i18n";
 import CarVisual from "../components/CarVisual";
+import { Field } from "../components/Primitives";
 
 const CITIES = ["Mumbai", "Delhi", "Bengaluru", "Hyderabad", "Pune", "Chennai", "Kolkata", "Ahmedabad", "Jaipur", "Lucknow", "Chandigarh"];
 
@@ -210,14 +211,6 @@ function Spec({ label, value, highlight }) {
   );
 }
 
-function Field({ label, children }) {
-  return (
-    <label className="block">
-      <div className="text-[10px] uppercase tracking-[0.25em] text-slate-400 font-bold mb-2">{label}</div>
-      {children}
-    </label>
-  );
-}
 
 function Checkbox({ checked, onChange, label, tid }) {
   return (

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { api, formatINR, API } from "../lib/api";
+import { api, formatINR, imageProxyUrl } from "../lib/api";
 import {
   ChevronLeft, Lock, Palette, DoorOpen, Lightbulb,
   Package, Zap, Sparkles, Crown, Gauge, RotateCw, Car, Eye,
@@ -88,7 +88,7 @@ export default function Showroom() {
 
   // Real OEM image via backend proxy
   const realUrl = getCarImage(car.id);
-  const proxiedUrl = realUrl ? `${API}/image-proxy?url=${encodeURIComponent(realUrl)}` : null;
+  const proxiedUrl = imageProxyUrl(realUrl);
 
   // 3D sway effect based on angle — creates the illusion of rotation
   // Angle 0-180 = normal; 180-360 = mirrored (as if we rotated to back, showing reverse)

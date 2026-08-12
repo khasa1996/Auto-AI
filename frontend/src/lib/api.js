@@ -8,6 +8,11 @@ export const api = axios.create({
   timeout: 60000,
 });
 
+const proxyUrl = (kind) => (url) => (url ? `${API}/${kind}-proxy?url=${encodeURIComponent(url)}` : null);
+
+export const imageProxyUrl = proxyUrl("image");
+export const videoProxyUrl = proxyUrl("video");
+
 export const formatINR = (n) => {
   if (n == null) return "-";
   if (n >= 10000000) return `₹${(n / 10000000).toFixed(2)} Cr`;

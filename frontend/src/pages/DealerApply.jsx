@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api } from "../lib/api";
 import { Briefcase, Loader2, CheckCircle2, Sparkles, TrendingUp } from "lucide-react";
+import { Field } from "../components/Primitives";
 
 const BRAND_OPTIONS = [
   "Maruti Suzuki", "Hyundai", "Tata", "Mahindra", "Kia", "Toyota", "Honda",
@@ -163,14 +164,6 @@ export default function DealerApply() {
   );
 }
 
-function Field({ label, children }) {
-  return (
-    <label className="block">
-      <div className="text-[10px] uppercase tracking-[0.25em] text-slate-400 font-bold mb-2">{label}</div>
-      {children}
-    </label>
-  );
-}
 
 function Info({ label, value }) {
   return (

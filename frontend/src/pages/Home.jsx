@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Scale, Sparkles, Calculator, Newspaper, Gauge, ShieldCheck, Zap, Cpu, Radar } from "lucide-react";
 import { useEffect, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
-import { api, API } from "../lib/api";
+import { api, videoProxyUrl } from "../lib/api";
 import CarCard from "../components/CarCard";
 import { useI18n } from "../lib/i18n";
 
@@ -68,7 +68,7 @@ export default function Home() {
             data-testid="hero-video"
             className="absolute inset-0 w-full h-full object-cover opacity-55"
           >
-            <source src={`${API}/video-proxy?url=${encodeURIComponent(HERO_VIDEO_URL)}`} type="video/mp4" />
+            <source src={videoProxyUrl(HERO_VIDEO_URL)} type="video/mp4" />
           </video>
           {/* darkening + warm tint overlays */}
           <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/55 to-[#050505]" />

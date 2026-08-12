@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { api } from "../lib/api";
+import { STORAGE_KEYS, getStored } from "../lib/storage";
 import { Crown, Check, Sparkles, Zap, Headphones, Gift, TrendingUp, Loader2, CheckCircle2, XCircle } from "lucide-react";
 
 const PLANS = [
@@ -82,7 +83,7 @@ export default function Premium() {
   const subscribe = async (planId) => {
     setBuyingId(planId);
     try {
-      const phone = localStorage.getItem("autoai_phone") || "";
+      const phone = getStored(STORAGE_KEYS.phone, "");
       const { data } = await api.post("/checkout/session", {
         plan_id: planId,
         origin_url: window.location.origin,

@@ -1,22 +1,5 @@
 """Iteration 4: image-proxy, phone OTP auth, /me/bookings, /dealer/leads."""
-import os
-import uuid
-import pytest
-import requests
-from pathlib import Path
-
-BASE_URL = ""
-for line in Path('/app/frontend/.env').read_text().splitlines():
-    if line.startswith('REACT_APP_BACKEND_URL='):
-        BASE_URL = line.split('=', 1)[1].strip().rstrip('/')
-API = f"{BASE_URL}/api"
-
-
-@pytest.fixture(scope="module")
-def client():
-    s = requests.Session()
-    s.headers.update({"Content-Type": "application/json"})
-    return s
+from api_client import API
 
 
 # ---------- Image proxy ----------

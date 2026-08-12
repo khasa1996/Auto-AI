@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, formatINR } from "../lib/api";
+import { STORAGE_KEYS, getStored, removeStored } from "../lib/storage";
 import { Phone, LogOut, Car, Clock, CheckCircle2 } from "lucide-react";
 import CarVisual from "../components/CarVisual";
+import { Pill } from "../components/Primitives";
 
 export default function MyBookings() {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const nav = useNavigate();
-  const phone = localStorage.getItem("autoai_phone");
+  const phone = getStored(STORAGE_KEYS.phone);
 
   useEffect(() => {
     if (!phone) { nav("/login"); return; }
@@ -18,8 +20,7 @@ export default function MyBookings() {
   }, [phone, nav]);
 
   const logout = () => {
-    localStorage.removeItem("autoai_token");
-    localStorage.removeItem("autoai_phone");
+    removeStored(STORAGE_KEYS.token, STORAGE_KEYS.phone);
     nav("/login");
   };
 
@@ -103,10 +104,3 @@ export default function MyBookings() {
   );
 }
 
-function Pill({ children, c }) {
-  return (
-    <span className="text-[9px] uppercase tracking-wider px-2 py-0.5 border font-bold" style={{ color: c, borderColor: c + "50" }}>
-      {children}
-    </span>
-  );
-}

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
+import { STORAGE_KEYS, getStored, removeStored, setStored } from "../lib/storage";
 import { ShieldCheck, Check, X, Loader2, Users, Clock, AlertTriangle, Lock, LogOut, Phone, MapPin, IndianRupee } from "lucide-react";
 
 export default function Admin() {
-  const [pin, setPin] = useState(() => localStorage.getItem("autoai_admin_pin") || "");
+  const [pin, setPin] = useState(() => getStored(STORAGE_KEYS.adminPin, ""));
   const [authed, setAuthed] = useState(false);
   const [pinInput, setPinInput] = useState("");
   const [loginError, setLoginError] = useState("");
@@ -17,11 +18,11 @@ export default function Admin() {
     try {
       await api.post("/admin/verify", { pin: p });
       setPin(p);
-      localStorage.setItem("autoai_admin_pin", p);
+      setStored(STORAGE_KEYS.adminPin, p);
       setAuthed(true);
     } catch {
       setLoginError("Invalid PIN");
-      localStorage.removeItem("autoai_admin_pin");
+      removeStored(STORAGE_KEYS.adminPin);
       setPin("");
     } finally { setLoading(false); }
   }, []);
@@ -54,7 +55,7 @@ export default function Admin() {
   };
 
   const logout = () => {
-    localStorage.removeItem("autoai_admin_pin");
+    removeStored(STORAGE_KEYS.adminPin);
     setAuthed(false); setPin("");
   };
 

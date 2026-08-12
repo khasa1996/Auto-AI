@@ -11,12 +11,20 @@ import httpx
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional
-import uuid
-from datetime import datetime, timezone
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest
 from cars_data import CARS_SEED, NEWS_SEED
+from utils import (
+    build_query,
+    ensure_allowed_host,
+    extract_json,
+    new_id,
+    proxy_headers,
+    random_hex,
+    top_counts,
+    utc_now_iso,
+)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -228,17 +236,6 @@ async def _prewarm_images():
 
 
 # ---------- Helpers ----------
-def extract_json(text: str):
-    """Extract first JSON object from an LLM text response."""
-    match = re.search(r"\{[\s\S]*\}", text)
-    if not match:
-        return None
-    try:
-        return json.loads(match.group(0))
-    except Exception:
-        return None
-
-
 async def get_chat(session_id: str, system_message: str, model_key: Optional[str] = None) -> LlmChat:
     """Return an LlmChat pinned to the requested model (default: Claude Sonnet)."""
     m = AI_MODELS.get(model_key) if model_key else None
@@ -249,6 +246,22 @@ async def get_chat(session_id: str, system_message: str, model_key: Optional[str
         system_message=system_message,
     ).with_model(*provider_model)
     return chat
+
+
+async def ask_for_json(session_prefix: str, system_message: str, prompt: str) -> dict:
+    """Run a one-shot LLM prompt that must answer with JSON, or fail with an HTTP error."""
+    try:
+        chat = await get_chat(f"{session_prefix}-{new_id()}", system_message)
+        response = await chat.send_message(UserMessage(text=prompt))
+        parsed = extract_json(response)
+        if not parsed:
+            raise HTTPException(status_code=500, detail="AI did not return valid JSON")
+        return parsed
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.exception("%s failure", session_prefix)
+        raise HTTPException(status_code=500, detail=f"AI error: {str(e)}")
 
 
 async def find_car_by_name(name: str) -> Optional[dict]:
@@ -283,10 +296,7 @@ async def _fetch_image(url: str):
 
 @app.get("/api/image-proxy")
 async def image_proxy(url: str):
-    from urllib.parse import urlparse
-    host = urlparse(url).netloc
-    if not any(host.endswith(h) for h in _ALLOWED_HOSTS):
-        raise HTTPException(status_code=400, detail="Host not allowed")
+    ensure_allowed_host(url, _ALLOWED_HOSTS)
 
     if url in _IMAGE_CACHE:
         data, ctype = _IMAGE_CACHE[url]
@@ -304,20 +314,14 @@ async def image_proxy(url: str):
         except httpx.RequestError as e:
             raise HTTPException(status_code=502, detail=f"Upstream error: {e}")
 
-    return Response(content=data, media_type=ctype, headers={
-        "Cache-Control": "public, max-age=604800",
-        "Cross-Origin-Resource-Policy": "cross-origin",
-    })
+    return Response(content=data, media_type=ctype, headers=proxy_headers(604800))
 
 
 @app.api_route("/api/video-proxy", methods=["GET", "HEAD"])
 async def video_proxy(url: str, request: Request):
     """Stream video from allowed hosts (Pexels) with Range-request passthrough for HTML5 <video>."""
-    from urllib.parse import urlparse
     from fastapi.responses import StreamingResponse
-    host = urlparse(url).netloc
-    if not any(host.endswith(h) for h in _ALLOWED_HOSTS):
-        raise HTTPException(status_code=400, detail="Host not allowed")
+    ensure_allowed_host(url, _ALLOWED_HOSTS)
 
     # Forward Range header from browser to upstream so video can seek/buffer properly
     forward_headers = {
@@ -340,11 +344,7 @@ async def video_proxy(url: str, request: Request):
             raise HTTPException(status_code=r.status_code, detail="Upstream fetch failed")
 
         ctype = r.headers.get("content-type", "video/mp4")
-        resp_headers = {
-            "Cache-Control": "public, max-age=86400",
-            "Cross-Origin-Resource-Policy": "cross-origin",
-            "Accept-Ranges": "bytes",
-        }
+        resp_headers = proxy_headers(86400, **{"Accept-Ranges": "bytes"})
         for h in ("content-length", "content-range"):
             if h in r.headers:
                 resp_headers[h.title()] = r.headers[h]
@@ -384,11 +384,7 @@ async def list_cars(
     fuel: Optional[str] = None,
     budget_max: Optional[int] = None,
 ):
-    query: dict = {}
-    if segment:
-        query["segment"] = segment
-    if fuel and fuel != "Any":
-        query["fuel"] = fuel
+    query = build_query(segment=segment, fuel=fuel)
     if budget_max:
         query["price_ex_showroom"] = {"$lte": budget_max}
     cars = await db.cars.find(query, {"_id": 0}).to_list(500)
@@ -476,18 +472,8 @@ CAR B:
 {json.dumps(car_b, indent=2)}
 
 Return ONLY the JSON in the exact schema."""
-    try:
-        chat = await get_chat(f"compare-{uuid.uuid4()}", COMPARE_SYSTEM)
-        response = await chat.send_message(UserMessage(text=prompt))
-        parsed = extract_json(response)
-        if not parsed:
-            raise HTTPException(status_code=500, detail="AI did not return valid JSON")
-        return {"car_a": car_a, "car_b": car_b, "analysis": parsed}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logging.exception("compare failure")
-        raise HTTPException(status_code=500, detail=f"AI error: {str(e)}")
+    parsed = await ask_for_json("compare", COMPARE_SYSTEM, prompt)
+    return {"car_a": car_a, "car_b": car_b, "analysis": parsed}
 
 
 # ---------- AI Recommend ----------
@@ -505,9 +491,8 @@ Output STRICT JSON only:
 
 @api_router.post("/ai/recommend")
 async def ai_recommend(req: RecommendRequest):
-    query: dict = {"price_ex_showroom": {"$gte": req.budget_min, "$lte": req.budget_max}}
-    if req.fuel and req.fuel != "Any":
-        query["fuel"] = req.fuel
+    query = build_query(fuel=req.fuel)
+    query["price_ex_showroom"] = {"$gte": req.budget_min, "$lte": req.budget_max}
     if req.seats:
         query["seats"] = {"$gte": req.seats}
     candidates = await db.cars.find(query, {"_id": 0}).to_list(200)
@@ -525,21 +510,11 @@ Candidate cars (JSON):
 {json.dumps(candidates, indent=2)}
 
 Return ONLY the JSON in the exact schema."""
-    try:
-        chat = await get_chat(f"recommend-{uuid.uuid4()}", RECOMMEND_SYSTEM)
-        response = await chat.send_message(UserMessage(text=prompt))
-        parsed = extract_json(response)
-        if not parsed:
-            raise HTTPException(status_code=500, detail="AI did not return valid JSON")
-        id_map = {c["id"]: c for c in candidates}
-        for pick in parsed.get("top_picks", []):
-            pick["car"] = id_map.get(pick.get("car_id"))
-        return parsed
-    except HTTPException:
-        raise
-    except Exception as e:
-        logging.exception("recommend failure")
-        raise HTTPException(status_code=500, detail=f"AI error: {str(e)}")
+    parsed = await ask_for_json("recommend", RECOMMEND_SYSTEM, prompt)
+    id_map = {c["id"]: c for c in candidates}
+    for pick in parsed.get("top_picks", []):
+        pick["car"] = id_map.get(pick.get("car_id"))
+    return parsed
 
 
 @api_router.get("/ai/models")
@@ -619,10 +594,7 @@ async def tts_speak(req: TTSRequest):
         return Response(
             content=audio_bytes,
             media_type="audio/mpeg",
-            headers={
-                "Cache-Control": "public, max-age=3600",
-                "Cross-Origin-Resource-Policy": "cross-origin",
-            },
+            headers=proxy_headers(3600),
         )
     except HTTPException:
         raise
@@ -665,11 +637,11 @@ def _format_booking_context(bookings: list) -> str:
 async def ai_chat(req: ChatRequest):
     try:
         await db.chat_messages.insert_one({
-            "id": str(uuid.uuid4()),
+            "id": new_id(),
             "session_id": req.session_id,
             "role": "user",
             "content": req.message,
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": utc_now_iso(),
         })
 
         # Fetch booking context if the message looks CRM-ish or a phone number was provided
@@ -678,9 +650,8 @@ async def ai_chat(req: ChatRequest):
         crm_keywords = ["booking", "track", "order", "cancel", "confirm", "sms", "email", "my car", "dealer", "delivery"]
         if any(k in msg_l for k in crm_keywords):
             # look for phone number or booking id in the message
-            import re as _re
-            phone_match = _re.search(r"\b(\d{10})\b", req.message)
-            bk_match = _re.search(r"\b([A-F0-9]{8})\b", req.message.upper())
+            phone_match = re.search(r"\b(\d{10})\b", req.message)
+            bk_match = re.search(r"\b([A-F0-9]{8})\b", req.message.upper())
             query: dict = {}
             if phone_match:
                 query["phone"] = phone_match.group(1)
@@ -696,11 +667,11 @@ async def ai_chat(req: ChatRequest):
 
             # Log notification intent
             await db.notifications.insert_one({
-                "id": str(uuid.uuid4()),
+                "id": new_id(),
                 "session_id": req.session_id,
                 "type": "crm_query",
                 "message": req.message[:200],
-                "ts": datetime.now(timezone.utc).isoformat(),
+                "ts": utc_now_iso(),
             })
 
         system = (CHAT_SYSTEM
@@ -710,12 +681,12 @@ async def ai_chat(req: ChatRequest):
         response = await chat.send_message(UserMessage(text=req.message))
         chosen = AI_MODELS.get(req.model or DEFAULT_CHAT_MODEL, AI_MODELS[DEFAULT_CHAT_MODEL])
         await db.chat_messages.insert_one({
-            "id": str(uuid.uuid4()),
+            "id": new_id(),
             "session_id": req.session_id,
             "role": "assistant",
             "content": response,
             "model": chosen["label"],
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": utc_now_iso(),
         })
         return {"reply": response, "model": chosen["label"]}
     except Exception as e:
@@ -754,7 +725,7 @@ async def create_booking(req: BookingRequest):
 
     dealer = DEALERS_BY_CITY.get(req.city.strip().title(), f"Auto-AI Partner — {req.city}")
     booking = Booking(
-        id=str(uuid.uuid4()),
+        id=new_id(),
         car_id=req.car_id,
         car_name=f"{car['brand']} {car['model']}",
         name=req.name,
@@ -770,7 +741,7 @@ async def create_booking(req: BookingRequest):
         status="Confirmed — Dealer will call shortly",
         dealer=dealer,
         eta_call_minutes=15,
-        created_at=datetime.now(timezone.utc).isoformat(),
+        created_at=utc_now_iso(),
     )
     await db.bookings.insert_one(booking.model_dump())
 
@@ -791,9 +762,7 @@ async def get_booking(booking_id: str):
 
 @api_router.get("/bookings")
 async def list_bookings(phone: Optional[str] = None, limit: int = 20):
-    q: dict = {}
-    if phone:
-        q["phone"] = phone
+    q = build_query(phone=phone)
     items = await db.bookings.find(q, {"_id": 0}).sort("created_at", -1).to_list(limit)
     return items
 
@@ -852,7 +821,7 @@ async def send_otp(req: OtpSendReq):
     # MVP: OTP is always 123456. Replace with Twilio/MSG91 integration when keys available.
     await db.otps.insert_one({
         "phone": req.phone, "otp": "123456",
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": utc_now_iso(),
     })
     return {"sent": True, "message": "OTP sent (MVP: use 123456)", "demo_otp": "123456"}
 
@@ -861,10 +830,10 @@ async def send_otp(req: OtpSendReq):
 async def verify_otp(req: OtpVerifyReq):
     if req.otp != "123456":
         raise HTTPException(status_code=401, detail="Invalid OTP")
-    token = f"autoai_{req.phone}_{uuid.uuid4().hex[:12]}"
+    token = f"autoai_{req.phone}_{random_hex(12)}"
     await db.user_sessions.insert_one({
         "token": token, "phone": req.phone,
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": utc_now_iso(),
     })
     return {"token": token, "phone": req.phone}
 
@@ -878,21 +847,14 @@ async def my_bookings(phone: str):
 # ---------- Dealer Portal ----------
 @api_router.get("/dealer/leads")
 async def dealer_leads(city: Optional[str] = None):
-    q: dict = {}
-    if city:
-        q["city"] = city
+    q = build_query(city=city)
     bookings = await db.bookings.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
     total = len(bookings)
-    by_car: dict = {}
-    by_city: dict = {}
     test_drive_count = sum(1 for b in bookings if b.get("test_drive"))
     loan_count = sum(1 for b in bookings if b.get("needs_loan"))
     insurance_count = sum(1 for b in bookings if b.get("needs_insurance"))
-    for b in bookings:
-        by_car[b.get("car_name", "Unknown")] = by_car.get(b.get("car_name", "Unknown"), 0) + 1
-        by_city[b.get("city", "Unknown")] = by_city.get(b.get("city", "Unknown"), 0) + 1
-    top_cars = sorted(by_car.items(), key=lambda x: -x[1])[:10]
-    top_cities = sorted(by_city.items(), key=lambda x: -x[1])[:10]
+    top_cars = top_counts(bookings, "car_name")
+    top_cities = top_counts(bookings, "city")
     return {
         "total_leads": total,
         "test_drive_requests": test_drive_count,
@@ -918,7 +880,7 @@ class DealerApplication(BaseModel):
 @api_router.post("/dealers/apply")
 async def dealer_apply(app: DealerApplication):
     record = {
-        "id": str(uuid.uuid4()),
+        "id": new_id(),
         "business_name": app.business_name,
         "owner_name": app.owner_name,
         "phone": app.phone,
@@ -928,7 +890,7 @@ async def dealer_apply(app: DealerApplication):
         "bid_per_lead": app.bid_per_lead,
         "status": "pending_verification",
         "verified": False,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": utc_now_iso(),
     }
     await db.dealer_partners.insert_one(record.copy())
     record.pop("_id", None)
@@ -937,9 +899,7 @@ async def dealer_apply(app: DealerApplication):
 
 @api_router.get("/dealers")
 async def list_dealers(city: Optional[str] = None):
-    q: dict = {}
-    if city:
-        q["city"] = city
+    q = build_query(city=city)
     items = await db.dealer_partners.find(q, {"_id": 0}).sort("bid_per_lead", -1).to_list(200)
     return items
 
@@ -960,15 +920,13 @@ class AdminPinReq(BaseModel):
 @api_router.post("/admin/verify")
 async def admin_verify(req: AdminPinReq):
     _check_admin(req.pin)
-    return {"ok": True, "token": f"admin_{uuid.uuid4().hex}"}
+    return {"ok": True, "token": f"admin_{random_hex()}"}
 
 
 @api_router.get("/admin/dealers")
 async def admin_list_dealers(pin: str, status: Optional[str] = None):
     _check_admin(pin)
-    q: dict = {}
-    if status:
-        q["status"] = status
+    q = build_query(status=status)
     items = await db.dealer_partners.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
     # Stats
     all_items = await db.dealer_partners.find({}, {"_id": 0, "status": 1, "bid_per_lead": 1}).to_list(500)
@@ -987,40 +945,32 @@ class AdminActionReq(BaseModel):
     note: Optional[str] = ""
 
 
-@api_router.post("/admin/dealers/{dealer_id}/approve")
-async def admin_approve_dealer(dealer_id: str, req: AdminActionReq):
-    _check_admin(req.pin)
+async def _set_dealer_status(dealer_id: str, status: str, verified: bool, decided_at_field: str, note: str):
+    """Apply an admin verdict to a dealer application and return the updated record."""
     result = await db.dealer_partners.update_one(
         {"id": dealer_id},
         {"$set": {
-            "status": "approved",
-            "verified": True,
-            "approved_at": datetime.now(timezone.utc).isoformat(),
-            "admin_note": req.note or "",
+            "status": status,
+            "verified": verified,
+            decided_at_field: utc_now_iso(),
+            "admin_note": note or "",
         }},
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Dealer not found")
-    updated = await db.dealer_partners.find_one({"id": dealer_id}, {"_id": 0})
-    return updated
+    return await db.dealer_partners.find_one({"id": dealer_id}, {"_id": 0})
+
+
+@api_router.post("/admin/dealers/{dealer_id}/approve")
+async def admin_approve_dealer(dealer_id: str, req: AdminActionReq):
+    _check_admin(req.pin)
+    return await _set_dealer_status(dealer_id, "approved", True, "approved_at", req.note)
 
 
 @api_router.post("/admin/dealers/{dealer_id}/reject")
 async def admin_reject_dealer(dealer_id: str, req: AdminActionReq):
     _check_admin(req.pin)
-    result = await db.dealer_partners.update_one(
-        {"id": dealer_id},
-        {"$set": {
-            "status": "rejected",
-            "verified": False,
-            "rejected_at": datetime.now(timezone.utc).isoformat(),
-            "admin_note": req.note or "",
-        }},
-    )
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Dealer not found")
-    updated = await db.dealer_partners.find_one({"id": dealer_id}, {"_id": 0})
-    return updated
+    return await _set_dealer_status(dealer_id, "rejected", False, "rejected_at", req.note)
 
 
 # ---------- Stripe subscriptions ----------
@@ -1063,14 +1013,14 @@ async def create_checkout(req: CheckoutRequest, http_request: Request):
     session = await checkout.create_checkout_session(ck_req)
 
     await db.payment_transactions.insert_one({
-        "id": str(uuid.uuid4()),
+        "id": new_id(),
         "session_id": session.session_id,
         "plan_id": req.plan_id,
         "amount": plan["amount"],
         "currency": plan["currency"],
         "phone": req.customer_phone or "",
         "payment_status": "initiated",
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": utc_now_iso(),
     })
     return {"url": session.url, "session_id": session.session_id}
 
@@ -1112,29 +1062,39 @@ async def checkout_status(session_id: str, http_request: Request):
         }
 
     if tx.get("payment_status") != "paid" and status.payment_status == "paid":
-        await db.payment_transactions.update_one(
-            {"session_id": session_id},
-            {"$set": {"payment_status": "paid", "status": status.status, "paid_at": datetime.now(timezone.utc).isoformat()}},
-        )
+        await _mark_transaction_paid(session_id, {"status": status.status})
         if tx.get("phone"):
-            await db.subscriptions.update_one(
-                {"phone": tx["phone"], "plan_id": tx["plan_id"]},
-                {"$setOnInsert": {
-                    "id": str(uuid.uuid4()),
-                    "phone": tx["phone"],
-                    "plan_id": tx["plan_id"],
-                    "session_id": session_id,
-                    "status": "active",
-                    "started_at": datetime.now(timezone.utc).isoformat(),
-                }},
-                upsert=True,
-            )
+            await _activate_subscription(tx["phone"], tx["plan_id"], session_id)
     return {
         "payment_status": status.payment_status,
         "status": status.status,
         "amount_total": status.amount_total,
         "currency": status.currency,
     }
+
+
+async def _mark_transaction_paid(session_id: str, extra: dict):
+    """Flag a checkout transaction as paid, plus caller-specific fields."""
+    await db.payment_transactions.update_one(
+        {"session_id": session_id},
+        {"$set": {"payment_status": "paid", "paid_at": utc_now_iso(), **extra}},
+    )
+
+
+async def _activate_subscription(phone: str, plan_id: str, session_id: str):
+    """Create the active subscription for a paid plan if it does not exist yet."""
+    await db.subscriptions.update_one(
+        {"phone": phone, "plan_id": plan_id},
+        {"$setOnInsert": {
+            "id": new_id(),
+            "phone": phone,
+            "plan_id": plan_id,
+            "session_id": session_id,
+            "status": "active",
+            "started_at": utc_now_iso(),
+        }},
+        upsert=True,
+    )
 
 
 @app.post("/api/webhook/stripe")
@@ -1153,24 +1113,10 @@ async def stripe_webhook(request: Request):
         return JSONResponse({"ok": False, "err": str(e)}, status_code=400)
 
     if evt.payment_status == "paid" and evt.session_id:
-        await db.payment_transactions.update_one(
-            {"session_id": evt.session_id},
-            {"$set": {"payment_status": "paid", "webhook_event": evt.event_type, "paid_at": datetime.now(timezone.utc).isoformat()}},
-        )
+        await _mark_transaction_paid(evt.session_id, {"webhook_event": evt.event_type})
         meta = evt.metadata or {}
         if meta.get("phone") and meta.get("plan_id"):
-            await db.subscriptions.update_one(
-                {"phone": meta["phone"], "plan_id": meta["plan_id"]},
-                {"$setOnInsert": {
-                    "id": str(uuid.uuid4()),
-                    "phone": meta["phone"],
-                    "plan_id": meta["plan_id"],
-                    "session_id": evt.session_id,
-                    "status": "active",
-                    "started_at": datetime.now(timezone.utc).isoformat(),
-                }},
-                upsert=True,
-            )
+            await _activate_subscription(meta["phone"], meta["plan_id"], evt.session_id)
     return {"ok": True}
 
 
@@ -1179,6 +1125,26 @@ async def my_subscription(phone: str):
     sub = await db.subscriptions.find_one({"phone": phone, "status": "active"}, {"_id": 0})
     return sub or {"status": "none"}
 
+
+
+def _partner_lead(booking: Booking, partner: dict, partner_type: str, commission: float, extra: dict) -> dict:
+    """Build a partner lead document for a booking."""
+    return {
+        "id": new_id(),
+        "booking_id": booking.id,
+        "car_id": booking.car_id,
+        "car_name": booking.car_name,
+        "customer_name": booking.name,
+        "customer_phone": booking.phone,
+        "city": booking.city,
+        "partner_id": partner["id"],
+        "partner_name": partner["name"],
+        "partner_type": partner_type,
+        "expected_commission": round(commission, 2),
+        "status": "assigned",
+        "created_at": utc_now_iso(),
+        **extra,
+    }
 
 
 def _assign_partners_to_booking(booking: Booking, car: dict):
@@ -1191,42 +1157,12 @@ def _assign_partners_to_booking(booking: Booking, car: dict):
         partner = LOAN_PARTNERS[0]
         loan_amount = car_price * 0.85  # assume 85% LTV
         commission = loan_amount * partner["commission_pct"] / 100
-        leads.append({
-            "id": str(uuid.uuid4()),
-            "booking_id": booking.id,
-            "car_id": booking.car_id,
-            "car_name": booking.car_name,
-            "customer_name": booking.name,
-            "customer_phone": booking.phone,
-            "city": booking.city,
-            "partner_id": partner["id"],
-            "partner_name": partner["name"],
-            "partner_type": "loan",
-            "loan_amount": loan_amount,
-            "expected_commission": round(commission, 2),
-            "status": "assigned",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
+        leads.append(_partner_lead(booking, partner, "loan", commission, {"loan_amount": loan_amount}))
     if booking.needs_insurance and INSURANCE_PARTNERS:
         partner = INSURANCE_PARTNERS[0]
         premium = car_price * partner["avg_premium_pct"] / 100
         commission = premium * partner["commission_pct"] / 100
-        leads.append({
-            "id": str(uuid.uuid4()),
-            "booking_id": booking.id,
-            "car_id": booking.car_id,
-            "car_name": booking.car_name,
-            "customer_name": booking.name,
-            "customer_phone": booking.phone,
-            "city": booking.city,
-            "partner_id": partner["id"],
-            "partner_name": partner["name"],
-            "partner_type": "insurance",
-            "annual_premium": round(premium, 2),
-            "expected_commission": round(commission, 2),
-            "status": "assigned",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
+        leads.append(_partner_lead(booking, partner, "insurance", commission, {"annual_premium": round(premium, 2)}))
     return leads
 
 

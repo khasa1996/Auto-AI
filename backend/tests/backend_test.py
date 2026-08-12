@@ -1,28 +1,7 @@
 """Backend tests for Auto-AI India API - iteration 2 (bookings, languages, enhanced chat)."""
-import os
 import re
 import uuid
-import pytest
-import requests
-from dotenv import load_dotenv
-from pathlib import Path
-
-load_dotenv(Path(__file__).resolve().parents[1] / '.env')
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
-if not BASE_URL:
-    fe = Path('/app/frontend/.env')
-    for line in fe.read_text().splitlines():
-        if line.startswith('REACT_APP_BACKEND_URL='):
-            BASE_URL = line.split('=', 1)[1].strip().rstrip('/')
-
-API = f"{BASE_URL}/api"
-
-
-@pytest.fixture(scope="module")
-def client():
-    s = requests.Session()
-    s.headers.update({"Content-Type": "application/json"})
-    return s
+from api_client import API
 
 
 # ---- Cars (expanded DB) ----

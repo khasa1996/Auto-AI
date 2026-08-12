@@ -1,16 +1,17 @@
 import { useState, useRef, useCallback } from "react";
 import { Volume2, VolumeX, Loader2 } from "lucide-react";
 import { API } from "../lib/api";
+import { STORAGE_KEYS, getStored, setStored } from "./storage";
 
 /**
  * Voice preference — read/written to localStorage. Shared across the app.
  * Values: "female" | "male"
  */
 export function getVoicePref() {
-  return localStorage.getItem("autoai_tts_voice") || "female";
+  return getStored(STORAGE_KEYS.ttsVoice, "female");
 }
 export function setVoicePref(v) {
-  localStorage.setItem("autoai_tts_voice", v);
+  setStored(STORAGE_KEYS.ttsVoice, v);
 }
 
 /**

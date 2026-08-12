@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Download, X, Smartphone } from "lucide-react";
+import { STORAGE_KEYS, getStored, setStored } from "../lib/storage";
 
 /**
  * PWA Install Prompt — shows an "Add to Home Screen" banner on first visit.
@@ -11,7 +12,7 @@ export default function InstallPWA() {
   const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
-    if (localStorage.getItem("autoai_pwa_dismissed")) return;
+    if (getStored(STORAGE_KEYS.pwaDismissed)) return;
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent);
     setIsIOS(ios);
 
@@ -48,7 +49,7 @@ export default function InstallPWA() {
   };
 
   const dismiss = () => {
-    localStorage.setItem("autoai_pwa_dismissed", "1");
+    setStored(STORAGE_KEYS.pwaDismissed, "1");
     setShow(false);
   };
 

@@ -1,4 +1,5 @@
 import { createContext, useContext, useState } from "react";
+import { STORAGE_KEYS, getStored, setStored } from "./storage";
 
 export const LANGUAGES = [
   { code: "en", name: "English", native: "English" },
@@ -105,8 +106,8 @@ const DICT = {
 const I18nContext = createContext({ lang: "en", setLang: () => {}, t: (k) => k, langName: "English" });
 
 export function I18nProvider({ children }) {
-  const [lang, setLangState] = useState(() => localStorage.getItem("autoai_lang") || "en");
-  const setLang = (l) => { localStorage.setItem("autoai_lang", l); setLangState(l); };
+  const [lang, setLangState] = useState(() => getStored(STORAGE_KEYS.lang, "en"));
+  const setLang = (l) => { setStored(STORAGE_KEYS.lang, l); setLangState(l); };
   const t = (k) => DICT[lang]?.[k] || DICT.en[k] || k;
   const meta = LANGUAGES.find((l) => l.code === lang) || LANGUAGES[0];
   return (
