@@ -98,3 +98,8 @@ credentials.json
 *.pem
 *.key
 .credentials
+
+# Python test artifacts
+.coverage
+htmlcov/
+.pytest_cache/
