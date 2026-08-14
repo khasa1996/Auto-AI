@@ -1,0 +1,34 @@
+name: Apply Razorpay payment migration
+
+on:
+  push:
+    branches:
+      - feat/razorpay-one-time-payments-2
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply Razorpay migration
+        run: python scripts/migrate_stripe_to_razorpay.py
+
+      - name: Commit migrated backend
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/server.py
+          if git diff --cached --quiet; then
+            echo "No backend changes to commit."
+            exit 0
+          fi
+          git commit -m "refactor: replace Stripe with Razorpay one-time payments"
+          git push origin HEAD:${GITHUB_REF_NAME}
