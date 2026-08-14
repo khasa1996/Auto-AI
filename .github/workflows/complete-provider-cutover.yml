@@ -19,17 +19,28 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
+          import re
 
           path = Path("backend/server.py")
           text = path.read_text(encoding="utf-8")
 
-          text = text.replace(
-              "from emergentintegrations.llm.chat import LlmChat, UserMessage\nfrom emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest",
-              "from llm_provider import LlmChat, UserMessage\nfrom stripe_provider import StripeCheckout, CheckoutSessionRequest",
+          text, n = re.subn(
+              r'^from emergentintegrations\.llm\.chat import LlmChat, UserMessage\r?\n',
+              'from llm_provider import LlmChat, UserMessage\n',
+              text,
+              flags=re.MULTILINE,
           )
-          text = text.replace('EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")\n', "")
+          text, n2 = re.subn(
+              r'^from emergentintegrations\.payments\.stripe\.checkout import StripeCheckout, CheckoutSessionRequest\r?\n',
+              'from stripe_provider import StripeCheckout, CheckoutSessionRequest\n',
+              text,
+              flags=re.MULTILINE,
+          )
+          text = re.sub(r'^EMERGENT_LLM_KEY\s*=.*\r?\n', '', text, flags=re.MULTILINE)
           text = text.replace('api_key=EMERGENT_LLM_KEY,', 'api_key=None,')
 
+          if n != 1 or n2 != 1:
+              raise SystemExit(f"Expected one replacement per Emergent import; got llm={n}, stripe={n2}")
           if "emergentintegrations" in text or "EMERGENT_LLM_KEY" in text:
               raise SystemExit("Emergent backend references remain after migration")
 
