@@ -63,9 +63,9 @@ class StripeProvider:
             ("success_url", success_url),
             ("cancel_url", cancel_url),
             ("line_items[0][quantity]", "1"),
-            ("line_items[0][price_data[currency]]", currency.lower()),
-            ("line_items[0][price_data[product_data[name]]", "Auto-AI Premium Access"),
-            ("line_items[0][price_data[unit_amount]", str(int(round(amount * 100)))),
+            ("line_items[0][price_data][currency]", currency.lower()),
+            ("line_items[0][price_data][product_data][name]", "Auto-AI Premium Access"),
+            ("line_items[0][price_data][unit_amount]", str(int(round(amount * 100)))),
         ]
         for key, value in metadata.items():
             data.append((f"metadata[{key}]", str(value)))
