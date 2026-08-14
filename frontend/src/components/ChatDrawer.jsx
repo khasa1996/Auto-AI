@@ -65,6 +65,8 @@ export default function ChatDrawer() {
   }, [messages, open]);
 
   // Update greeting on language change (only if conversation hasn't started)
+  // greetings is intentionally recreated from the active language map; lang is the true dependency.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     setMessages((m) => (m.length === 1 && m[0].role === "assistant" ? [{ role: "assistant", content: greetings[lang] || greetings.en }] : m));
   }, [lang]);
