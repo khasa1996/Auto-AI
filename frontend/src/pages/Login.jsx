@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, USER_TOKEN_KEY } from "../lib/api";
 import { Phone, Loader2, Shield, ArrowRight } from "lucide-react";
 
 export default function Login() {
@@ -20,7 +20,9 @@ export default function Login() {
       const { data } = await api.post("/auth/send-otp", { phone });
       setDemoOtp(data.demo_otp || "");
       setStep(2);
-    } catch { setError("Could not send OTP, please try again"); }
+    } catch (e) {
+      setError(e?.response?.status === 429 ? "Too many OTP requests. Try again later." : "Could not send OTP, please try again");
+    }
     finally { setLoading(false); }
   };
 
@@ -29,13 +31,12 @@ export default function Login() {
     setLoading(true); setError("");
     try {
       const { data } = await api.post("/auth/verify-otp", { phone, otp });
-      // NOTE: MVP auth — token is a mock session id. Real auth (Twilio + JWT in
-      // httpOnly cookie) is on the P1 backlog. localStorage is acceptable here
-      // because no real secret is issued yet.
-      localStorage.setItem("autoai_token", data.token);
+      localStorage.setItem(USER_TOKEN_KEY, data.token);
       localStorage.setItem("autoai_phone", data.phone);
       nav("/my-bookings");
-    } catch { setError("Invalid OTP"); }
+    } catch (e) {
+      setError(e?.response?.status === 429 ? "Too many attempts. Request a new OTP later." : "Invalid or expired OTP");
+    }
     finally { setLoading(false); }
   };
 
@@ -95,7 +96,7 @@ export default function Login() {
               </label>
               {demoOtp && (
                 <div className="text-[10px] uppercase tracking-[0.25em] text-[#F59E0B] font-mono bg-[#F59E0B]/5 border border-[#F59E0B]/30 px-3 py-2">
-                  Demo OTP for MVP: <strong>{demoOtp}</strong>
+                  Demo OTP (dev mode): <strong>{demoOtp}</strong>
                 </div>
               )}
               {error && <div className="text-xs text-[#EF4444]">{error}</div>}

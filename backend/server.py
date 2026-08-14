@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Request
+from fastapi import FastAPI, APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -17,9 +17,17 @@ from datetime import datetime, timezone
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest
 from cars_data import CARS_SEED, NEWS_SEED
+import security
+from security import RateLimiter
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+CORS_ORIGINS = [o.strip() for o in os.environ.get('CORS_ORIGINS', '*').split(',') if o.strip()] or ['*']
+ALLOW_CREDENTIALS = '*' not in CORS_ORIGINS
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -86,8 +94,83 @@ AI_MODELS = {
 }
 DEFAULT_CHAT_MODEL = "claude"
 
-app = FastAPI(title="Auto-AI India API")
+_DOCS_ENABLED = security.APP_ENV != "production"
+app = FastAPI(
+    title="Auto-AI India API",
+    # The interactive docs enumerate every endpoint and schema; keep them off in production.
+    docs_url="/docs" if _DOCS_ENABLED else None,
+    redoc_url="/redoc" if _DOCS_ENABLED else None,
+    openapi_url="/openapi.json" if _DOCS_ENABLED else None,
+)
 api_router = APIRouter(prefix="/api")
+
+PHONE_PATTERN = r"^\+?[0-9]{10,15}$"
+
+
+# ---------- Auth ----------
+ADMIN_PIN = os.environ.get("ADMIN_PIN", "").strip()
+
+# Per-phone limits stop OTP bombing a single number; the looser per-IP limits
+# still allow shared/NAT egress addresses to sign several people in.
+_otp_send_limiter = RateLimiter(limit=5, window_seconds=600)
+_otp_send_ip_limiter = RateLimiter(limit=40, window_seconds=600)
+_otp_verify_limiter = RateLimiter(limit=10, window_seconds=600)
+_otp_verify_ip_limiter = RateLimiter(limit=60, window_seconds=600)
+_admin_login_limiter = RateLimiter(limit=10, window_seconds=600)
+_booking_limiter = RateLimiter(limit=60, window_seconds=600)
+_dealer_apply_limiter = RateLimiter(limit=20, window_seconds=600)
+
+
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
+def _bearer_token(authorization: Optional[str]) -> Optional[str]:
+    if not authorization:
+        return None
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        return None
+    return token.strip()
+
+
+async def optional_user_phone(authorization: Optional[str] = Header(None)) -> Optional[str]:
+    """Resolve the caller's phone from a session token, or None when unauthenticated."""
+    token = _bearer_token(authorization)
+    if not token:
+        return None
+    sess = await db.user_sessions.find_one({"token_hash": security.hash_secret(token)}, {"_id": 0})
+    if not sess or security.is_expired(sess.get("expires_at")):
+        return None
+    return sess["phone"]
+
+
+async def current_user_phone(phone: Optional[str] = Depends(optional_user_phone)) -> str:
+    if not phone:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return phone
+
+
+async def require_admin(
+    authorization: Optional[str] = Header(None),
+    x_admin_pin: Optional[str] = Header(None),
+) -> str:
+    """Admin auth via a session token from /api/admin/verify, or the admin PIN header."""
+    token = _bearer_token(authorization)
+    if token:
+        sess = await db.admin_sessions.find_one({"token_hash": security.hash_secret(token)}, {"_id": 0})
+        if sess and not security.is_expired(sess.get("expires_at")):
+            return "admin"
+    if x_admin_pin and _admin_pin_valid(x_admin_pin):
+        return "admin"
+    raise HTTPException(status_code=401, detail="Admin authentication required")
+
+
+def _admin_pin_valid(pin: str) -> bool:
+    if not ADMIN_PIN:
+        # Fail closed: without a configured PIN the admin surface stays unreachable.
+        raise HTTPException(status_code=503, detail="Admin access is not configured")
+    return security.constant_time_equals(pin, ADMIN_PIN)
 
 
 # ---------- Models ----------
@@ -126,41 +209,41 @@ class NewsItem(BaseModel):
 
 
 class CompareRequest(BaseModel):
-    car_a: str
-    car_b: str
-    user_need: Optional[str] = "general family use"
+    car_a: str = Field(max_length=120)
+    car_b: str = Field(max_length=120)
+    user_need: Optional[str] = Field(default="general family use", max_length=500)
 
 
 class RecommendRequest(BaseModel):
-    budget_min: int
-    budget_max: int
-    fuel: Optional[str] = "Any"
-    seats: Optional[int] = 5
-    usage: Optional[str] = "city"
-    notes: Optional[str] = ""
+    budget_min: int = Field(ge=0, le=1_000_000_000)
+    budget_max: int = Field(ge=0, le=1_000_000_000)
+    fuel: Optional[str] = Field(default="Any", max_length=40)
+    seats: Optional[int] = Field(default=5, ge=1, le=20)
+    usage: Optional[str] = Field(default="city", max_length=200)
+    notes: Optional[str] = Field(default="", max_length=1000)
 
 
 class ChatRequest(BaseModel):
     model_config = {"protected_namespaces": ()}
 
-    session_id: str
-    message: str
-    language: Optional[str] = "English"
-    model: Optional[str] = None  # "claude" | "gemini-pro" | "gemini-flash"
+    session_id: str = Field(max_length=128)
+    message: str = Field(min_length=1, max_length=4000)
+    language: Optional[str] = Field(default="English", max_length=40)
+    model: Optional[str] = Field(default=None, max_length=40)  # "claude" | "gemini-pro" | "gemini-flash"
 
 
 class BookingRequest(BaseModel):
-    car_id: str
-    name: str
-    phone: str
-    email: Optional[str] = ""
-    city: str
-    preferred_date: Optional[str] = ""
+    car_id: str = Field(max_length=80)
+    name: str = Field(min_length=1, max_length=120)
+    phone: str = Field(pattern=PHONE_PATTERN)
+    email: Optional[str] = Field(default="", max_length=200)
+    city: str = Field(min_length=1, max_length=80)
+    preferred_date: Optional[str] = Field(default="", max_length=40)
     test_drive: bool = True
     needs_loan: bool = False
     needs_insurance: bool = False
-    exchange_car: Optional[str] = ""
-    notes: Optional[str] = ""
+    exchange_car: Optional[str] = Field(default="", max_length=120)
+    notes: Optional[str] = Field(default="", max_length=2000)
 
 
 class Booking(BaseModel):
@@ -185,9 +268,9 @@ class Booking(BaseModel):
 
 
 class EMIRequest(BaseModel):
-    principal: float
-    annual_rate: float
-    tenure_months: int
+    principal: float = Field(gt=0, le=1_000_000_000)
+    annual_rate: float = Field(ge=0, le=100)
+    tenure_months: int = Field(gt=0, le=480)
 
 
 # ---------- Startup: seed data ----------
@@ -200,6 +283,16 @@ async def seed_db():
         await db.cars.insert_many([dict(c) for c in CARS_SEED])
     if NEWS_SEED:
         await db.news.insert_many([dict(n) for n in NEWS_SEED])
+
+    await db.otps.create_index("phone")
+    await db.user_sessions.create_index("token_hash")
+    await db.admin_sessions.create_index("token_hash")
+    await db.bookings.create_index("phone")
+
+    if not security.SECRET_KEY_CONFIGURED:
+        logger.warning("SECRET_KEY is not configured — sessions and OTPs will be invalidated on restart.")
+    if not ADMIN_PIN:
+        logger.warning("ADMIN_PIN is not configured — the admin API will refuse all requests.")
 
     # Pre-warm image proxy cache in the background for popular cars (non-blocking)
     import asyncio as _asyncio
@@ -271,22 +364,31 @@ _IMAGE_CACHE: dict = {}
 _ALLOWED_HOSTS = ("upload.wikimedia.org", "commons.wikimedia.org", "images.unsplash.com", "images.pexels.com", "videos.pexels.com", "cdn.pixabay.com", "imgd.aeplcdn.com", "imgd-ct.aeplcdn.com", "stimg.cardekho.com", "i.ytimg.com")
 
 
+_MAX_PROXY_BYTES = 15 * 1024 * 1024
+
+
+def _require_allowed_host(url: str):
+    if not security.host_allowed(url, _ALLOWED_HOSTS):
+        raise HTTPException(status_code=400, detail="Host not allowed")
+
+
 async def _fetch_image(url: str):
-    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True, max_redirects=3) as client:
         r = await client.get(url, headers={
             "User-Agent": "Mozilla/5.0 (X11; Linux) Chrome/120 AutoAIIndia/1.0",
             "Accept": "image/avif,image/webp,image/png,image/jpeg,*/*",
             "Referer": "https://www.carwale.com/",
         })
+        # A redirect must not carry the request off the allowlist.
+        _require_allowed_host(str(r.url))
+        if len(r.content) > _MAX_PROXY_BYTES:
+            raise HTTPException(status_code=502, detail="Upstream payload too large")
         return r
 
 
 @app.get("/api/image-proxy")
-async def image_proxy(url: str):
-    from urllib.parse import urlparse
-    host = urlparse(url).netloc
-    if not any(host.endswith(h) for h in _ALLOWED_HOSTS):
-        raise HTTPException(status_code=400, detail="Host not allowed")
+async def image_proxy(url: str = Query(max_length=2000)):
+    _require_allowed_host(url)
 
     if url in _IMAGE_CACHE:
         data, ctype = _IMAGE_CACHE[url]
@@ -301,8 +403,9 @@ async def image_proxy(url: str):
                 _IMAGE_CACHE[url] = (data, ctype)
         except HTTPException:
             raise
-        except httpx.RequestError as e:
-            raise HTTPException(status_code=502, detail=f"Upstream error: {e}")
+        except httpx.RequestError:
+            logging.exception("image proxy upstream error")
+            raise HTTPException(status_code=502, detail="Upstream error")
 
     return Response(content=data, media_type=ctype, headers={
         "Cache-Control": "public, max-age=604800",
@@ -311,13 +414,10 @@ async def image_proxy(url: str):
 
 
 @app.api_route("/api/video-proxy", methods=["GET", "HEAD"])
-async def video_proxy(url: str, request: Request):
+async def video_proxy(request: Request, url: str = Query(max_length=2000)):
     """Stream video from allowed hosts (Pexels) with Range-request passthrough for HTML5 <video>."""
-    from urllib.parse import urlparse
     from fastapi.responses import StreamingResponse
-    host = urlparse(url).netloc
-    if not any(host.endswith(h) for h in _ALLOWED_HOSTS):
-        raise HTTPException(status_code=400, detail="Host not allowed")
+    _require_allowed_host(url)
 
     # Forward Range header from browser to upstream so video can seek/buffer properly
     forward_headers = {
@@ -329,11 +429,15 @@ async def video_proxy(url: str, request: Request):
     if range_header:
         forward_headers["Range"] = range_header
 
-    client = httpx.AsyncClient(timeout=30.0, follow_redirects=True)
+    client = httpx.AsyncClient(timeout=30.0, follow_redirects=True, max_redirects=3)
     try:
         method = "HEAD" if request.method == "HEAD" else "GET"
         req = client.build_request(method, url, headers=forward_headers)
         r = await client.send(req, stream=True)
+        if not security.host_allowed(str(r.url), _ALLOWED_HOSTS):
+            await r.aclose()
+            await client.aclose()
+            raise HTTPException(status_code=400, detail="Host not allowed")
         if r.status_code not in (200, 206):
             await r.aclose()
             await client.aclose()
@@ -366,9 +470,10 @@ async def video_proxy(url: str, request: Request):
     except HTTPException:
         await client.aclose()
         raise
-    except httpx.RequestError as e:
+    except httpx.RequestError:
         await client.aclose()
-        raise HTTPException(status_code=502, detail=f"Upstream error: {e}")
+        logging.exception("video proxy upstream error")
+        raise HTTPException(status_code=502, detail="Upstream error")
 
 
 # ---------- Car routes ----------
@@ -379,10 +484,10 @@ async def root():
 
 @api_router.get("/cars", response_model=List[Car])
 async def list_cars(
-    q: Optional[str] = None,
-    segment: Optional[str] = None,
-    fuel: Optional[str] = None,
-    budget_max: Optional[int] = None,
+    q: Optional[str] = Query(None, max_length=120),
+    segment: Optional[str] = Query(None, max_length=40),
+    fuel: Optional[str] = Query(None, max_length=40),
+    budget_max: Optional[int] = Query(None, ge=0, le=1_000_000_000),
 ):
     query: dict = {}
     if segment:
@@ -415,8 +520,6 @@ async def list_news():
 # ---------- EMI ----------
 @api_router.post("/emi/calculate")
 async def calculate_emi(req: EMIRequest):
-    if req.tenure_months <= 0 or req.principal <= 0:
-        raise HTTPException(status_code=400, detail="Invalid input")
     r = req.annual_rate / 12 / 100
     n = req.tenure_months
     if r == 0:
@@ -481,13 +584,13 @@ Return ONLY the JSON in the exact schema."""
         response = await chat.send_message(UserMessage(text=prompt))
         parsed = extract_json(response)
         if not parsed:
-            raise HTTPException(status_code=500, detail="AI did not return valid JSON")
+            raise HTTPException(status_code=502, detail="AI did not return valid JSON")
         return {"car_a": car_a, "car_b": car_b, "analysis": parsed}
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logging.exception("compare failure")
-        raise HTTPException(status_code=500, detail=f"AI error: {str(e)}")
+        raise HTTPException(status_code=502, detail="AI service unavailable")
 
 
 # ---------- AI Recommend ----------
@@ -530,16 +633,16 @@ Return ONLY the JSON in the exact schema."""
         response = await chat.send_message(UserMessage(text=prompt))
         parsed = extract_json(response)
         if not parsed:
-            raise HTTPException(status_code=500, detail="AI did not return valid JSON")
+            raise HTTPException(status_code=502, detail="AI did not return valid JSON")
         id_map = {c["id"]: c for c in candidates}
         for pick in parsed.get("top_picks", []):
             pick["car"] = id_map.get(pick.get("car_id"))
         return parsed
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logging.exception("recommend failure")
-        raise HTTPException(status_code=500, detail=f"AI error: {str(e)}")
+        raise HTTPException(status_code=502, detail="AI service unavailable")
 
 
 @api_router.get("/ai/models")
@@ -584,8 +687,8 @@ async def tts_list_voices():
 
 
 class TTSRequest(BaseModel):
-    text: str
-    voice: Optional[str] = None  # "female" | "male"
+    text: str = Field(max_length=5000)
+    voice: Optional[str] = Field(default=None, max_length=20)  # "female" | "male"
 
 
 @api_router.post("/tts/speak")
@@ -626,10 +729,9 @@ async def tts_speak(req: TTSRequest):
         )
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logging.exception("TTS failure")
-        raise HTTPException(status_code=502, detail=f"TTS error: {e}")
-
+        raise HTTPException(status_code=502, detail="TTS service unavailable")
 
 
 # ---------- AI Chat ----------
@@ -662,7 +764,7 @@ def _format_booking_context(bookings: list) -> str:
 
 
 @api_router.post("/ai/chat")
-async def ai_chat(req: ChatRequest):
+async def ai_chat(req: ChatRequest, caller_phone: Optional[str] = Depends(optional_user_phone)):
     try:
         await db.chat_messages.insert_one({
             "id": str(uuid.uuid4()),
@@ -672,27 +774,21 @@ async def ai_chat(req: ChatRequest):
             "ts": datetime.now(timezone.utc).isoformat(),
         })
 
-        # Fetch booking context if the message looks CRM-ish or a phone number was provided
+        # Fetch booking context if the message looks CRM-ish. Only the signed-in
+        # caller's own bookings are ever loaded — a phone number typed into the
+        # chat must not unlock someone else's records.
         booking_context = "(none)"
         msg_l = req.message.lower()
         crm_keywords = ["booking", "track", "order", "cancel", "confirm", "sms", "email", "my car", "dealer", "delivery"]
         if any(k in msg_l for k in crm_keywords):
-            # look for phone number or booking id in the message
-            import re as _re
-            phone_match = _re.search(r"\b(\d{10})\b", req.message)
-            bk_match = _re.search(r"\b([A-F0-9]{8})\b", req.message.upper())
-            query: dict = {}
-            if phone_match:
-                query["phone"] = phone_match.group(1)
-            if not query:
-                # Use all recent bookings from this session_id (chat already established trust)
-                bookings = await db.bookings.find({}, {"_id": 0}).sort("created_at", -1).to_list(5)
+            if caller_phone:
+                bookings = await db.bookings.find({"phone": caller_phone}, {"_id": 0}).sort("created_at", -1).to_list(5)
+                bk_match = re.search(r"\b([A-F0-9]{8})\b", req.message.upper())
+                if bk_match:
+                    bookings = [b for b in bookings if b["id"][:8].upper() == bk_match.group(1)] or bookings
+                booking_context = _format_booking_context(bookings)
             else:
-                bookings = await db.bookings.find(query, {"_id": 0}).sort("created_at", -1).to_list(5)
-            if bk_match:
-                # filter by id prefix
-                bookings = [b for b in bookings if b["id"][:8].upper() == bk_match.group(1)] or bookings
-            booking_context = _format_booking_context(bookings)
+                booking_context = "(caller is not signed in — ask them to sign in at /login to see booking details)"
 
             # Log notification intent
             await db.notifications.insert_one({
@@ -718,9 +814,11 @@ async def ai_chat(req: ChatRequest):
             "ts": datetime.now(timezone.utc).isoformat(),
         })
         return {"reply": response, "model": chosen["label"]}
-    except Exception as e:
+    except HTTPException:
+        raise
+    except Exception:
         logging.exception("chat failure")
-        raise HTTPException(status_code=500, detail=f"AI error: {str(e)}")
+        raise HTTPException(status_code=502, detail="AI service unavailable")
 
 
 @api_router.get("/ai/chat/{session_id}/history")
@@ -747,7 +845,9 @@ DEALERS_BY_CITY = {
 
 
 @api_router.post("/bookings", response_model=Booking)
-async def create_booking(req: BookingRequest):
+async def create_booking(req: BookingRequest, request: Request):
+    if not _booking_limiter.allow(_client_ip(request)):
+        raise HTTPException(status_code=429, detail="Too many bookings, try again later")
     car = await db.cars.find_one({"id": req.car_id}, {"_id": 0})
     if not car:
         raise HTTPException(status_code=404, detail="Car not found")
@@ -782,15 +882,27 @@ async def create_booking(req: BookingRequest):
 
 
 @api_router.get("/bookings/{booking_id}", response_model=Booking)
-async def get_booking(booking_id: str):
+async def get_booking(
+    booking_id: str,
+    caller_phone: Optional[str] = Depends(optional_user_phone),
+    x_admin_pin: Optional[str] = Header(None),
+):
     b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
     if not b:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    is_admin = bool(x_admin_pin) and _admin_pin_valid(x_admin_pin)
+    if not is_admin and b.get("phone") != caller_phone:
+        # Same 404 as a missing booking so ids can't be enumerated.
         raise HTTPException(status_code=404, detail="Booking not found")
     return b
 
 
 @api_router.get("/bookings")
-async def list_bookings(phone: Optional[str] = None, limit: int = 20):
+async def list_bookings(
+    phone: Optional[str] = Query(None, max_length=20),
+    limit: int = Query(20, ge=1, le=200),
+    _: str = Depends(require_admin),
+):
     q: dict = {}
     if phone:
         q["phone"] = phone
@@ -815,15 +927,15 @@ INSURANCE_PARTNERS = [
 
 
 @api_router.get("/partners")
-async def list_partners(type: Optional[str] = None):
+async def list_partners(type: Optional[str] = Query(None, max_length=20)):
     all_p = LOAN_PARTNERS + INSURANCE_PARTNERS
     if type:
-        return [p for p in all_p if p["type"] == type]
+        all_p = [p for p in all_p if p["type"] == type]
     return all_p
 
 
 @api_router.get("/partners/leads")
-async def partner_leads():
+async def partner_leads(_: str = Depends(require_admin)):
     leads = await db.partner_leads.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
     # Aggregate commission totals
     total_commission = sum(lead.get("expected_commission", 0) for lead in leads)
@@ -839,45 +951,81 @@ async def partner_leads():
 
 # ---------- Phone OTP Auth ----------
 class OtpSendReq(BaseModel):
-    phone: str
+    phone: str = Field(pattern=PHONE_PATTERN)
 
 
 class OtpVerifyReq(BaseModel):
-    phone: str
-    otp: str
+    phone: str = Field(pattern=PHONE_PATTERN)
+    otp: str = Field(min_length=4, max_length=10)
 
 
 @api_router.post("/auth/send-otp")
-async def send_otp(req: OtpSendReq):
-    # MVP: OTP is always 123456. Replace with Twilio/MSG91 integration when keys available.
+async def send_otp(req: OtpSendReq, request: Request):
+    if not _otp_send_limiter.allow(req.phone) or not _otp_send_ip_limiter.allow(_client_ip(request)):
+        raise HTTPException(status_code=429, detail="Too many OTP requests, try again later")
+
+    otp = security.generate_otp()
+    # Only the digest is persisted, and any earlier code for this phone is invalidated.
+    await db.otps.delete_many({"phone": req.phone})
     await db.otps.insert_one({
-        "phone": req.phone, "otp": "123456",
+        "phone": req.phone,
+        "otp_hash": security.hash_secret(otp),
+        "attempts": 0,
+        "expires_at": security.expiry_iso(seconds=security.OTP_TTL_SECONDS),
         "ts": datetime.now(timezone.utc).isoformat(),
     })
-    return {"sent": True, "message": "OTP sent (MVP: use 123456)", "demo_otp": "123456"}
+    if security.OTP_DEMO_MODE:
+        return {"sent": True, "message": f"OTP sent (demo mode: use {otp})", "demo_otp": otp}
+    # Delivery is the SMS provider's job; the code never leaves the server here.
+    logger.info("OTP issued for %s", req.phone)
+    return {"sent": True, "message": "OTP sent"}
 
 
 @api_router.post("/auth/verify-otp")
-async def verify_otp(req: OtpVerifyReq):
-    if req.otp != "123456":
-        raise HTTPException(status_code=401, detail="Invalid OTP")
-    token = f"autoai_{req.phone}_{uuid.uuid4().hex[:12]}"
+async def verify_otp(req: OtpVerifyReq, request: Request):
+    if not _otp_verify_limiter.allow(req.phone) or not _otp_verify_ip_limiter.allow(_client_ip(request)):
+        raise HTTPException(status_code=429, detail="Too many attempts, try again later")
+
+    record = await db.otps.find_one({"phone": req.phone}, {"_id": 0})
+    if not record or security.is_expired(record.get("expires_at")):
+        raise HTTPException(status_code=401, detail="Invalid or expired OTP")
+    if record.get("attempts", 0) >= security.OTP_MAX_ATTEMPTS:
+        raise HTTPException(status_code=429, detail="Too many attempts, request a new OTP")
+    if not security.constant_time_equals(security.hash_secret(req.otp), record["otp_hash"]):
+        await db.otps.update_one({"phone": req.phone}, {"$inc": {"attempts": 1}})
+        raise HTTPException(status_code=401, detail="Invalid or expired OTP")
+
+    await db.otps.delete_many({"phone": req.phone})  # single use
+    token = security.generate_token()
     await db.user_sessions.insert_one({
-        "token": token, "phone": req.phone,
+        "token_hash": security.hash_secret(token),
+        "phone": req.phone,
+        "expires_at": security.expiry_iso(hours=security.USER_SESSION_TTL_HOURS),
         "ts": datetime.now(timezone.utc).isoformat(),
     })
     return {"token": token, "phone": req.phone}
 
 
+@api_router.post("/auth/logout")
+async def logout(authorization: Optional[str] = Header(None)):
+    token = _bearer_token(authorization)
+    if token:
+        await db.user_sessions.delete_many({"token_hash": security.hash_secret(token)})
+    return {"ok": True}
+
+
 @api_router.get("/me/bookings")
-async def my_bookings(phone: str):
+async def my_bookings(phone: str = Depends(current_user_phone)):
     bookings = await db.bookings.find({"phone": phone}, {"_id": 0}).sort("created_at", -1).to_list(50)
     return bookings
 
 
 # ---------- Dealer Portal ----------
 @api_router.get("/dealer/leads")
-async def dealer_leads(city: Optional[str] = None):
+async def dealer_leads(
+    city: Optional[str] = Query(None, max_length=80),
+    _: str = Depends(require_admin),
+):
     q: dict = {}
     if city:
         q["city"] = city
@@ -906,17 +1054,19 @@ async def dealer_leads(city: Optional[str] = None):
 
 # ---------- Dealer self-service onboarding + lead bidding ----------
 class DealerApplication(BaseModel):
-    business_name: str
-    owner_name: str
-    phone: str
-    email: Optional[str] = ""
-    city: str
-    brands: List[str] = []
-    bid_per_lead: float = 500.0  # how much they'll pay per qualified lead
+    business_name: str = Field(min_length=1, max_length=160)
+    owner_name: str = Field(min_length=1, max_length=120)
+    phone: str = Field(pattern=PHONE_PATTERN)
+    email: Optional[str] = Field(default="", max_length=200)
+    city: str = Field(min_length=1, max_length=80)
+    brands: List[str] = Field(default_factory=list, max_length=40)
+    bid_per_lead: float = Field(default=500.0, ge=0, le=1_000_000)  # how much they'll pay per qualified lead
 
 
 @api_router.post("/dealers/apply")
-async def dealer_apply(app: DealerApplication):
+async def dealer_apply(app: DealerApplication, request: Request):
+    if not _dealer_apply_limiter.allow(_client_ip(request)):
+        raise HTTPException(status_code=429, detail="Too many applications, try again later")
     record = {
         "id": str(uuid.uuid4()),
         "business_name": app.business_name,
@@ -936,7 +1086,10 @@ async def dealer_apply(app: DealerApplication):
 
 
 @api_router.get("/dealers")
-async def list_dealers(city: Optional[str] = None):
+async def list_dealers(
+    city: Optional[str] = Query(None, max_length=80),
+    _: str = Depends(require_admin),
+):
     q: dict = {}
     if city:
         q["city"] = city
@@ -944,28 +1097,39 @@ async def list_dealers(city: Optional[str] = None):
     return items
 
 
-# ---------- Admin Panel (PIN-gated) ----------
-ADMIN_PIN = os.environ.get("ADMIN_PIN", "108108")  # default demo PIN
-
-
-def _check_admin(pin: str):
-    if pin != ADMIN_PIN:
-        raise HTTPException(status_code=401, detail="Invalid admin PIN")
-
-
+# ---------- Admin Panel (token-gated; PIN only exchanged for a session token) ----------
 class AdminPinReq(BaseModel):
-    pin: str
+    pin: str = Field(min_length=4, max_length=64)
 
 
 @api_router.post("/admin/verify")
-async def admin_verify(req: AdminPinReq):
-    _check_admin(req.pin)
-    return {"ok": True, "token": f"admin_{uuid.uuid4().hex}"}
+async def admin_verify(req: AdminPinReq, request: Request):
+    if not _admin_login_limiter.allow(_client_ip(request)):
+        raise HTTPException(status_code=429, detail="Too many attempts, try again later")
+    if not _admin_pin_valid(req.pin):
+        raise HTTPException(status_code=401, detail="Invalid admin PIN")
+    token = security.generate_token()
+    await db.admin_sessions.insert_one({
+        "token_hash": security.hash_secret(token),
+        "expires_at": security.expiry_iso(hours=security.ADMIN_SESSION_TTL_HOURS),
+        "ts": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"ok": True, "token": token}
+
+
+@api_router.post("/admin/logout")
+async def admin_logout(authorization: Optional[str] = Header(None)):
+    token = _bearer_token(authorization)
+    if token:
+        await db.admin_sessions.delete_many({"token_hash": security.hash_secret(token)})
+    return {"ok": True}
 
 
 @api_router.get("/admin/dealers")
-async def admin_list_dealers(pin: str, status: Optional[str] = None):
-    _check_admin(pin)
+async def admin_list_dealers(
+    status: Optional[str] = Query(None, max_length=40),
+    _: str = Depends(require_admin),
+):
     q: dict = {}
     if status:
         q["status"] = status
@@ -983,13 +1147,11 @@ async def admin_list_dealers(pin: str, status: Optional[str] = None):
 
 
 class AdminActionReq(BaseModel):
-    pin: str
-    note: Optional[str] = ""
+    note: Optional[str] = Field(default="", max_length=1000)
 
 
 @api_router.post("/admin/dealers/{dealer_id}/approve")
-async def admin_approve_dealer(dealer_id: str, req: AdminActionReq):
-    _check_admin(req.pin)
+async def admin_approve_dealer(dealer_id: str, req: AdminActionReq, _: str = Depends(require_admin)):
     result = await db.dealer_partners.update_one(
         {"id": dealer_id},
         {"$set": {
@@ -1006,8 +1168,7 @@ async def admin_approve_dealer(dealer_id: str, req: AdminActionReq):
 
 
 @api_router.post("/admin/dealers/{dealer_id}/reject")
-async def admin_reject_dealer(dealer_id: str, req: AdminActionReq):
-    _check_admin(req.pin)
+async def admin_reject_dealer(dealer_id: str, req: AdminActionReq, _: str = Depends(require_admin)):
     result = await db.dealer_partners.update_one(
         {"id": dealer_id},
         {"$set": {
@@ -1033,15 +1194,31 @@ PLANS = {
 
 
 class CheckoutRequest(BaseModel):
-    plan_id: str
-    origin_url: str
-    customer_phone: Optional[str] = ""
+    plan_id: str = Field(max_length=40)
+    origin_url: str = Field(max_length=300)
+
+
+def _validated_origin(origin_url: str, http_request: Request) -> str:
+    """Only ever redirect back to an origin we control — an attacker-supplied
+    origin_url would otherwise turn Stripe's return flow into an open redirect."""
+    candidate = origin_url.rstrip("/")
+    allowed = {o.rstrip("/") for o in CORS_ORIGINS if o != "*"}
+    allowed.add(str(http_request.base_url).rstrip("/"))
+    request_origin = http_request.headers.get("origin")
+    if candidate in allowed or (request_origin and candidate == request_origin.rstrip("/")):
+        return candidate
+    raise HTTPException(status_code=400, detail="origin_url is not allowed")
 
 
 @api_router.post("/checkout/session")
-async def create_checkout(req: CheckoutRequest, http_request: Request):
+async def create_checkout(
+    req: CheckoutRequest,
+    http_request: Request,
+    customer_phone: str = Depends(current_user_phone),
+):
     if req.plan_id not in PLANS:
         raise HTTPException(status_code=400, detail="Invalid plan")
+    origin_url = _validated_origin(req.origin_url, http_request)
     if not STRIPE_API_KEY:
         raise HTTPException(status_code=503, detail="Stripe not configured")
 
@@ -1050,15 +1227,15 @@ async def create_checkout(req: CheckoutRequest, http_request: Request):
     webhook_url = f"{host_url}/api/webhook/stripe"
     checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
 
-    success_url = f"{req.origin_url}/premium?session_id={{CHECKOUT_SESSION_ID}}"
-    cancel_url = f"{req.origin_url}/premium"
+    success_url = f"{origin_url}/premium?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{origin_url}/premium"
 
     ck_req = CheckoutSessionRequest(
         amount=plan["amount"],
         currency=plan["currency"],
         success_url=success_url,
         cancel_url=cancel_url,
-        metadata={"plan_id": req.plan_id, "phone": req.customer_phone or "anonymous"},
+        metadata={"plan_id": req.plan_id, "phone": customer_phone},
     )
     session = await checkout.create_checkout_session(ck_req)
 
@@ -1068,7 +1245,7 @@ async def create_checkout(req: CheckoutRequest, http_request: Request):
         "plan_id": req.plan_id,
         "amount": plan["amount"],
         "currency": plan["currency"],
-        "phone": req.customer_phone or "",
+        "phone": customer_phone,
         "payment_status": "initiated",
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
@@ -1076,11 +1253,15 @@ async def create_checkout(req: CheckoutRequest, http_request: Request):
 
 
 @api_router.get("/checkout/status/{session_id}")
-async def checkout_status(session_id: str, http_request: Request):
+async def checkout_status(
+    session_id: str,
+    http_request: Request,
+    caller_phone: str = Depends(current_user_phone),
+):
     if not STRIPE_API_KEY:
         raise HTTPException(status_code=503, detail="Stripe not configured")
     tx = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
-    if not tx:
+    if not tx or tx.get("phone") != caller_phone:
         raise HTTPException(status_code=404, detail="Session not found")
 
     if tx.get("payment_status") == "paid":
@@ -1148,9 +1329,9 @@ async def stripe_webhook(request: Request):
     checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
     try:
         evt = await checkout.handle_webhook(body, sig)
-    except Exception as e:
+    except Exception:
         logging.exception("webhook error")
-        return JSONResponse({"ok": False, "err": str(e)}, status_code=400)
+        return JSONResponse({"ok": False, "err": "invalid webhook"}, status_code=400)
 
     if evt.payment_status == "paid" and evt.session_id:
         await db.payment_transactions.update_one(
@@ -1175,10 +1356,9 @@ async def stripe_webhook(request: Request):
 
 
 @api_router.get("/me/subscription")
-async def my_subscription(phone: str):
+async def my_subscription(phone: str = Depends(current_user_phone)):
     sub = await db.subscriptions.find_one({"phone": phone, "status": "active"}, {"_id": 0})
     return sub or {"status": "none"}
-
 
 
 def _assign_partners_to_booking(booking: Booking, car: dict):
@@ -1234,14 +1414,13 @@ app.include_router(api_router)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
-    allow_methods=["*"],
-    allow_headers=["*"],
+    # Credentials cannot be combined with a wildcard origin, so a wildcard
+    # deployment stays credential-less until CORS_ORIGINS is set explicitly.
+    allow_credentials=ALLOW_CREDENTIALS,
+    allow_origins=CORS_ORIGINS,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Admin-Pin"],
 )
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
 
 
 @app.on_event("shutdown")

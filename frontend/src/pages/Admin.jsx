@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { api } from "../lib/api";
+import { api, ADMIN_TOKEN_KEY } from "../lib/api";
 import { ShieldCheck, Check, X, Loader2, Users, Clock, AlertTriangle, Lock, LogOut, Phone, MapPin, IndianRupee } from "lucide-react";
 
 export default function Admin() {
-  const [pin, setPin] = useState(() => localStorage.getItem("autoai_admin_pin") || "");
   const [authed, setAuthed] = useState(false);
   const [pinInput, setPinInput] = useState("");
   const [loginError, setLoginError] = useState("");
@@ -12,33 +11,42 @@ export default function Admin() {
   const [filter, setFilter] = useState("all");
   const [acting, setActing] = useState(null);
 
+  // The PIN is exchanged for a short-lived session token; the PIN itself is never stored.
   const tryAuth = useCallback(async (p) => {
     setLoading(true); setLoginError("");
     try {
-      await api.post("/admin/verify", { pin: p });
-      setPin(p);
-      localStorage.setItem("autoai_admin_pin", p);
+      const { data: resp } = await api.post("/admin/verify", { pin: p });
+      localStorage.setItem(ADMIN_TOKEN_KEY, resp.token);
       setAuthed(true);
     } catch {
       setLoginError("Invalid PIN");
-      localStorage.removeItem("autoai_admin_pin");
-      setPin("");
+      localStorage.removeItem(ADMIN_TOKEN_KEY);
     } finally { setLoading(false); }
   }, []);
 
-  // Auto-auth on mount if PIN was previously stored.
-  // (Intentional effect-based auth check on first render.)
-  useEffect(() => {
-    if (pin && !authed) tryAuth(pin);
-  }, []); // eslint-disable-line
-
   const load = useCallback(async () => {
-    if (!pin) return;
-    const params = new URLSearchParams({ pin });
+    const params = new URLSearchParams();
     if (filter !== "all") params.set("status", filter === "pending" ? "pending_verification" : filter);
-    const { data: resp } = await api.get(`/admin/dealers?${params.toString()}`);
-    setData(resp);
-  }, [pin, filter]);
+    const qs = params.toString();
+    try {
+      const { data: resp } = await api.get(`/admin/dealers${qs ? `?${qs}` : ""}`);
+      setData(resp);
+    } catch (e) {
+      if (e?.response?.status === 401) {
+        localStorage.removeItem(ADMIN_TOKEN_KEY);
+        setAuthed(false);
+      }
+    }
+  }, [filter]);
+
+  // Resume an existing admin session if the stored token is still valid.
+  useEffect(() => {
+    if (localStorage.getItem(ADMIN_TOKEN_KEY)) {
+      api.get("/admin/dealers")
+        .then(({ data: resp }) => { setData(resp); setAuthed(true); })
+        .catch(() => localStorage.removeItem(ADMIN_TOKEN_KEY));
+    }
+  }, []);
 
   // Reload dealer list when auth state changes or filter is updated.
   useEffect(() => {
@@ -48,14 +56,15 @@ export default function Admin() {
   const act = async (dealerId, action) => {
     setActing(dealerId);
     try {
-      await api.post(`/admin/dealers/${dealerId}/${action}`, { pin });
+      await api.post(`/admin/dealers/${dealerId}/${action}`, {});
       await load();
     } finally { setActing(null); }
   };
 
   const logout = () => {
-    localStorage.removeItem("autoai_admin_pin");
-    setAuthed(false); setPin("");
+    api.post("/admin/logout", {}).catch(() => {});
+    localStorage.removeItem(ADMIN_TOKEN_KEY);
+    setAuthed(false);
   };
 
   // --- Auth gate ---
@@ -92,9 +101,6 @@ export default function Admin() {
             >
               {loading ? "Verifying…" : "Enter Console"}
             </button>
-            <div className="text-[10px] uppercase tracking-[0.25em] text-slate-500 font-mono text-center">
-              Demo PIN: 108108
-            </div>
           </form>
         </div>
       </div>

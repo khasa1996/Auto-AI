@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { api, formatINR } from "../lib/api";
+import { api, USER_TOKEN_KEY } from "../lib/api";
 import { Phone, LogOut, Car, Clock, CheckCircle2 } from "lucide-react";
 import CarVisual from "../components/CarVisual";
 
@@ -10,18 +10,21 @@ export default function MyBookings() {
   const nav = useNavigate();
   const phone = localStorage.getItem("autoai_phone");
 
-  useEffect(() => {
-    if (!phone) { nav("/login"); return; }
-    api.get(`/me/bookings?phone=${encodeURIComponent(phone)}`)
-      .then((r) => setBookings(r.data))
-      .finally(() => setLoading(false));
-  }, [phone, nav]);
-
-  const logout = () => {
-    localStorage.removeItem("autoai_token");
+  const logout = useCallback(() => {
+    api.post("/auth/logout", {}).catch(() => {});
+    localStorage.removeItem(USER_TOKEN_KEY);
     localStorage.removeItem("autoai_phone");
     nav("/login");
-  };
+  }, [nav]);
+
+  // The bookings returned are whichever ones belong to the session token.
+  useEffect(() => {
+    if (!localStorage.getItem(USER_TOKEN_KEY)) { nav("/login"); return; }
+    api.get("/me/bookings")
+      .then((r) => setBookings(r.data))
+      .catch((e) => { if (e?.response?.status === 401) logout(); })
+      .finally(() => setLoading(false));
+  }, [nav, logout]);
 
   return (
     <div className="bg-[#050505] min-h-screen" data-testid="my-bookings-page">
