@@ -36,7 +36,7 @@ db = client[os.environ['DB_NAME']]
 
 
 ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY')
-CLAUDE_MODEL = ("anthropic", "claude-sonnet-4-5-20250929")
+CLAUDE_MODEL = ("anthropic", "claude-sonnet-4-6")
 
 # ---------- AI Model Registry ----------
 # Models available for the 24/7 chatbot. Compare/Recommend continue to use
