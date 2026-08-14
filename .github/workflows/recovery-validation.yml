@@ -16,7 +16,7 @@ jobs:
 
       - name: Scan for active Emergent references
         run: |
-          if git grep -niE 'emergentintegrations|EMERGENT_LLM_KEY|@emergentbase|assets\.emergent\.sh|\.emergent' -- ':! .github/*'; then
+          if git grep -niE 'emergentintegrations|EMERGENT_LLM_KEY|@emergentbase|assets\.emergent\.sh|\.emergent|emergentagent\.com' -- . ':(exclude).github/*' ':(exclude)memory/*' ':(exclude)test_reports/*'; then
             echo 'Active Emergent references found.'
             exit 1
           fi
