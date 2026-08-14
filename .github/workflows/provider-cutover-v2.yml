@@ -32,7 +32,7 @@ jobs:
           python -m py_compile backend/server.py backend/llm_provider.py backend/stripe_provider.py
           ! grep -RniE 'emergentintegrations|EMERGENT_LLM_KEY' backend --exclude-dir='__pycache__'
       - name: Install test runner
-        run: python -m pip install --disable-pip-version-check -q pytest
+        run: python -m pip install --disable-pip-version-check -q pytest httpx
       - name: Provider tests
         working-directory: backend
         run: python -m pytest tests/unit/test_provider_adapters.py -q
