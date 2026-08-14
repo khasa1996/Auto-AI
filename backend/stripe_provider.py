@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import os
 import time
 from dataclasses import dataclass
@@ -18,6 +19,15 @@ import httpx
 
 class StripeProviderError(RuntimeError):
     """Raised when Stripe cannot complete an operation."""
+
+
+@dataclass(frozen=True)
+class CheckoutSessionRequest:
+    amount: float
+    currency: str
+    success_url: str
+    cancel_url: str
+    metadata: dict[str, str]
 
 
 @dataclass(frozen=True)
@@ -32,6 +42,14 @@ class CheckoutStatus:
     status: str
     amount_total: Optional[float]
     currency: Optional[str]
+    metadata: dict
+
+
+@dataclass(frozen=True)
+class StripeWebhookEvent:
+    event_type: str
+    session_id: Optional[str]
+    payment_status: Optional[str]
     metadata: dict
 
 
@@ -56,8 +74,6 @@ class StripeProvider:
         cancel_url: str,
         metadata: Mapping[str, str],
     ) -> CheckoutSession:
-        # Auto-AI currently sells one-time plan access. Subscription renewal can
-        # be introduced later with a Stripe Price ID without changing the route.
         data: list[tuple[str, str]] = [
             ("mode", "payment"),
             ("success_url", success_url),
@@ -69,7 +85,6 @@ class StripeProvider:
         ]
         for key, value in metadata.items():
             data.append((f"metadata[{key}]", str(value)))
-
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(f"{self.BASE_URL}/checkout/sessions", headers=self.headers, data=data)
         if response.status_code >= 400:
@@ -91,6 +106,41 @@ class StripeProvider:
             amount_total=(body.get("amount_total") or 0) / 100 if body.get("amount_total") is not None else None,
             currency=body.get("currency"),
             metadata=body.get("metadata") or {},
+        )
+
+
+class StripeCheckout:
+    """Compatibility façade matching the old checkout adapter surface."""
+
+    def __init__(self, api_key: Optional[str] = None, webhook_url: Optional[str] = None):
+        self.provider = StripeProvider(api_key)
+        self.webhook_url = webhook_url
+
+    async def create_checkout_session(self, req: CheckoutSessionRequest) -> CheckoutSession:
+        return await self.provider.create_checkout_session(
+            amount=req.amount,
+            currency=req.currency,
+            success_url=req.success_url,
+            cancel_url=req.cancel_url,
+            metadata=req.metadata,
+        )
+
+    async def get_checkout_status(self, session_id: str) -> CheckoutStatus:
+        return await self.provider.get_checkout_status(session_id)
+
+    async def handle_webhook(self, body: bytes, signature: str) -> StripeWebhookEvent:
+        if not verify_webhook_signature(body, signature):
+            raise StripeProviderError("Invalid Stripe webhook signature")
+        try:
+            event = json.loads(body.decode("utf-8"))
+            obj = event.get("data", {}).get("object", {})
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise StripeProviderError("Invalid Stripe webhook payload") from exc
+        return StripeWebhookEvent(
+            event_type=event.get("type", ""),
+            session_id=obj.get("id"),
+            payment_status=obj.get("payment_status"),
+            metadata=obj.get("metadata") or {},
         )
 
 
