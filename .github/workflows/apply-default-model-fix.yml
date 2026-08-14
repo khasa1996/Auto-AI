@@ -1,0 +1,29 @@
+name: Apply default model fix
+
+on:
+  push:
+    branches:
+      - refactor/remove-emergent
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Align default Claude model
+        shell: bash
+        run: |
+          set -e
+          if ! grep -q 'claude-sonnet-4-5-20250929' backend/server.py; then
+            echo 'Default model is already aligned.'
+            exit 0
+          fi
+          sed -i 's/claude-sonnet-4-5-20250929/claude-sonnet-4-6/' backend/server.py
+          git config user.name 'Auto-AI Recovery Bot'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add backend/server.py
+          git commit -m 'fix: align default Claude model'
+          git push
