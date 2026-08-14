@@ -37,7 +37,7 @@ async def create_order(*, amount_paise: int, currency: str, receipt: str, notes:
         "currency": currency.upper(),
         "receipt": receipt[:40],
         "notes": notes,
-        "payment_capture": 1,
+        "capture": "automatic",
     }
     async with httpx.AsyncClient(timeout=15.0) as client:
         response = await client.post(f"{RAZORPAY_API_BASE}/orders", auth=_auth(), json=payload)
