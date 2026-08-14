@@ -22,15 +22,6 @@ class StripeProviderError(RuntimeError):
 
 
 @dataclass(frozen=True)
-class CheckoutSessionRequest:
-    amount: float
-    currency: str
-    success_url: str
-    cancel_url: str
-    metadata: dict[str, str]
-
-
-@dataclass(frozen=True)
 class CheckoutSession:
     session_id: str
     url: str
@@ -46,10 +37,19 @@ class CheckoutStatus:
 
 
 @dataclass(frozen=True)
-class StripeWebhookEvent:
-    event_type: str
+class CheckoutSessionRequest:
+    amount: float
+    currency: str
+    success_url: str
+    cancel_url: str
+    metadata: Mapping[str, str]
+
+
+@dataclass(frozen=True)
+class WebhookEvent:
+    payment_status: str
     session_id: Optional[str]
-    payment_status: Optional[str]
+    event_type: str
     metadata: dict
 
 
@@ -85,6 +85,7 @@ class StripeProvider:
         ]
         for key, value in metadata.items():
             data.append((f"metadata[{key}]", str(value)))
+
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(f"{self.BASE_URL}/checkout/sessions", headers=self.headers, data=data)
         if response.status_code >= 400:
@@ -108,43 +109,52 @@ class StripeProvider:
             metadata=body.get("metadata") or {},
         )
 
+    async def handle_webhook(self, payload: bytes, signature_header: str) -> WebhookEvent:
+        if not verify_webhook_signature(payload, signature_header):
+            raise StripeProviderError("Invalid Stripe webhook signature")
+        try:
+            event = json.loads(payload.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise StripeProviderError("Invalid Stripe webhook JSON") from exc
+        event_type = event.get("type", "")
+        obj = (event.get("data") or {}).get("object") or {}
+        return WebhookEvent(
+            payment_status=obj.get("payment_status", "unpaid"),
+            session_id=obj.get("id"),
+            event_type=event_type,
+            metadata=obj.get("metadata") or {},
+        )
+
 
 class StripeCheckout:
-    """Compatibility façade matching the old checkout adapter surface."""
+    """Compatibility facade preserving the old server route API."""
 
     def __init__(self, api_key: Optional[str] = None, webhook_url: Optional[str] = None):
         self.provider = StripeProvider(api_key)
         self.webhook_url = webhook_url
 
-    async def create_checkout_session(self, req: CheckoutSessionRequest) -> CheckoutSession:
+    async def create_checkout_session(self, request: CheckoutSessionRequest) -> CheckoutSession:
         return await self.provider.create_checkout_session(
-            amount=req.amount,
-            currency=req.currency,
-            success_url=req.success_url,
-            cancel_url=req.cancel_url,
-            metadata=req.metadata,
+            amount=request.amount,
+            currency=request.currency,
+            success_url=request.success_url,
+            cancel_url=request.cancel_url,
+            metadata=request.metadata,
         )
 
     async def get_checkout_status(self, session_id: str) -> CheckoutStatus:
         return await self.provider.get_checkout_status(session_id)
 
-    async def handle_webhook(self, body: bytes, signature: str) -> StripeWebhookEvent:
-        if not verify_webhook_signature(body, signature):
-            raise StripeProviderError("Invalid Stripe webhook signature")
-        try:
-            event = json.loads(body.decode("utf-8"))
-            obj = event.get("data", {}).get("object", {})
-        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise StripeProviderError("Invalid Stripe webhook payload") from exc
-        return StripeWebhookEvent(
-            event_type=event.get("type", ""),
-            session_id=obj.get("id"),
-            payment_status=obj.get("payment_status"),
-            metadata=obj.get("metadata") or {},
-        )
+    async def handle_webhook(self, body: bytes, signature_header: str) -> WebhookEvent:
+        return await self.provider.handle_webhook(body, signature_header)
 
 
-def verify_webhook_signature(payload: bytes, signature_header: str, secret: Optional[str] = None, tolerance_seconds: int = 300) -> bool:
+def verify_webhook_signature(
+    payload: bytes,
+    signature_header: str,
+    secret: Optional[str] = None,
+    tolerance_seconds: int = 300,
+) -> bool:
     """Verify Stripe's `t=...,v1=...` signature format."""
     webhook_secret = (secret or os.environ.get("STRIPE_WEBHOOK_SECRET", "")).strip()
     if not webhook_secret or not signature_header:
