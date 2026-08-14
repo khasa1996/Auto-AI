@@ -69,6 +69,7 @@ export default function ChatDrawer() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     setMessages((m) => (m.length === 1 && m[0].role === "assistant" ? [{ role: "assistant", content: greetings[lang] || greetings.en }] : m));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang]);
 
   const send = async (text) => {
