@@ -14,8 +14,8 @@ from typing import List, Optional
 import uuid
 from datetime import datetime, timezone
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage
-from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest
+from llm_provider import LlmChat, UserMessage
+from stripe_provider import StripeCheckout, CheckoutSessionRequest
 from cars_data import CARS_SEED, NEWS_SEED
 import security
 from security import RateLimiter
@@ -34,7 +34,7 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
+
 ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY')
 CLAUDE_MODEL = ("anthropic", "claude-sonnet-4-5-20250929")
 
@@ -337,7 +337,7 @@ async def get_chat(session_id: str, system_message: str, model_key: Optional[str
     m = AI_MODELS.get(model_key) if model_key else None
     provider_model = (m["provider"], m["model"]) if m else CLAUDE_MODEL
     chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
+        api_key=None,
         session_id=session_id,
         system_message=system_message,
     ).with_model(*provider_model)
