@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
@@ -15,18 +15,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Scan for active Emergent references
+      - name: Scan active project for Emergent references
         run: |
           if git grep -niE 'emergentintegrations|EMERGENT_LLM_KEY|@emergentbase|assets\.emergent\.sh|\.emergent|emergentagent\.com' -- . ':(exclude).github/*' ':(exclude)memory/*' ':(exclude)test_reports/*'; then
             echo 'Active Emergent references found.'
             exit 1
           fi
 
-      - name: Backend syntax and provider tests
-        run: |
-          python -m pip install --disable-pip-version-check -q pytest httpx
-          python -m py_compile backend/server.py backend/llm_provider.py backend/stripe_provider.py
-          PYTHONPATH=backend python -m pytest backend/tests/unit/test_provider_adapters.py -q
+      - name: Install backend dependencies
+        working-directory: backend
+        run: python -m pip install --disable-pip-version-check -q -r requirements.txt
+
+      - name: Compile backend and tests
+        run: python -m compileall -q backend
+
+      - name: Provider adapter tests
+        working-directory: backend
+        run: PYTHONPATH=. python -m pytest tests/unit -q
 
       - name: Frontend dependency install
         working-directory: frontend
@@ -36,13 +41,5 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-      - name: Clean temporary validation files
-        run: rm -f frontend/package-lock.json .github/workflows/recovery-validation.yml
-
-      - name: Record validated cutover
-        run: |
-          git config user.name 'Auto-AI Recovery Bot'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
-          git commit --allow-empty -m 'test: validate Emergent-independent build'
-          git push
+      - name: Verify no generated validation artifacts are required
+        run: test ! -e frontend/package-lock.json || rm -f frontend/package-lock.json
