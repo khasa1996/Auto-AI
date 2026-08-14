@@ -1,8 +1,7 @@
 """Provider-neutral LLM gateway for Auto-AI.
 
-This module intentionally uses vendor HTTP APIs through the existing `httpx`
-dependency instead of a hosted integration layer. Provider credentials stay
-server-side and are read only from environment variables.
+Uses vendor HTTP APIs directly through httpx. No hosted integration SDK is
+required and provider credentials remain server-side.
 """
 
 from __future__ import annotations
@@ -25,8 +24,11 @@ class LLMResult:
     model: str
 
 
-# The model ids are kept in one registry so application code does not need to
-# know vendor-specific endpoint details.
+@dataclass(frozen=True)
+class UserMessage:
+    text: str
+
+
 MODELS: dict[str, dict[str, str]] = {
     "claude": {"provider": "anthropic", "model": "claude-sonnet-4-6"},
     "claude-opus": {"provider": "anthropic", "model": "claude-opus-4-7"},
@@ -36,6 +38,32 @@ MODELS: dict[str, dict[str, str]] = {
     "gemini-pro": {"provider": "gemini", "model": "gemini-3.1-pro-preview"},
     "gemini-flash": {"provider": "gemini", "model": "gemini-3.5-flash"},
 }
+
+
+class LlmChat:
+    """Temporary compatibility façade for the existing Auto-AI server API."""
+
+    def __init__(self, api_key: Optional[str], session_id: str, system_message: str):
+        self.session_id = session_id
+        self.system_message = system_message
+        self.provider: Optional[str] = None
+        self.model: Optional[str] = None
+
+    def with_model(self, provider: str, model: str) -> "LlmChat":
+        self.provider = provider
+        self.model = model
+        return self
+
+    async def send_message(self, message: UserMessage) -> str:
+        if not self.provider or not self.model:
+            raise LLMProviderError("No LLM model selected")
+        model_key = next(
+            (key for key, value in MODELS.items() if value["provider"] == self.provider and value["model"] == self.model),
+            None,
+        )
+        if model_key is None:
+            raise LLMProviderError(f"Unsupported model: {self.provider}/{self.model}")
+        return (await generate_text(model_key=model_key, system=self.system_message, user=message.text)).text
 
 
 def _required_env(name: str) -> str:
@@ -53,7 +81,7 @@ def resolve_model(model_key: Optional[str]) -> tuple[str, str]:
     return entry["provider"], entry["model"]
 
 
-def _anthropic_messages(system: str, user: str, history: Optional[Iterable[dict[str, str]]]) -> list[dict[str, Any]]:
+def _messages(user: str, history: Optional[Iterable[dict[str, str]]]) -> list[dict[str, Any]]:
     messages: list[dict[str, Any]] = []
     for item in history or []:
         role = item.get("role")
@@ -70,13 +98,9 @@ async def _call_anthropic(model: str, system: str, user: str, history: Optional[
         "model": model,
         "max_tokens": int(os.environ.get("LLM_MAX_TOKENS", "4096")),
         "system": system,
-        "messages": _anthropic_messages(system, user, history),
+        "messages": _messages(user, history),
     }
-    headers = {
-        "x-api-key": key,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-    }
+    headers = {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
     async with httpx.AsyncClient(timeout=90.0) as client:
         response = await client.post("https://api.anthropic.com/v1/messages", headers=headers, json=payload)
     if response.status_code >= 400:
@@ -90,20 +114,15 @@ async def _call_anthropic(model: str, system: str, user: str, history: Optional[
 
 async def _call_openai(model: str, system: str, user: str, history: Optional[Iterable[dict[str, str]]]) -> str:
     key = _required_env("OPENAI_API_KEY")
-    # Responses API accepts a simple input string plus instructions. Previous
-    # turns are supplied as structured messages when available.
     if history:
-        input_items: list[dict[str, str]] = []
-        for item in history:
-            role = item.get("role")
-            content = item.get("content")
-            if role in {"user", "assistant"} and content:
-                input_items.append({"role": role, "content": content})
-        input_items.append({"role": "user", "content": user})
-        input_value: Any = input_items
+        input_value: Any = [
+            {"role": item["role"], "content": item["content"]}
+            for item in history
+            if item.get("role") in {"user", "assistant"} and item.get("content")
+        ]
+        input_value.append({"role": "user", "content": user})
     else:
         input_value = user
-
     payload = {
         "model": model,
         "instructions": system,
@@ -118,12 +137,12 @@ async def _call_openai(model: str, system: str, user: str, history: Optional[Ite
     data = response.json()
     text = data.get("output_text")
     if not text:
-        parts: list[str] = []
-        for item in data.get("output", []):
-            for content in item.get("content", []):
-                if content.get("type") in {"output_text", "text"} and content.get("text"):
-                    parts.append(content["text"])
-        text = "".join(parts)
+        text = "".join(
+            content.get("text", "")
+            for item in data.get("output", [])
+            for content in item.get("content", [])
+            if content.get("type") in {"output_text", "text"}
+        )
     if not text:
         raise LLMProviderError("OpenAI returned an empty response")
     return text
@@ -157,13 +176,7 @@ async def _call_gemini(model: str, system: str, user: str, history: Optional[Ite
     return text
 
 
-async def generate_text(
-    *,
-    model_key: Optional[str],
-    system: str,
-    user: str,
-    history: Optional[Iterable[dict[str, str]]] = None,
-) -> LLMResult:
+async def generate_text(*, model_key: Optional[str], system: str, user: str, history: Optional[Iterable[dict[str, str]]] = None) -> LLMResult:
     """Generate text through the selected first-party provider API."""
     provider, model = resolve_model(model_key)
     if provider == "anthropic":
@@ -172,6 +185,6 @@ async def generate_text(
         text = await _call_openai(model, system, user, history)
     elif provider == "gemini":
         text = await _call_gemini(model, system, user, history)
-    else:  # defensive; registry is closed above
+    else:
         raise LLMProviderError(f"Unsupported provider: {provider}")
     return LLMResult(text=text, provider=provider, model=model)
