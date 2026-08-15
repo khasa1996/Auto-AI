@@ -1,0 +1,93 @@
+name: Auto-AI staging integration tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      backend_url:
+        description: "Base URL of the deployed Auto-AI staging backend (no trailing slash)"
+        required: true
+        type: string
+      run_stripe:
+        description: "Run Stripe integration tests (staging must use Stripe test credentials)"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    name: Staging API integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      REACT_APP_BACKEND_URL: ${{ inputs.backend_url }}
+      ADMIN_PIN: ${{ secrets.AUTO_AI_STAGING_ADMIN_PIN }}
+      RUN_STRIPE: ${{ inputs.run_stripe }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate staging configuration
+        run: |
+          set -euo pipefail
+          test -n "$REACT_APP_BACKEND_URL"
+          test -n "$ADMIN_PIN"
+          case "$REACT_APP_BACKEND_URL" in
+            https://*) ;;
+            *) echo "backend_url must use HTTPS"; exit 1 ;;
+          esac
+          echo "Testing backend: $REACT_APP_BACKEND_URL"
+          echo "Stripe tests enabled: $RUN_STRIPE"
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend test dependencies
+        working-directory: backend
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+
+      - name: Check backend health
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+          import requests
+          base = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
+          candidates = [f"{base}/api/health", f"{base}/health", f"{base}/api/healthz", f"{base}/healthz"]
+          last = None
+          for url in candidates:
+              try:
+                  r = requests.get(url, timeout=15)
+                  print(url, r.status_code, r.text[:300])
+                  if 200 <= r.status_code < 300:
+                      sys.exit(0)
+                  last = f"{url}: HTTP {r.status_code}"
+              except Exception as exc:
+                  print(url, exc)
+                  last = f"{url}: {exc}"
+          raise SystemExit(f"No health endpoint responded successfully. Last result: {last}")
+          PY
+
+      - name: Run authenticated/security integration suite
+        working-directory: backend
+        run: |
+          PYTHONPATH=. pytest -q tests/backend_test.py tests/test_security.py tests/test_iteration3.py tests/test_iteration4.py
+
+      - name: Run Stripe staging integration suite
+        if: ${{ inputs.run_stripe }}
+        working-directory: backend
+        run: |
+          PYTHONPATH=. pytest -q tests/test_iteration5.py
+
+      - name: Report test environment
+        if: always()
+        run: |
+          echo "Auto-AI staging integration workflow completed."
+          echo "Backend URL: $REACT_APP_BACKEND_URL"
