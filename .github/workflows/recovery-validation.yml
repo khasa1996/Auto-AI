@@ -22,10 +22,10 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
-      - name: Scan active project for Emergent references
+      - name: Scan active project for retired external integration references
         run: |
-          if git grep -niE 'emergentintegrations|EMERGENT_LLM_KEY|@emergentbase|assets\.emergent\.sh|\.emergent|emergentagent\.com' -- . ':(exclude).github/*' ':(exclude)memory/*' ':(exclude)test_reports/*'; then
-            echo 'Active Emergent references found.'
+          if git grep -niE 'emergentintegrations|EMERGENT_LLM_KEY|@emergentbase|assets\.emergent\.sh|\.emergent|emergentagent\.com' -- . ':(exclude).github/workflows/recovery-validation.yml' ':(exclude)test_reports/*'; then
+            echo 'Retired external integration references found in the active project.'
             exit 1
           fi
 
