@@ -1,105 +1,123 @@
 # Auto-AI India — Product Requirements
 
-## What's Implemented (iteration 6, 2026-02-20)
+## Product
+
+Auto-AI India is an AI-powered premium automotive intelligence platform for Indian car buyers, dealers and partners.
+
+The product goal is to provide an independent automotive decision layer covering discovery, comparison, recommendation, financing guidance, bookings, dealer workflows and premium digital experiences.
+
+## Current implementation
 
 ### Backend
-- 106-car database, Claude Sonnet 4.5 AI engine (compare, recommend, chat)
-- AI-as-CRM (booking tracking via chat), multi-language (8 Indian languages)
-- Bookings with auto partner-lead creation, 9 partners (5 banks + 4 insurers)
-- Image proxy for 106 CarWale CDN photos (bypasses Chrome ORB), pre-warmed cache
-- Phone OTP auth (MVP: 123456)
-- Dealer Command Center endpoints + **dealer self-service apply/list**
-- **Admin panel** with PIN auth for approving dealer applications
-- **Stripe subscriptions**: `/api/checkout/session`, `/api/checkout/status/{id}`, `/api/webhook/stripe`, `/api/me/subscription`
-  - Plans: Premium ₹199/mo, Dealer ₹999/mo
+
+- 100+ Indian car records with brand/model/variant/specification data.
+- Car search, filtering and individual-car APIs.
+- AI comparison and recommendation endpoints.
+- 24/7 AI chat with language selection and selectable model providers.
+- EMI calculation.
+- Test-drive and booking workflows with city/dealer mapping.
+- OTP authentication and authenticated booking history.
+- Dealer self-service onboarding and admin approval workflow.
+- Partner lead and commission pipeline for financing and insurance.
+- Premium subscription checkout and payment-status handling.
+- Stripe webhook handling with local signature verification.
+- Image and video proxy endpoints with HTTPS host allowlisting.
+- ElevenLabs text-to-speech integration.
 
 ### Frontend
-- Routes: `/`, `/compare`, `/recommend`, `/cars`, `/emi`, `/news`, `/book/:id`, `/showroom/:id`, `/premium`, `/dealer`, `/dealers/apply`, `/admin`, `/about`, `/login`, `/my-bookings`
-- Real latest OEM photos for all 106 cars via backend proxy
-- 360° Premium Showroom (drag-rotate, 7 colors, interior toggles, 3-min paywall)
-- Founder page, Dealer onboarding, Admin panel (PIN from the `ADMIN_PIN` env var)
-- Stripe-powered Premium checkout + post-payment status polling
-- PWA (manifest + service worker + install prompt)
-- Multi-language toggle (8 Indian languages)
 
-### **NEW — Premium Visual Redesign (iter 6, 2026-02-20)**
-- **framer-motion** installed, all hero/section reveals use spring + stagger motion
-- Overhauled `index.css`: added grain, tracing-beam, glass-strong, dot-grid, corner-notch, btn-shine, breathe, scan-line, shimmer, gradient-amber-text utilities + Outfit/Manrope/Bebas Neue fonts
-- **Home.jsx**: hero now has **looping Pexels driving reel video background** (proxied via backend `/api/video-proxy` with HTTP Range support) + luxury car poster fallback + parallax scroll + italic amber gradient headline + HUD glass card with live zero-wait tracker + floating "AI LIVE" badge
-- **Navbar**: scroll-responsive glass with border glow, animated `layoutId` underline, gradient logo, mobile staggered reveal
-- **CarCard**: glass-chip segment badge, Bebas-Neue price chip, Framer-Motion hover lift, glow overlay, gradient CTA
-- **ChatDrawer**: breathing gradient amber orb FAB + tooltip; drawer slides in with spring on glass-strong surface
-- **Premium.jsx**: tracing-beam animated conic-gradient border on ₹199 plan + MOST POPULAR pill + Bebas-Neue big prices + motion stagger
+- Home, compare, recommend, cars, EMI, news, booking, showroom, premium, dealer, dealer-application, admin, about, login and booking-history routes.
+- Automotive media and visual car presentation.
+- AI chat drawer and model selector.
+- Multi-language UI.
+- Premium showroom experience with interactive visual states and paint customization.
+- PWA manifest/service-worker support.
+- Capacitor 7 configuration for Android/iOS packaging using the bundled production web build.
 
-### **NEW — 360° Showroom Fix (iter 7, 2026-02-20)**
-- Previously the Showroom rendered a generic hand-drawn SVG instead of the real car. Now it uses the **actual CarWale OEM photo** (same source as listings, via `getCarImage` + `/api/image-proxy`).
-- Added **3D sway rotation** (Framer Motion rotateY + translateX + perspective) driven by drag/slider/auto-spin — car appears to rotate, flips horizontally past 90° to suggest the rear side.
-- **Paint customization**: color wash overlays (mix-blend-overlay + soft-light) let users preview 7 paint colors on the real photo.
-- **State chips**: Doors Open / Hood Up / Boot Open / Lights ON appear as visible amber chips on the viewer when toggled.
-- **Angle slider** at bottom + touch/swipe support for mobile.
-- **Studio spotlight + floor reflection ring** + paint name readout + FRONT/REAR readout.
-- Interior view renders a luxury SVG cabin diagram.
+## AI architecture
 
-### **NEW — Video Proxy Endpoint (iter 7)**
-- `/api/video-proxy` streams from `videos.pexels.com` with full HTTP Range-request passthrough (required for HTML5 `<video>` seeking/buffering). Returns 206 Partial Content on Range, supports HEAD for preflight.
+Auto-AI uses a provider-neutral server-side gateway in `backend/llm_provider.py`.
 
-### Testing
-- iter 1-5: backend + frontend comprehensive (~100% pass)
-- iter 6: design smoke tested on desktop + mobile (Home / Cars / Compare / Premium) — all pages render, chat orb visible, no console errors
+Current model registry:
 
-## Known Limits / Not Yet Done
-- Stripe uses TEST keys (not real rupees yet)
-- OTP hardcoded to 123456 (needs Twilio/MSG91)
-- No real-time car data feed (CarDekho/CarWale have no public API)
-- Daily car refresh is simulated
+- `claude` → Anthropic `claude-sonnet-4-6` — default balanced model.
+- `claude-opus` → Anthropic `claude-opus-4-7` — deep reasoning.
+- `claude-haiku` → Anthropic `claude-haiku-4-5-20251001` — fast/lightweight.
+- `gpt-flagship` → OpenAI `gpt-5.4` — flagship reasoning.
+- `gpt-mini` → OpenAI `gpt-5.4-mini` — fast/efficient.
+- `gemini-pro` → Google `gemini-3.1-pro-preview` — deep analysis.
+- `gemini-flash` → Google `gemini-3.5-flash` — fast/efficient.
 
-### **NEW — OpenAI Chat Models added (iter 10, 2026-02-20)**
-- Extended `AI_MODELS` registry with two OpenAI GPT models via Emergent LLM Key:
-  - `gpt-flagship` → `gpt-5.4` (OpenAI · Flagship reasoning · versatile)
-  - `gpt-mini` → `gpt-5.4-mini` (OpenAI · Fast & efficient)
-- Chat drawer picker now shows **5 models total**: Claude Sonnet 4.6 · GPT-5.4 · GPT-5.4 Mini · Gemini 3.1 Pro · Gemini 3.5 Flash
-- Added distinct `Brain` icon for OpenAI models in the picker (vs `Zap` for Gemini, `Sparkles` for Claude)
-- All 5 models verified via curl — respond correctly with model label returned in response.
+Provider credentials are read only from deployment environment variables. The application does not require a hosted app-builder or intermediary AI integration service.
 
-### **NEW — Gemini Chat Models Integration (iter 9, 2026-02-20)**
-- Added Google Gemini as a selectable chat brain alongside Claude via Emergent LLM Key (`emergentintegrations.LlmChat`)
-- Registry `AI_MODELS` in `server.py`:
-  - `claude` → `claude-sonnet-4-6` (Anthropic · Balanced reasoning · unbiased) — DEFAULT
-  - `gemini-pro` → `gemini-3.1-pro-preview` (Google · Deep analysis · latest)
-  - `gemini-flash` → `gemini-3.5-flash` (Google · Blazing fast · concise)
-- New endpoint `GET /api/ai/models` — lists all pickable models with label + family + strength
-- `POST /api/ai/chat` now accepts optional `model` field; reply includes `model` label so UI shows which brain answered
-- `ChatRequest.model_config = {"protected_namespaces": ()}` added so Pydantic v2 doesn't reserve the `model` field name
-- Compare/Recommend endpoints unchanged (still use Claude for deep unbiased analysis)
-- **UI**: `ChatDrawer.jsx` gets a sleek model picker bar under the header — shows Active AI with dropdown of all 3 models, each with family + strength tagline. Choice persists in localStorage. Switching models opens a fresh session so history stays clean. Each assistant message shows a small `· Gemini 3.5 Flash` badge.
-- Verified all 3 models respond correctly via curl.
+## Payments architecture
 
-### **NEW — Capacitor Mobile Wrapper (iter 8, 2026-02-20)**
-- Installed `@capacitor/core@7`, `cli@7`, `android@7`, `ios@7`, `app@7`, `splash-screen@7`, `status-bar@7`
-- Created `/app/frontend/capacitor.config.json`:
-  - appId `com.autoai.india`, appName `Auto-AI India`
-  - **Live Web Wrapper mode** — `server.url` points to deployed site; any web update instantly reflects in mobile app with no APK re-release
-  - Dark splash (`#050505`), dark status bar
-- Added `yarn` scripts: `mobile:init:android`, `mobile:init:ios`, `mobile:sync`, `mobile:open:android`, `mobile:open:ios`
-- Wrote **`/app/MOBILE_APP_GUIDE.md`** — full step-by-step for Android Studio + Xcode build, Play Store + App Store submission, icon/splash generation (@capacitor/assets), cost summary ($25 Play + $99/yr Apple), troubleshooting
-- User must run native builds on their own Mac/PC (Android Studio or Xcode required — can't run in cloud container)
+Stripe is accessed directly from the backend through `backend/stripe_provider.py`.
 
-## Go-Live Checklist
-1. Replace STRIPE_API_KEY with live key → real payments live
-2. Get Twilio/MSG91 account → replace OTP stub for real SMS
-3. Upload founder photo to replace "A" initials on /about
-4. Generate PWA + mobile app icons (`resources/icon.png` + `resources/splash.png` 1024+2732px) then `npx @capacitor/assets generate`
-5. Follow `/app/MOBILE_APP_GUIDE.md` to ship Android + iOS apps
+The backend:
 
-## Backlog (ROADMAP)
-- **P1** Real SMS OTP via Twilio/MSG91
-- **P1** Hard-gate Premium features (lock unlimited compares / priority booking for free tier)
-- **P1** Daily live price sync (scheduled scrape from CarDekho/CarWale)
-- **P2** Transactional email (SendGrid/Resend) for booking + dealer lead notifications
-- **P2** Android/iOS wrapper via Capacitor
-- **P3** Refactor `server.py` (650+ lines) into modular route files
+- creates checkout sessions directly with Stripe;
+- stores the Auto-AI transaction/session mapping;
+- verifies Stripe webhook signatures locally;
+- updates payment/subscription state from verified events;
+- restricts checkout-status access to the authenticated customer session;
+- validates allowed return origins.
 
-## Mobile App Paths
-- **Now**: PWA is live. Users tap "Install" (Android) or Share→Add to Home (iOS).
-- **Next**: Capacitor wrapper for Play Store + App Store (~₹4,200 fees, 2–4 weeks).
-- **Future**: React Native rewrite (2–3 months).
+## Authentication and security
+
+- Production must provide a persistent `SECRET_KEY`.
+- Demo OTP mode is disabled automatically when `APP_ENV=production`.
+- User and admin session tokens are stored as hashes.
+- Admin endpoints are protected by authenticated admin sessions or the configured admin PIN.
+- Booking/customer endpoints use authenticated user sessions.
+- External media proxy requests use an HTTPS host allowlist.
+- Stripe webhook signatures are verified before processing payment events.
+- Production CORS should use explicit trusted origins.
+
+## Independent deployment requirements
+
+Required/feature-dependent environment variables are documented in `docs/INDEPENDENT_DEPLOYMENT.md`.
+
+The deployment must not depend on any external app-builder runtime, preview service, hosted AI integration layer, or hosted payment wrapper.
+
+## Validation gates
+
+The recovery branch must pass:
+
+1. Active independence/reference scan.
+2. Backend compilation.
+3. Provider adapter tests.
+4. MongoDB driver compatibility check.
+5. Frontend production build.
+6. Authenticated runtime smoke tests for AI, authentication and bookings.
+7. Stripe test-mode checkout and webhook verification.
+8. Production environment-variable verification.
+9. Vercel preview validation.
+
+Only after these gates are satisfied should the recovery branch be merged into `main`.
+
+## Known engineering follow-ups
+
+- Split the large `backend/server.py` into focused routers/services.
+- Replace in-process rate limiting with a shared store when running multiple API replicas.
+- Add stronger automated runtime/API smoke tests to CI without exposing production credentials.
+- Improve frontend dependency reproducibility with a committed package lockfile strategy.
+- Add server-side entitlement enforcement for premium/showroom limits before real paid rollout.
+- Replace demo OTP delivery with a production SMS provider before launch.
+- Replace Stripe test credentials with live credentials only during the controlled production launch.
+- Add live automotive data ingestion only where source licensing and API access permit it.
+
+## Go-live checklist
+
+- [ ] Recovery branch reviewed and all CI checks green.
+- [ ] No active dependency or runtime integration with external app-builder services.
+- [ ] Production secrets configured independently.
+- [ ] `APP_ENV=production` configured.
+- [ ] `SECRET_KEY` configured with a persistent high-entropy value.
+- [ ] AI provider keys configured for the providers enabled in production.
+- [ ] `STRIPE_API_KEY` and `STRIPE_WEBHOOK_SECRET` configured for the intended Stripe environment.
+- [ ] `CORS_ORIGINS` contains only trusted production origins.
+- [ ] `ADMIN_PIN` configured securely.
+- [ ] Authenticated AI, booking and payment smoke tests completed.
+- [ ] Production Vercel configuration verified.
+- [ ] Only then merge to `main` and deploy production.
