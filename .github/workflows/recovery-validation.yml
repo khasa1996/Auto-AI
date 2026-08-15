@@ -15,6 +15,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
       - name: Scan active project for Emergent references
         run: |
           if git grep -niE 'emergentintegrations|EMERGENT_LLM_KEY|@emergentbase|assets\.emergent\.sh|\.emergent|emergentagent\.com' -- . ':(exclude).github/*' ':(exclude)memory/*' ':(exclude)test_reports/*'; then
@@ -26,9 +33,11 @@ jobs:
         run: |
           ! grep -Rni 'claude-sonnet-4-5-20250929' backend --exclude-dir='__pycache__'
 
-      - name: Install backend dependencies
+      - name: Verify MongoDB driver compatibility
         working-directory: backend
-        run: python -m pip install --disable-pip-version-check -q -r requirements.txt
+        run: |
+          python -m pip install --disable-pip-version-check -q -r requirements.txt
+          python -c "import motor, pymongo; from motor.motor_asyncio import AsyncIOMotorClient; print(f'Motor {motor.version}; PyMongo {pymongo.version}; AsyncIOMotorClient import OK')"
 
       - name: Compile backend and tests
         run: python -m compileall -q backend
