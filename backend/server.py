@@ -17,7 +17,6 @@ from datetime import datetime, timezone
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from razorpay_gateway import (
     RAZORPAY_KEY_ID,
-    RAZORPAY_KEY_SECRET,
     create_order as razorpay_create_order,
     fetch_payment as razorpay_fetch_payment,
     is_configured as razorpay_is_configured,
