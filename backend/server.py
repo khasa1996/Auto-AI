@@ -14,7 +14,7 @@ from typing import List, Optional
 import uuid
 from datetime import datetime, timezone
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+# from emergentintegrations.llm.chat import LlmChat, UserMessage
 from razorpay_gateway import (
     RAZORPAY_KEY_ID,
     RAZORPAY_KEY_SECRET,
@@ -28,21 +28,25 @@ import security
 from security import RateLimiter
 
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+load_dotenv(ROOT_DIR / ".env")
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
-CORS_ORIGINS = [o.strip() for o in os.environ.get('CORS_ORIGINS', '*').split(',') if o.strip()] or ['*']
-ALLOW_CREDENTIALS = '*' not in CORS_ORIGINS
+CORS_ORIGINS = [
+    o.strip() for o in os.environ.get("CORS_ORIGINS", "*").split(",") if o.strip()
+] or ["*"]
+ALLOW_CREDENTIALS = "*" not in CORS_ORIGINS
 
 # MongoDB connection
-mongo_url = os.environ['MONGO_URL']
+mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+db = client[os.environ["DB_NAME"]]
 
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
-ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY')
+EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
+ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY")
 CLAUDE_MODEL = ("anthropic", "claude-sonnet-4-5-20250929")
 
 # ---------- AI Model Registry ----------
@@ -141,18 +145,24 @@ def _bearer_token(authorization: Optional[str]) -> Optional[str]:
     return token.strip()
 
 
-async def optional_user_phone(authorization: Optional[str] = Header(None)) -> Optional[str]:
+async def optional_user_phone(
+    authorization: Optional[str] = Header(None),
+) -> Optional[str]:
     """Resolve the caller's phone from a session token, or None when unauthenticated."""
     token = _bearer_token(authorization)
     if not token:
         return None
-    sess = await db.user_sessions.find_one({"token_hash": security.hash_secret(token)}, {"_id": 0})
+    sess = await db.user_sessions.find_one(
+        {"token_hash": security.hash_secret(token)}, {"_id": 0}
+    )
     if not sess or security.is_expired(sess.get("expires_at")):
         return None
     return sess["phone"]
 
 
-async def current_user_phone(phone: Optional[str] = Depends(optional_user_phone)) -> str:
+async def current_user_phone(
+    phone: Optional[str] = Depends(optional_user_phone),
+) -> str:
     if not phone:
         raise HTTPException(status_code=401, detail="Authentication required")
     return phone
@@ -165,7 +175,9 @@ async def require_admin(
     """Admin auth via a session token from /api/admin/verify, or the admin PIN header."""
     token = _bearer_token(authorization)
     if token:
-        sess = await db.admin_sessions.find_one({"token_hash": security.hash_secret(token)}, {"_id": 0})
+        sess = await db.admin_sessions.find_one(
+            {"token_hash": security.hash_secret(token)}, {"_id": 0}
+        )
         if sess and not security.is_expired(sess.get("expires_at")):
             return "admin"
     if x_admin_pin and _admin_pin_valid(x_admin_pin):
@@ -236,7 +248,9 @@ class ChatRequest(BaseModel):
     session_id: str = Field(max_length=128)
     message: str = Field(min_length=1, max_length=4000)
     language: Optional[str] = Field(default="English", max_length=40)
-    model: Optional[str] = Field(default=None, max_length=40)  # "claude" | "gemini-pro" | "gemini-flash"
+    model: Optional[str] = Field(
+        default=None, max_length=40
+    )  # "claude" | "gemini-pro" | "gemini-flash"
 
 
 class BookingRequest(BaseModel):
@@ -297,18 +311,24 @@ async def seed_db():
     await db.bookings.create_index("phone")
 
     if not security.SECRET_KEY_CONFIGURED:
-        logger.warning("SECRET_KEY is not configured — sessions and OTPs will be invalidated on restart.")
+        logger.warning(
+            "SECRET_KEY is not configured — sessions and OTPs will be invalidated on restart."
+        )
     if not ADMIN_PIN:
-        logger.warning("ADMIN_PIN is not configured — the admin API will refuse all requests.")
+        logger.warning(
+            "ADMIN_PIN is not configured — the admin API will refuse all requests."
+        )
 
     # Pre-warm image proxy cache in the background for popular cars (non-blocking)
     import asyncio as _asyncio
+
     _asyncio.create_task(_prewarm_images())
 
 
 async def _prewarm_images():
     """Fetch a curated set of car images to fill the proxy cache before first user visit."""
     import asyncio
+
     # Top 30 most-viewed cars (matches id list used by CAR_IMAGES on frontend)
     urls_to_warm = [
         "https://imgd.aeplcdn.com/664x374/n/cw/ec/141867/nexon-exterior-right-front-three-quarter-79.png",
@@ -321,7 +341,10 @@ async def _prewarm_images():
         try:
             r = await _fetch_image(u)
             if r.status_code == 200:
-                _IMAGE_CACHE[u] = (r.content, r.headers.get("content-type", "image/jpeg"))
+                _IMAGE_CACHE[u] = (
+                    r.content,
+                    r.headers.get("content-type", "image/jpeg"),
+                )
         except Exception:
             pass
         await asyncio.sleep(0.1)
@@ -339,7 +362,9 @@ def extract_json(text: str):
         return None
 
 
-async def get_chat(session_id: str, system_message: str, model_key: Optional[str] = None) -> LlmChat:
+async def get_chat(
+    session_id: str, system_message: str, model_key: Optional[str] = None
+) -> LlmChat:
     """Return an LlmChat pinned to the requested model (default: Claude Sonnet)."""
     m = AI_MODELS.get(model_key) if model_key else None
     provider_model = (m["provider"], m["model"]) if m else CLAUDE_MODEL
@@ -357,18 +382,31 @@ async def find_car_by_name(name: str) -> Optional[dict]:
     cars = await db.cars.find({}, {"_id": 0}).to_list(500)
     for c in cars:
         full = f"{c['brand']} {c['model']}".lower()
-        if name in full or full in name or c['model'].lower() == name:
+        if name in full or full in name or c["model"].lower() == name:
             return c
     # fuzzy: match by model token
     for c in cars:
-        if c['model'].lower() in name or any(tok in c['model'].lower() for tok in name.split()):
+        if c["model"].lower() in name or any(
+            tok in c["model"].lower() for tok in name.split()
+        ):
             return c
     return None
 
 
 # ---------- Image proxy (fixes Chrome ORB for hotlinked images) ----------
 _IMAGE_CACHE: dict = {}
-_ALLOWED_HOSTS = ("upload.wikimedia.org", "commons.wikimedia.org", "images.unsplash.com", "images.pexels.com", "videos.pexels.com", "cdn.pixabay.com", "imgd.aeplcdn.com", "imgd-ct.aeplcdn.com", "stimg.cardekho.com", "i.ytimg.com")
+_ALLOWED_HOSTS = (
+    "upload.wikimedia.org",
+    "commons.wikimedia.org",
+    "images.unsplash.com",
+    "images.pexels.com",
+    "videos.pexels.com",
+    "cdn.pixabay.com",
+    "imgd.aeplcdn.com",
+    "imgd-ct.aeplcdn.com",
+    "stimg.cardekho.com",
+    "i.ytimg.com",
+)
 
 
 _MAX_PROXY_BYTES = 15 * 1024 * 1024
@@ -380,12 +418,17 @@ def _require_allowed_host(url: str):
 
 
 async def _fetch_image(url: str):
-    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True, max_redirects=3) as client:
-        r = await client.get(url, headers={
-            "User-Agent": "Mozilla/5.0 (X11; Linux) Chrome/120 AutoAIIndia/1.0",
-            "Accept": "image/avif,image/webp,image/png,image/jpeg,*/*",
-            "Referer": "https://www.carwale.com/",
-        })
+    async with httpx.AsyncClient(
+        timeout=15.0, follow_redirects=True, max_redirects=3
+    ) as client:
+        r = await client.get(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (X11; Linux) Chrome/120 AutoAIIndia/1.0",
+                "Accept": "image/avif,image/webp,image/png,image/jpeg,*/*",
+                "Referer": "https://www.carwale.com/",
+            },
+        )
         # A redirect must not carry the request off the allowlist.
         _require_allowed_host(str(r.url))
         if len(r.content) > _MAX_PROXY_BYTES:
@@ -403,7 +446,9 @@ async def image_proxy(url: str = Query(max_length=2000)):
         try:
             r = await _fetch_image(url)
             if r.status_code != 200:
-                raise HTTPException(status_code=r.status_code, detail="Upstream fetch failed")
+                raise HTTPException(
+                    status_code=r.status_code, detail="Upstream fetch failed"
+                )
             data = r.content
             ctype = r.headers.get("content-type", "image/jpeg")
             if len(_IMAGE_CACHE) < 1000:
@@ -414,16 +459,21 @@ async def image_proxy(url: str = Query(max_length=2000)):
             logging.exception("image proxy upstream error")
             raise HTTPException(status_code=502, detail="Upstream error")
 
-    return Response(content=data, media_type=ctype, headers={
-        "Cache-Control": "public, max-age=604800",
-        "Cross-Origin-Resource-Policy": "cross-origin",
-    })
+    return Response(
+        content=data,
+        media_type=ctype,
+        headers={
+            "Cache-Control": "public, max-age=604800",
+            "Cross-Origin-Resource-Policy": "cross-origin",
+        },
+    )
 
 
 @app.api_route("/api/video-proxy", methods=["GET", "HEAD"])
 async def video_proxy(request: Request, url: str = Query(max_length=2000)):
     """Stream video from allowed hosts (Pexels) with Range-request passthrough for HTML5 <video>."""
     from fastapi.responses import StreamingResponse
+
     _require_allowed_host(url)
 
     # Forward Range header from browser to upstream so video can seek/buffer properly
@@ -448,7 +498,9 @@ async def video_proxy(request: Request, url: str = Query(max_length=2000)):
         if r.status_code not in (200, 206):
             await r.aclose()
             await client.aclose()
-            raise HTTPException(status_code=r.status_code, detail="Upstream fetch failed")
+            raise HTTPException(
+                status_code=r.status_code, detail="Upstream fetch failed"
+            )
 
         ctype = r.headers.get("content-type", "video/mp4")
         resp_headers = {
@@ -463,7 +515,9 @@ async def video_proxy(request: Request, url: str = Query(max_length=2000)):
         if request.method == "HEAD":
             await r.aclose()
             await client.aclose()
-            return Response(status_code=r.status_code, media_type=ctype, headers=resp_headers)
+            return Response(
+                status_code=r.status_code, media_type=ctype, headers=resp_headers
+            )
 
         async def iterator():
             try:
@@ -473,7 +527,12 @@ async def video_proxy(request: Request, url: str = Query(max_length=2000)):
                 await r.aclose()
                 await client.aclose()
 
-        return StreamingResponse(iterator(), status_code=r.status_code, media_type=ctype, headers=resp_headers)
+        return StreamingResponse(
+            iterator(),
+            status_code=r.status_code,
+            media_type=ctype,
+            headers=resp_headers,
+        )
     except HTTPException:
         await client.aclose()
         raise
@@ -615,14 +674,20 @@ Output STRICT JSON only:
 
 @api_router.post("/ai/recommend")
 async def ai_recommend(req: RecommendRequest):
-    query: dict = {"price_ex_showroom": {"$gte": req.budget_min, "$lte": req.budget_max}}
+    query: dict = {
+        "price_ex_showroom": {"$gte": req.budget_min, "$lte": req.budget_max}
+    }
     if req.fuel and req.fuel != "Any":
         query["fuel"] = req.fuel
     if req.seats:
         query["seats"] = {"$gte": req.seats}
     candidates = await db.cars.find(query, {"_id": 0}).to_list(200)
     if not candidates:
-        return {"top_picks": [], "summary": "No cars match your criteria. Try widening the budget or seat filter.", "candidates": []}
+        return {
+            "top_picks": [],
+            "summary": "No cars match your criteria. Try widening the budget or seat filter.",
+            "candidates": [],
+        }
 
     prompt = f"""Buyer profile:
 - Budget: ₹{req.budget_min:,} to ₹{req.budget_max:,}
@@ -658,7 +723,12 @@ async def list_ai_models():
     return {
         "default": DEFAULT_CHAT_MODEL,
         "models": [
-            {"id": k, "label": v["label"], "family": v["family"], "strength": v["strength"]}
+            {
+                "id": k,
+                "label": v["label"],
+                "family": v["family"],
+                "strength": v["strength"],
+            }
             for k, v in AI_MODELS.items()
         ],
     }
@@ -715,6 +785,7 @@ async def tts_speak(req: TTSRequest):
     try:
         # Local import so a missing pkg doesn't crash server startup
         from elevenlabs import ElevenLabs
+
         client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
         audio_iter = client.text_to_speech.convert(
             text=text,
@@ -771,55 +842,82 @@ def _format_booking_context(bookings: list) -> str:
 
 
 @api_router.post("/ai/chat")
-async def ai_chat(req: ChatRequest, caller_phone: Optional[str] = Depends(optional_user_phone)):
+async def ai_chat(
+    req: ChatRequest, caller_phone: Optional[str] = Depends(optional_user_phone)
+):
     try:
-        await db.chat_messages.insert_one({
-            "id": str(uuid.uuid4()),
-            "session_id": req.session_id,
-            "role": "user",
-            "content": req.message,
-            "ts": datetime.now(timezone.utc).isoformat(),
-        })
+        await db.chat_messages.insert_one(
+            {
+                "id": str(uuid.uuid4()),
+                "session_id": req.session_id,
+                "role": "user",
+                "content": req.message,
+                "ts": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
         # Fetch booking context if the message looks CRM-ish. Only the signed-in
         # caller's own bookings are ever loaded — a phone number typed into the
         # chat must not unlock someone else's records.
         booking_context = "(none)"
         msg_l = req.message.lower()
-        crm_keywords = ["booking", "track", "order", "cancel", "confirm", "sms", "email", "my car", "dealer", "delivery"]
+        crm_keywords = [
+            "booking",
+            "track",
+            "order",
+            "cancel",
+            "confirm",
+            "sms",
+            "email",
+            "my car",
+            "dealer",
+            "delivery",
+        ]
         if any(k in msg_l for k in crm_keywords):
             if caller_phone:
-                bookings = await db.bookings.find({"phone": caller_phone}, {"_id": 0}).sort("created_at", -1).to_list(5)
+                bookings = (
+                    await db.bookings.find({"phone": caller_phone}, {"_id": 0})
+                    .sort("created_at", -1)
+                    .to_list(5)
+                )
                 bk_match = re.search(r"\b([A-F0-9]{8})\b", req.message.upper())
                 if bk_match:
-                    bookings = [b for b in bookings if b["id"][:8].upper() == bk_match.group(1)] or bookings
+                    bookings = [
+                        b for b in bookings if b["id"][:8].upper() == bk_match.group(1)
+                    ] or bookings
                 booking_context = _format_booking_context(bookings)
             else:
                 booking_context = "(caller is not signed in — ask them to sign in at /login to see booking details)"
 
             # Log notification intent
-            await db.notifications.insert_one({
-                "id": str(uuid.uuid4()),
-                "session_id": req.session_id,
-                "type": "crm_query",
-                "message": req.message[:200],
-                "ts": datetime.now(timezone.utc).isoformat(),
-            })
+            await db.notifications.insert_one(
+                {
+                    "id": str(uuid.uuid4()),
+                    "session_id": req.session_id,
+                    "type": "crm_query",
+                    "message": req.message[:200],
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                }
+            )
 
-        system = (CHAT_SYSTEM
-                  .replace("{LANGUAGE}", req.language or "English")
-                  .replace("{BOOKING_CONTEXT}", booking_context))
+        system = CHAT_SYSTEM.replace("{LANGUAGE}", req.language or "English").replace(
+            "{BOOKING_CONTEXT}", booking_context
+        )
         chat = await get_chat(req.session_id, system, req.model)
         response = await chat.send_message(UserMessage(text=req.message))
-        chosen = AI_MODELS.get(req.model or DEFAULT_CHAT_MODEL, AI_MODELS[DEFAULT_CHAT_MODEL])
-        await db.chat_messages.insert_one({
-            "id": str(uuid.uuid4()),
-            "session_id": req.session_id,
-            "role": "assistant",
-            "content": response,
-            "model": chosen["label"],
-            "ts": datetime.now(timezone.utc).isoformat(),
-        })
+        chosen = AI_MODELS.get(
+            req.model or DEFAULT_CHAT_MODEL, AI_MODELS[DEFAULT_CHAT_MODEL]
+        )
+        await db.chat_messages.insert_one(
+            {
+                "id": str(uuid.uuid4()),
+                "session_id": req.session_id,
+                "role": "assistant",
+                "content": response,
+                "model": chosen["label"],
+                "ts": datetime.now(timezone.utc).isoformat(),
+            }
+        )
         return {"reply": response, "model": chosen["label"]}
     except HTTPException:
         raise
@@ -830,7 +928,11 @@ async def ai_chat(req: ChatRequest, caller_phone: Optional[str] = Depends(option
 
 @api_router.get("/ai/chat/{session_id}/history")
 async def chat_history(session_id: str):
-    msgs = await db.chat_messages.find({"session_id": session_id}, {"_id": 0}).sort("ts", 1).to_list(500)
+    msgs = (
+        await db.chat_messages.find({"session_id": session_id}, {"_id": 0})
+        .sort("ts", 1)
+        .to_list(500)
+    )
     return msgs
 
 
@@ -854,12 +956,16 @@ DEALERS_BY_CITY = {
 @api_router.post("/bookings", response_model=Booking)
 async def create_booking(req: BookingRequest, request: Request):
     if not _booking_limiter.allow(_client_ip(request)):
-        raise HTTPException(status_code=429, detail="Too many bookings, try again later")
+        raise HTTPException(
+            status_code=429, detail="Too many bookings, try again later"
+        )
     car = await db.cars.find_one({"id": req.car_id}, {"_id": 0})
     if not car:
         raise HTTPException(status_code=404, detail="Car not found")
 
-    dealer = DEALERS_BY_CITY.get(req.city.strip().title(), f"Auto-AI Partner — {req.city}")
+    dealer = DEALERS_BY_CITY.get(
+        req.city.strip().title(), f"Auto-AI Partner — {req.city}"
+    )
     booking = Booking(
         id=str(uuid.uuid4()),
         car_id=req.car_id,
@@ -919,17 +1025,76 @@ async def list_bookings(
 
 # ---------- Partners / Commission pipeline ----------
 LOAN_PARTNERS = [
-    {"id": "hdfc-bank", "name": "HDFC Bank", "type": "loan", "rate_min": 8.75, "rate_max": 10.25, "commission_pct": 1.2},
-    {"id": "sbi", "name": "SBI", "type": "loan", "rate_min": 8.5, "rate_max": 9.95, "commission_pct": 1.0},
-    {"id": "icici-bank", "name": "ICICI Bank", "type": "loan", "rate_min": 8.9, "rate_max": 10.5, "commission_pct": 1.3},
-    {"id": "axis-bank", "name": "Axis Bank", "type": "loan", "rate_min": 9.0, "rate_max": 10.75, "commission_pct": 1.25},
-    {"id": "bajaj-finserv", "name": "Bajaj Finserv", "type": "loan", "rate_min": 9.25, "rate_max": 11.5, "commission_pct": 1.5},
+    {
+        "id": "hdfc-bank",
+        "name": "HDFC Bank",
+        "type": "loan",
+        "rate_min": 8.75,
+        "rate_max": 10.25,
+        "commission_pct": 1.2,
+    },
+    {
+        "id": "sbi",
+        "name": "SBI",
+        "type": "loan",
+        "rate_min": 8.5,
+        "rate_max": 9.95,
+        "commission_pct": 1.0,
+    },
+    {
+        "id": "icici-bank",
+        "name": "ICICI Bank",
+        "type": "loan",
+        "rate_min": 8.9,
+        "rate_max": 10.5,
+        "commission_pct": 1.3,
+    },
+    {
+        "id": "axis-bank",
+        "name": "Axis Bank",
+        "type": "loan",
+        "rate_min": 9.0,
+        "rate_max": 10.75,
+        "commission_pct": 1.25,
+    },
+    {
+        "id": "bajaj-finserv",
+        "name": "Bajaj Finserv",
+        "type": "loan",
+        "rate_min": 9.25,
+        "rate_max": 11.5,
+        "commission_pct": 1.5,
+    },
 ]
 INSURANCE_PARTNERS = [
-    {"id": "bajaj-allianz", "name": "Bajaj Allianz", "type": "insurance", "avg_premium_pct": 3.2, "commission_pct": 17.5},
-    {"id": "icici-lombard", "name": "ICICI Lombard", "type": "insurance", "avg_premium_pct": 3.0, "commission_pct": 16.0},
-    {"id": "hdfc-ergo", "name": "HDFC ERGO", "type": "insurance", "avg_premium_pct": 3.1, "commission_pct": 16.5},
-    {"id": "tata-aig", "name": "TATA AIG", "type": "insurance", "avg_premium_pct": 2.9, "commission_pct": 15.5},
+    {
+        "id": "bajaj-allianz",
+        "name": "Bajaj Allianz",
+        "type": "insurance",
+        "avg_premium_pct": 3.2,
+        "commission_pct": 17.5,
+    },
+    {
+        "id": "icici-lombard",
+        "name": "ICICI Lombard",
+        "type": "insurance",
+        "avg_premium_pct": 3.0,
+        "commission_pct": 16.0,
+    },
+    {
+        "id": "hdfc-ergo",
+        "name": "HDFC ERGO",
+        "type": "insurance",
+        "avg_premium_pct": 3.1,
+        "commission_pct": 16.5,
+    },
+    {
+        "id": "tata-aig",
+        "name": "TATA AIG",
+        "type": "insurance",
+        "avg_premium_pct": 2.9,
+        "commission_pct": 15.5,
+    },
 ]
 
 
@@ -943,7 +1108,9 @@ async def list_partners(type: Optional[str] = Query(None, max_length=20)):
 
 @api_router.get("/partners/leads")
 async def partner_leads(_: str = Depends(require_admin)):
-    leads = await db.partner_leads.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    leads = (
+        await db.partner_leads.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    )
     # Aggregate commission totals
     total_commission = sum(lead.get("expected_commission", 0) for lead in leads)
     by_partner = {}
@@ -953,7 +1120,11 @@ async def partner_leads(_: str = Depends(require_admin)):
             by_partner[p] = {"count": 0, "commission": 0.0}
         by_partner[p]["count"] += 1
         by_partner[p]["commission"] += lead.get("expected_commission", 0)
-    return {"leads": leads, "total_commission": round(total_commission, 2), "by_partner": by_partner}
+    return {
+        "leads": leads,
+        "total_commission": round(total_commission, 2),
+        "by_partner": by_partner,
+    }
 
 
 # ---------- Phone OTP Auth ----------
@@ -968,21 +1139,31 @@ class OtpVerifyReq(BaseModel):
 
 @api_router.post("/auth/send-otp")
 async def send_otp(req: OtpSendReq, request: Request):
-    if not _otp_send_limiter.allow(req.phone) or not _otp_send_ip_limiter.allow(_client_ip(request)):
-        raise HTTPException(status_code=429, detail="Too many OTP requests, try again later")
+    if not _otp_send_limiter.allow(req.phone) or not _otp_send_ip_limiter.allow(
+        _client_ip(request)
+    ):
+        raise HTTPException(
+            status_code=429, detail="Too many OTP requests, try again later"
+        )
 
     otp = security.generate_otp()
     # Only the digest is persisted, and any earlier code for this phone is invalidated.
     await db.otps.delete_many({"phone": req.phone})
-    await db.otps.insert_one({
-        "phone": req.phone,
-        "otp_hash": security.hash_secret(otp),
-        "attempts": 0,
-        "expires_at": security.expiry_iso(seconds=security.OTP_TTL_SECONDS),
-        "ts": datetime.now(timezone.utc).isoformat(),
-    })
+    await db.otps.insert_one(
+        {
+            "phone": req.phone,
+            "otp_hash": security.hash_secret(otp),
+            "attempts": 0,
+            "expires_at": security.expiry_iso(seconds=security.OTP_TTL_SECONDS),
+            "ts": datetime.now(timezone.utc).isoformat(),
+        }
+    )
     if security.OTP_DEMO_MODE:
-        return {"sent": True, "message": f"OTP sent (demo mode: use {otp})", "demo_otp": otp}
+        return {
+            "sent": True,
+            "message": f"OTP sent (demo mode: use {otp})",
+            "demo_otp": otp,
+        }
     # Delivery is the SMS provider's job; the code never leaves the server here.
     logger.info("OTP issued for %s", req.phone)
     return {"sent": True, "message": "OTP sent"}
@@ -990,26 +1171,36 @@ async def send_otp(req: OtpSendReq, request: Request):
 
 @api_router.post("/auth/verify-otp")
 async def verify_otp(req: OtpVerifyReq, request: Request):
-    if not _otp_verify_limiter.allow(req.phone) or not _otp_verify_ip_limiter.allow(_client_ip(request)):
-        raise HTTPException(status_code=429, detail="Too many attempts, try again later")
+    if not _otp_verify_limiter.allow(req.phone) or not _otp_verify_ip_limiter.allow(
+        _client_ip(request)
+    ):
+        raise HTTPException(
+            status_code=429, detail="Too many attempts, try again later"
+        )
 
     record = await db.otps.find_one({"phone": req.phone}, {"_id": 0})
     if not record or security.is_expired(record.get("expires_at")):
         raise HTTPException(status_code=401, detail="Invalid or expired OTP")
     if record.get("attempts", 0) >= security.OTP_MAX_ATTEMPTS:
-        raise HTTPException(status_code=429, detail="Too many attempts, request a new OTP")
-    if not security.constant_time_equals(security.hash_secret(req.otp), record["otp_hash"]):
+        raise HTTPException(
+            status_code=429, detail="Too many attempts, request a new OTP"
+        )
+    if not security.constant_time_equals(
+        security.hash_secret(req.otp), record["otp_hash"]
+    ):
         await db.otps.update_one({"phone": req.phone}, {"$inc": {"attempts": 1}})
         raise HTTPException(status_code=401, detail="Invalid or expired OTP")
 
     await db.otps.delete_many({"phone": req.phone})  # single use
     token = security.generate_token()
-    await db.user_sessions.insert_one({
-        "token_hash": security.hash_secret(token),
-        "phone": req.phone,
-        "expires_at": security.expiry_iso(hours=security.USER_SESSION_TTL_HOURS),
-        "ts": datetime.now(timezone.utc).isoformat(),
-    })
+    await db.user_sessions.insert_one(
+        {
+            "token_hash": security.hash_secret(token),
+            "phone": req.phone,
+            "expires_at": security.expiry_iso(hours=security.USER_SESSION_TTL_HOURS),
+            "ts": datetime.now(timezone.utc).isoformat(),
+        }
+    )
     return {"token": token, "phone": req.phone}
 
 
@@ -1023,7 +1214,11 @@ async def logout(authorization: Optional[str] = Header(None)):
 
 @api_router.get("/me/bookings")
 async def my_bookings(phone: str = Depends(current_user_phone)):
-    bookings = await db.bookings.find({"phone": phone}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    bookings = (
+        await db.bookings.find({"phone": phone}, {"_id": 0})
+        .sort("created_at", -1)
+        .to_list(50)
+    )
     return bookings
 
 
@@ -1044,7 +1239,9 @@ async def dealer_leads(
     loan_count = sum(1 for b in bookings if b.get("needs_loan"))
     insurance_count = sum(1 for b in bookings if b.get("needs_insurance"))
     for b in bookings:
-        by_car[b.get("car_name", "Unknown")] = by_car.get(b.get("car_name", "Unknown"), 0) + 1
+        by_car[b.get("car_name", "Unknown")] = (
+            by_car.get(b.get("car_name", "Unknown"), 0) + 1
+        )
         by_city[b.get("city", "Unknown")] = by_city.get(b.get("city", "Unknown"), 0) + 1
     top_cars = sorted(by_car.items(), key=lambda x: -x[1])[:10]
     top_cities = sorted(by_city.items(), key=lambda x: -x[1])[:10]
@@ -1067,13 +1264,17 @@ class DealerApplication(BaseModel):
     email: Optional[str] = Field(default="", max_length=200)
     city: str = Field(min_length=1, max_length=80)
     brands: List[str] = Field(default_factory=list, max_length=40)
-    bid_per_lead: float = Field(default=500.0, ge=0, le=1_000_000)  # how much they'll pay per qualified lead
+    bid_per_lead: float = Field(
+        default=500.0, ge=0, le=1_000_000
+    )  # how much they'll pay per qualified lead
 
 
 @api_router.post("/dealers/apply")
 async def dealer_apply(app: DealerApplication, request: Request):
     if not _dealer_apply_limiter.allow(_client_ip(request)):
-        raise HTTPException(status_code=429, detail="Too many applications, try again later")
+        raise HTTPException(
+            status_code=429, detail="Too many applications, try again later"
+        )
     record = {
         "id": str(uuid.uuid4()),
         "business_name": app.business_name,
@@ -1100,7 +1301,11 @@ async def list_dealers(
     q: dict = {}
     if city:
         q["city"] = city
-    items = await db.dealer_partners.find(q, {"_id": 0}).sort("bid_per_lead", -1).to_list(200)
+    items = (
+        await db.dealer_partners.find(q, {"_id": 0})
+        .sort("bid_per_lead", -1)
+        .to_list(200)
+    )
     return items
 
 
@@ -1112,15 +1317,19 @@ class AdminPinReq(BaseModel):
 @api_router.post("/admin/verify")
 async def admin_verify(req: AdminPinReq, request: Request):
     if not _admin_login_limiter.allow(_client_ip(request)):
-        raise HTTPException(status_code=429, detail="Too many attempts, try again later")
+        raise HTTPException(
+            status_code=429, detail="Too many attempts, try again later"
+        )
     if not _admin_pin_valid(req.pin):
         raise HTTPException(status_code=401, detail="Invalid admin PIN")
     token = security.generate_token()
-    await db.admin_sessions.insert_one({
-        "token_hash": security.hash_secret(token),
-        "expires_at": security.expiry_iso(hours=security.ADMIN_SESSION_TTL_HOURS),
-        "ts": datetime.now(timezone.utc).isoformat(),
-    })
+    await db.admin_sessions.insert_one(
+        {
+            "token_hash": security.hash_secret(token),
+            "expires_at": security.expiry_iso(hours=security.ADMIN_SESSION_TTL_HOURS),
+            "ts": datetime.now(timezone.utc).isoformat(),
+        }
+    )
     return {"ok": True, "token": token}
 
 
@@ -1140,15 +1349,34 @@ async def admin_list_dealers(
     q: dict = {}
     if status:
         q["status"] = status
-    items = await db.dealer_partners.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    items = (
+        await db.dealer_partners.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    )
     # Stats
-    all_items = await db.dealer_partners.find({}, {"_id": 0, "status": 1, "bid_per_lead": 1}).to_list(500)
+    all_items = await db.dealer_partners.find(
+        {}, {"_id": 0, "status": 1, "bid_per_lead": 1}
+    ).to_list(500)
+    pending = 0
+    approved = 0
+    rejected = 0
+    total_bids = 0
+
+    for d in all_items:
+        status = d.get("status")
+        if status == "pending_verification":
+            pending += 1
+        elif status == "approved":
+            approved += 1
+        elif status == "rejected":
+            rejected += 1
+        total_bids += d.get("bid_per_lead", 0)
+
     stats = {
         "total": len(all_items),
-        "pending": sum(1 for d in all_items if d.get("status") == "pending_verification"),
-        "approved": sum(1 for d in all_items if d.get("status") == "approved"),
-        "rejected": sum(1 for d in all_items if d.get("status") == "rejected"),
-        "avg_bid": round(sum(d.get("bid_per_lead", 0) for d in all_items) / max(1, len(all_items)), 2),
+        "pending": pending,
+        "approved": approved,
+        "rejected": rejected,
+        "avg_bid": round(total_bids / max(1, len(all_items)), 2),
     }
     return {"dealers": items, "stats": stats}
 
@@ -1158,15 +1386,19 @@ class AdminActionReq(BaseModel):
 
 
 @api_router.post("/admin/dealers/{dealer_id}/approve")
-async def admin_approve_dealer(dealer_id: str, req: AdminActionReq, _: str = Depends(require_admin)):
+async def admin_approve_dealer(
+    dealer_id: str, req: AdminActionReq, _: str = Depends(require_admin)
+):
     result = await db.dealer_partners.update_one(
         {"id": dealer_id},
-        {"$set": {
-            "status": "approved",
-            "verified": True,
-            "approved_at": datetime.now(timezone.utc).isoformat(),
-            "admin_note": req.note or "",
-        }},
+        {
+            "$set": {
+                "status": "approved",
+                "verified": True,
+                "approved_at": datetime.now(timezone.utc).isoformat(),
+                "admin_note": req.note or "",
+            }
+        },
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Dealer not found")
@@ -1175,15 +1407,19 @@ async def admin_approve_dealer(dealer_id: str, req: AdminActionReq, _: str = Dep
 
 
 @api_router.post("/admin/dealers/{dealer_id}/reject")
-async def admin_reject_dealer(dealer_id: str, req: AdminActionReq, _: str = Depends(require_admin)):
+async def admin_reject_dealer(
+    dealer_id: str, req: AdminActionReq, _: str = Depends(require_admin)
+):
     result = await db.dealer_partners.update_one(
         {"id": dealer_id},
-        {"$set": {
-            "status": "rejected",
-            "verified": False,
-            "rejected_at": datetime.now(timezone.utc).isoformat(),
-            "admin_note": req.note or "",
-        }},
+        {
+            "$set": {
+                "status": "rejected",
+                "verified": False,
+                "rejected_at": datetime.now(timezone.utc).isoformat(),
+                "admin_note": req.note or "",
+            }
+        },
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Dealer not found")
@@ -1195,8 +1431,18 @@ async def admin_reject_dealer(dealer_id: str, req: AdminActionReq, _: str = Depe
 RAZORPAY_WEBHOOK_SECRET = os.environ.get("RAZORPAY_WEBHOOK_SECRET", "").strip()
 
 PLANS = {
-    "premium": {"name": "Premium", "amount": 199.00, "amount_paise": 19900, "currency": "INR"},
-    "dealer": {"name": "Dealer / Business", "amount": 999.00, "amount_paise": 99900, "currency": "INR"},
+    "premium": {
+        "name": "Premium",
+        "amount": 199.00,
+        "amount_paise": 19900,
+        "currency": "INR",
+    },
+    "dealer": {
+        "name": "Dealer / Business",
+        "amount": 999.00,
+        "amount_paise": 99900,
+        "currency": "INR",
+    },
 }
 
 
@@ -1210,25 +1456,30 @@ class CheckoutVerifyRequest(BaseModel):
     razorpay_payment_id: str = Field(max_length=80)
     razorpay_signature: str = Field(max_length=256)
 
+
 def _activate_entitlement(tx: dict, payment_id: str):
     return db.entitlements.update_one(
         {"phone": tx["phone"], "plan_id": tx["plan_id"]},
-        {"$set": {
-            "status": "active",
-            "purchase_type": "one_time",
-            "order_id": tx["order_id"],
-            "payment_id": payment_id,
-            "amount": tx["amount"],
-            "currency": tx["currency"],
-            "activated_at": datetime.now(timezone.utc).isoformat(),
-        }, "$setOnInsert": {
-            "id": str(uuid.uuid4()),
-            "phone": tx["phone"],
-            "plan_id": tx["plan_id"],
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        }},
+        {
+            "$set": {
+                "status": "active",
+                "purchase_type": "one_time",
+                "order_id": tx["order_id"],
+                "payment_id": payment_id,
+                "amount": tx["amount"],
+                "currency": tx["currency"],
+                "activated_at": datetime.now(timezone.utc).isoformat(),
+            },
+            "$setOnInsert": {
+                "id": str(uuid.uuid4()),
+                "phone": tx["phone"],
+                "plan_id": tx["plan_id"],
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            },
+        },
         upsert=True,
     )
+
 
 @api_router.post("/checkout/order")
 async def create_checkout_order(
@@ -1253,18 +1504,20 @@ async def create_checkout_order(
         logging.exception("Razorpay order creation failed")
         raise HTTPException(status_code=502, detail="Payment gateway unavailable")
 
-    await db.payment_transactions.insert_one({
-        "id": str(uuid.uuid4()),
-        "order_id": order["id"],
-        "receipt": receipt,
-        "plan_id": req.plan_id,
-        "amount": plan["amount"],
-        "amount_paise": plan["amount_paise"],
-        "currency": plan["currency"],
-        "phone": customer_phone,
-        "payment_status": "initiated",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    })
+    await db.payment_transactions.insert_one(
+        {
+            "id": str(uuid.uuid4()),
+            "order_id": order["id"],
+            "receipt": receipt,
+            "plan_id": req.plan_id,
+            "amount": plan["amount"],
+            "amount_paise": plan["amount_paise"],
+            "currency": plan["currency"],
+            "phone": customer_phone,
+            "payment_status": "initiated",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
 
     return {
         "key_id": RAZORPAY_KEY_ID,
@@ -1275,6 +1528,7 @@ async def create_checkout_order(
         "plan_name": plan["name"],
         "customer_phone": customer_phone,
     }
+
 
 @api_router.post("/checkout/verify")
 async def verify_checkout(
@@ -1293,7 +1547,9 @@ async def verify_checkout(
         payment_id=req.razorpay_payment_id,
         signature=req.razorpay_signature,
     ):
-        raise HTTPException(status_code=400, detail="Payment signature verification failed")
+        raise HTTPException(
+            status_code=400, detail="Payment signature verification failed"
+        )
 
     try:
         payment = await razorpay_fetch_payment(req.razorpay_payment_id)
@@ -1304,21 +1560,27 @@ async def verify_checkout(
     if payment.get("order_id") != tx["order_id"]:
         raise HTTPException(status_code=400, detail="Payment/order mismatch")
     if payment.get("status") != "captured":
-        raise HTTPException(status_code=409, detail=f"Payment is not captured: {payment.get('status', 'unknown')}")
+        raise HTTPException(
+            status_code=409,
+            detail=f"Payment is not captured: {payment.get('status', 'unknown')}",
+        )
     if int(payment.get("amount", 0)) != int(tx["amount_paise"]):
         raise HTTPException(status_code=400, detail="Payment amount mismatch")
 
     await db.payment_transactions.update_one(
         {"order_id": tx["order_id"]},
-        {"$set": {
-            "payment_status": "paid",
-            "payment_id": req.razorpay_payment_id,
-            "signature_verified": True,
-            "paid_at": datetime.now(timezone.utc).isoformat(),
-        }},
+        {
+            "$set": {
+                "payment_status": "paid",
+                "payment_id": req.razorpay_payment_id,
+                "signature_verified": True,
+                "paid_at": datetime.now(timezone.utc).isoformat(),
+            }
+        },
     )
     await _activate_entitlement(tx, req.razorpay_payment_id)
     return {"ok": True, "payment_status": "paid", "plan_id": tx["plan_id"]}
+
 
 @api_router.get("/checkout/status/{order_id}")
 async def checkout_status(
@@ -1336,6 +1598,7 @@ async def checkout_status(
         "status": "complete" if tx.get("payment_status") == "paid" else "open",
         "plan_id": tx.get("plan_id"),
     }
+
 
 @app.post("/api/webhook/razorpay")
 async def razorpay_webhook(request: Request):
@@ -1356,10 +1619,12 @@ async def razorpay_webhook(request: Request):
     event_id = request.headers.get("x-razorpay-event-id", "")
     if event_id:
         try:
-            await db.processed_payment_events.insert_one({
-                "_id": event_id,
-                "received_at": datetime.now(timezone.utc).isoformat(),
-            })
+            await db.processed_payment_events.insert_one(
+                {
+                    "_id": event_id,
+                    "received_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
         except Exception:
             # Duplicate event IDs are expected; treat them as already processed.
             return {"ok": True, "duplicate": True}
@@ -1375,22 +1640,27 @@ async def razorpay_webhook(request: Request):
         if tx:
             await db.payment_transactions.update_one(
                 {"order_id": order_id},
-                {"$set": {
-                    "payment_status": "paid",
-                    "payment_id": payment_id,
-                    "webhook_event": event,
-                    "paid_at": datetime.now(timezone.utc).isoformat(),
-                }},
+                {
+                    "$set": {
+                        "payment_status": "paid",
+                        "payment_id": payment_id,
+                        "webhook_event": event,
+                        "paid_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                },
             )
             await _activate_entitlement(tx, payment_id)
 
     return {"ok": True}
 
+
 @api_router.get("/me/access")
 async def my_access(phone: str = Depends(current_user_phone)):
-    items = await db.entitlements.find(
-        {"phone": phone, "status": "active"}, {"_id": 0}
-    ).sort("activated_at", -1).to_list(20)
+    items = (
+        await db.entitlements.find({"phone": phone, "status": "active"}, {"_id": 0})
+        .sort("activated_at", -1)
+        .to_list(20)
+    )
     return {"entitlements": items}
 
 
@@ -1404,42 +1674,46 @@ def _assign_partners_to_booking(booking: Booking, car: dict):
         partner = LOAN_PARTNERS[0]
         loan_amount = car_price * 0.85  # assume 85% LTV
         commission = loan_amount * partner["commission_pct"] / 100
-        leads.append({
-            "id": str(uuid.uuid4()),
-            "booking_id": booking.id,
-            "car_id": booking.car_id,
-            "car_name": booking.car_name,
-            "customer_name": booking.name,
-            "customer_phone": booking.phone,
-            "city": booking.city,
-            "partner_id": partner["id"],
-            "partner_name": partner["name"],
-            "partner_type": "loan",
-            "loan_amount": loan_amount,
-            "expected_commission": round(commission, 2),
-            "status": "assigned",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
+        leads.append(
+            {
+                "id": str(uuid.uuid4()),
+                "booking_id": booking.id,
+                "car_id": booking.car_id,
+                "car_name": booking.car_name,
+                "customer_name": booking.name,
+                "customer_phone": booking.phone,
+                "city": booking.city,
+                "partner_id": partner["id"],
+                "partner_name": partner["name"],
+                "partner_type": "loan",
+                "loan_amount": loan_amount,
+                "expected_commission": round(commission, 2),
+                "status": "assigned",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
     if booking.needs_insurance and INSURANCE_PARTNERS:
         partner = INSURANCE_PARTNERS[0]
         premium = car_price * partner["avg_premium_pct"] / 100
         commission = premium * partner["commission_pct"] / 100
-        leads.append({
-            "id": str(uuid.uuid4()),
-            "booking_id": booking.id,
-            "car_id": booking.car_id,
-            "car_name": booking.car_name,
-            "customer_name": booking.name,
-            "customer_phone": booking.phone,
-            "city": booking.city,
-            "partner_id": partner["id"],
-            "partner_name": partner["name"],
-            "partner_type": "insurance",
-            "annual_premium": round(premium, 2),
-            "expected_commission": round(commission, 2),
-            "status": "assigned",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
+        leads.append(
+            {
+                "id": str(uuid.uuid4()),
+                "booking_id": booking.id,
+                "car_id": booking.car_id,
+                "car_name": booking.car_name,
+                "customer_name": booking.name,
+                "customer_phone": booking.phone,
+                "city": booking.city,
+                "partner_id": partner["id"],
+                "partner_name": partner["name"],
+                "partner_type": "insurance",
+                "annual_premium": round(premium, 2),
+                "expected_commission": round(commission, 2),
+                "status": "assigned",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
     return leads
 
 
