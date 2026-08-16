@@ -1040,12 +1040,21 @@ async def dealer_leads(
     total = len(bookings)
     by_car: dict = {}
     by_city: dict = {}
-    test_drive_count = sum(1 for b in bookings if b.get("test_drive"))
-    loan_count = sum(1 for b in bookings if b.get("needs_loan"))
-    insurance_count = sum(1 for b in bookings if b.get("needs_insurance"))
+    test_drive_count = 0
+    loan_count = 0
+    insurance_count = 0
     for b in bookings:
-        by_car[b.get("car_name", "Unknown")] = by_car.get(b.get("car_name", "Unknown"), 0) + 1
-        by_city[b.get("city", "Unknown")] = by_city.get(b.get("city", "Unknown"), 0) + 1
+        if b.get("test_drive"):
+            test_drive_count += 1
+        if b.get("needs_loan"):
+            loan_count += 1
+        if b.get("needs_insurance"):
+            insurance_count += 1
+
+        car = b.get("car_name", "Unknown")
+        by_car[car] = by_car.get(car, 0) + 1
+        city = b.get("city", "Unknown")
+        by_city[city] = by_city.get(city, 0) + 1
     top_cars = sorted(by_car.items(), key=lambda x: -x[1])[:10]
     top_cities = sorted(by_city.items(), key=lambda x: -x[1])[:10]
     return {
