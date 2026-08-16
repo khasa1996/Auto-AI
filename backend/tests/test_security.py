@@ -1,6 +1,7 @@
 """Security regression tests for the auth, authorization and proxy surfaces."""
 import os
 import uuid
+from security import host_allowed
 
 import pytest
 import requests
@@ -107,3 +108,37 @@ def test_chat_does_not_leak_another_users_booking(client):
     }, timeout=120)
     assert r.status_code == 200, r.text
     assert prefix not in r.json().get("reply", "").upper()
+
+
+
+@pytest.mark.parametrize("url, allowed_hosts, expected", [
+    # Valid: Exact match
+    ("https://example.com/api", ("example.com",), True),
+    ("https://example.com", ("example.com", "other.com"), True),
+
+    # Valid: Subdomain match
+    ("https://sub.example.com/api", ("example.com",), True),
+    ("https://deep.sub.example.com/api", ("example.com",), True),
+
+    # Invalid: Not HTTPS
+    ("http://example.com/api", ("example.com",), False),
+    ("ftp://example.com/api", ("example.com",), False),
+
+    # Invalid: Credentials in URL
+    ("https://user@example.com/api", ("example.com",), False),
+    ("https://user:pass@example.com/api", ("example.com",), False),
+
+    # Invalid: Host mismatch
+    ("https://notexample.com/api", ("example.com",), False),
+    ("https://example.net/api", ("example.com",), False),
+
+    # Invalid: Prefix/Suffix issues
+    ("https://badexample.com/api", ("example.com",), False), # not a subdomain
+    ("https://example.com.evil.com", ("example.com",), False),
+
+    # Empty host / invalid url
+    ("https:///api", ("example.com",), False),
+    ("not_a_url", ("example.com",), False),
+])
+def test_host_allowed(url, allowed_hosts, expected):
+    assert host_allowed(url, allowed_hosts) == expected
