@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { X, Send, Sparkles, Trash2, ChevronDown, Cpu, Zap, Brain, Mic } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "../lib/api";
-import { useI18n, LANGUAGES } from "../lib/i18n";
+import { useI18n } from "../lib/i18n";
 import { SpeakButton, getVoicePref, setVoicePref } from "../lib/tts";
 
 const QUICK_PROMPTS = {
