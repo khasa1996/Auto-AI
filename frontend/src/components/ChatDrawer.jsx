@@ -3,7 +3,7 @@ import { X, Send, Sparkles, Trash2, ChevronDown, Cpu, Zap, Brain, Mic } from "lu
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "../lib/api";
 import { useI18n, LANGUAGES } from "../lib/i18n";
-import { SpeakButton, getVoicePref, setVoicePref } from "../lib/tts";
+import { getVoicePref, setVoicePref } from "../lib/tts";
 
 const QUICK_PROMPTS = {
   en: ["Creta vs Seltos — which is safer?", "Best car under ₹10 lakh for city", "Why is Thar waiting so long?", "Hybrid or EV in 2026?"],
