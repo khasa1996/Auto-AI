@@ -1,0 +1,13 @@
+name: Temporary Actions test
+on:
+  push:
+    branches:
+      - refactor/remove-emergent
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python -c "print('actions runner works')"
