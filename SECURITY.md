@@ -6,20 +6,28 @@ Please report suspected vulnerabilities privately to the repository owner rather
 than opening a public issue. Include reproduction steps and the affected
 endpoint or page.
 
-## Required configuration
+## Required production configuration
 
-The API fails closed when these are missing, so every deployment must set them:
+Production deployments must fail closed when critical authentication or browser-security configuration is missing:
 
-| Variable | Purpose | If unset |
+| Variable | Purpose | Production requirement |
 | --- | --- | --- |
-| `SECRET_KEY` | Keys the HMAC used to hash session tokens and OTPs | An ephemeral key is generated: all sessions and OTPs are invalidated on restart |
-| `ADMIN_PIN` | Gates `/api/admin/*` and the lead/dealer data | Admin API returns `503`; there is no default PIN |
-| `CORS_ORIGINS` | Comma-separated allowlist of browser origins | Falls back to `*`, and credentialed cross-origin requests are then refused |
-| `APP_ENV` | Set to `production` in production | Demo mode stays enabled and `/docs` is served |
-| `OTP_DEMO_MODE` | When enabled, `/api/auth/send-otp` returns a fixed OTP for local development | Enabled outside production; always disabled when `APP_ENV=production` |
+| `SECRET_KEY` | HMAC key for session tokens and OTP digests | Required; the API refuses to start without it |
+| `ADMIN_PIN` | Gates `/api/admin/*` and lead/dealer data | Required for admin functionality; otherwise admin access returns `503` |
+| `CORS_ORIGINS` | Comma-separated allowlist of browser origins | Must contain the real frontend origin; do not use `*` with authenticated browser traffic |
+| `APP_ENV` | Controls production behavior | Set to `production` |
+| `OTP_DEMO_MODE` | Fixed OTP for local development | Must be disabled in production; production logic forces it off |
+| `MONGO_URL` | MongoDB connection string | Required |
+| `DB_NAME` | MongoDB database name | Required |
+| `ANTHROPIC_API_KEY` | Anthropic direct LLM access | Required if Anthropic models are enabled |
+| `OPENAI_API_KEY` | OpenAI direct LLM access | Required if OpenAI models are enabled |
+| `GEMINI_API_KEY` or `GOOGLE_API_KEY` | Google Gemini direct LLM access | Required if Gemini models are enabled |
+| `RAZORPAY_KEY_ID` | Razorpay checkout key | Required for paid checkout |
+| `RAZORPAY_KEY_SECRET` | Razorpay server-side verification | Required for paid checkout |
+| `RAZORPAY_WEBHOOK_SECRET` | Razorpay webhook signature verification | Required when webhooks are enabled |
 
-`CORS_ORIGINS` also defines the origins accepted as Stripe return URLs, so it
-must list the real frontend origin in production.
+Never configure `EMERGENT_LLM_KEY` or any Emergent-specific variable. Auto-AI's
+LLM integrations are direct provider integrations and do not depend on Emergent.
 
 ## Authentication model
 
@@ -30,8 +38,35 @@ must list the real frontend origin in production.
   digest) with an expiry; send it as `Authorization: Bearer <token>`.
   `/api/auth/logout` revokes it.
 * Endpoints that return customer PII (`/api/me/*`, `/api/bookings/{id}`) derive
-  the phone number from the session — never from a request parameter.
+  the phone number from the authenticated session — never from an untrusted
+  request parameter.
 * Lead, dealer and booking-wide data requires admin auth: exchange `ADMIN_PIN`
-  at `/api/admin/verify` for a short-lived token, or send `X-Admin-Pin`.
-  The PIN is never accepted in a query string or request body field other than
-  that one login call.
+  at `/api/admin/verify` for a short-lived token, or use the `X-Admin-Pin`
+  header where explicitly supported. The PIN is never accepted in a query
+  string.
+* AI chat requires an authenticated user and persists history scoped to the
+  authenticated phone/session owner.
+
+## Payment security
+
+Auto-AI uses Razorpay for checkout. The backend verifies the Razorpay payment
+signature, confirms the payment belongs to the authenticated user's order,
+checks the Razorpay order ID, verifies the captured status and validates the
+server-recorded amount before activating an entitlement. Razorpay webhooks
+require an HMAC signature and use the provider event ID for duplicate-event
+protection.
+
+## SSRF and media proxying
+
+Image and video proxy endpoints accept only HTTPS URLs whose hosts are on an
+explicit allowlist. Redirect destinations are checked again against that
+allowlist, response sizes are bounded, and credentials embedded in URLs are
+rejected. The allowlist must be reviewed whenever a new media provider is added.
+
+## Operational hardening
+
+The current rate limiter is process-local. This is acceptable for a single API
+instance but must be replaced with a shared store such as Redis before running
+multiple API replicas behind a load balancer.
+
+Production API documentation (`/docs`, `/redoc`, and OpenAPI) is disabled.
