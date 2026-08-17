@@ -1,6 +1,6 @@
 # Independent Deployment Guide
 
-This document defines the runtime configuration required to run Auto-AI without an external app-builder or hosted integration layer.
+This document defines the runtime configuration required to run Auto-AI without Emergent or another external app-builder/hosted integration layer.
 
 ## Required backend variables
 
@@ -16,8 +16,9 @@ This document defines the runtime configuration required to run Auto-AI without 
 | `ANTHROPIC_API_KEY` | If Claude enabled | Direct Anthropic API access |
 | `OPENAI_API_KEY` | If GPT models enabled | Direct OpenAI API access |
 | `GEMINI_API_KEY` | If Gemini models enabled | Direct Google Gemini API access |
-| `STRIPE_API_KEY` | If Stripe checkout enabled | Direct Stripe API access; use Stripe test key in staging |
-| `STRIPE_WEBHOOK_SECRET` | If Stripe webhooks enabled | Local Stripe webhook signature verification |
+| `RAZORPAY_KEY_ID` | If Razorpay payments enabled | Public Razorpay API/Checkout key identifier |
+| `RAZORPAY_KEY_SECRET` | If Razorpay payments enabled | Backend-only Razorpay secret used for order/signature verification |
+| `RAZORPAY_WEBHOOK_SECRET` | If Razorpay webhook reconciliation enabled | Backend-only webhook signature secret |
 | `ELEVENLABS_API_KEY` | If TTS enabled | Direct ElevenLabs API access |
 
 Do not commit any of these values to Git.
@@ -39,7 +40,7 @@ Use explicit production origins in `CORS_ORIGINS`; do not rely on `*` for a cred
 
 ## Staging integration-test baseline
 
-The repository now contains `.github/workflows/integration-tests.yml`. It is deliberately manual and requires a deployed HTTPS staging backend before it can run.
+The repository contains `.github/workflows/integration-tests.yml`. It is deliberately manual and requires a deployed HTTPS staging backend before it can run.
 
 Configure the GitHub Actions secret:
 
@@ -65,7 +66,7 @@ The workflow accepts the staging backend URL as a manual input and runs:
 - OTP and rate-limit tests
 - AI privacy/booking-context tests
 - dealer and partner tests
-- Stripe tests when enabled
+- Razorpay/payment tests when enabled
 - deployed API health checks
 
 The existing integration fixtures authenticate through `/api/auth/send-otp` and `/api/auth/verify-otp`; they expect `demo_otp` in the response so CI can obtain a test session without receiving real SMS messages. Admin-gated tests use `AUTO_AI_STAGING_ADMIN_PIN` through the workflow's `ADMIN_PIN` environment variable.
@@ -90,41 +91,47 @@ gemini-flash  -> gemini / gemini-3.5-flash
 
 Model availability should be checked against the provider's current API documentation before a production rollout.
 
-## Stripe
+## Razorpay
 
-Configure both:
-
-```text
-STRIPE_API_KEY=...
-STRIPE_WEBHOOK_SECRET=...
-```
-
-The application talks directly to Stripe. Checkout return URLs are validated against configured trusted origins, and webhook signatures are verified locally before payment state is changed.
-
-Configure the Stripe webhook endpoint as:
+Razorpay is the active payment gateway. Configure the required credentials only in the deployment environment:
 
 ```text
-/api/webhook/stripe
+RAZORPAY_KEY_ID=...
+RAZORPAY_KEY_SECRET=...
+RAZORPAY_WEBHOOK_SECRET=...
 ```
 
-Use Stripe test credentials during staging. Switch to live credentials only as part of the controlled production launch.
+The application uses a server-created order flow. Plan pricing is selected server-side, checkout signatures are verified server-side before entitlements are activated, and captured-payment webhook events are reconciled for reliability and idempotency.
 
-## Vercel
+Current one-time plans are:
 
-The recovery branch currently has a successful Vercel preview deployment associated with the latest recovery commit.
+```text
+Premium: ₹199
+Dealer / Business: ₹999
+```
+
+The backend must never expose `RAZORPAY_KEY_SECRET` or `RAZORPAY_WEBHOOK_SECRET` to the frontend.
+
+Use Razorpay test credentials during staging. Switch to live credentials only as part of the controlled production launch.
+
+## Vercel / frontend deployment
+
+The recovery branch has been validated for frontend production builds and has associated preview deployments. A preview deployment being green is not sufficient for production promotion.
 
 Before production promotion:
 
-1. Configure production environment variables in Vercel.
-2. Confirm the production frontend origin is included in `CORS_ORIGINS`.
-3. Confirm the backend has access to MongoDB and all enabled provider APIs.
-4. Run the staging integration workflow.
-5. Verify Stripe test-mode checkout and webhook behavior in staging.
-6. Only then promote the recovery branch to production.
+1. Configure production frontend environment variables in Vercel.
+2. Configure the independently deployed backend and its production environment variables.
+3. Confirm the production frontend origin is included in `CORS_ORIGINS`.
+4. Confirm the backend has access to MongoDB and all enabled provider APIs.
+5. Run the staging integration workflow against a real HTTPS staging backend.
+6. Verify Razorpay test-mode order creation, checkout signature verification, entitlement activation and webhook reconciliation in staging.
+7. Perform authenticated runtime smoke tests.
+8. Only then promote the recovery branch to production.
 
 ## Independence verification
 
-The repository CI should fail if active application files contain references to the retired external integration layer. The scan covers the tracked application tree while excluding only the validation workflow's own search patterns and historical generated test reports.
+Repository CI should fail if active application files contain references to the retired external integration layer. The scan covers the tracked application tree while excluding only the validation workflow's own search patterns and historical generated test reports.
 
 ## Runtime smoke-test checklist
 
@@ -150,13 +157,14 @@ The repository CI should fail if active application files contain references to 
 - Confirm dealer/admin views require appropriate authentication.
 - Confirm AI CRM context only uses the signed-in customer's bookings.
 
-### Stripe
+### Razorpay
 
-- Create an authenticated checkout session using Stripe test credentials.
-- Confirm a foreign `origin_url` is rejected.
-- Query checkout status while payment is pending.
-- Send a valid signed webhook and verify payment state handling.
-- Send an invalid signature and confirm it is rejected.
+- Create an authenticated Razorpay order using staging/test credentials.
+- Confirm the amount is selected server-side from the plan identifier.
+- Confirm a valid checkout signature activates the correct one-time entitlement.
+- Confirm an invalid signature is rejected.
+- Send a valid signed captured-payment webhook and verify reconciliation/idempotency.
+- Confirm Razorpay secrets are never returned by frontend-facing API responses.
 
 ## Merge rule
 
