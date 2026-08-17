@@ -24,23 +24,27 @@ ADMIN_SESSION_TTL_HOURS = 8
 
 DEMO_OTP = "123456"
 
+# Production must provide a persistent secret. Development may use an ephemeral
+# key so local sessions/OTPs are intentionally invalidated whenever the process
+# restarts.
+APP_ENV = os.environ.get("APP_ENV", "development").strip().lower()
+SECRET_KEY_CONFIGURED = bool(os.environ.get("SECRET_KEY", "").strip())
+if APP_ENV == "production" and not SECRET_KEY_CONFIGURED:
+    raise RuntimeError("SECRET_KEY must be configured when APP_ENV=production")
+
 
 def _load_secret_key() -> str:
     key = os.environ.get("SECRET_KEY", "").strip()
     if key:
         return key
-    # Ephemeral key: the app stays usable in dev, but tokens/OTPs issued before a
-    # restart stop validating. Production must set SECRET_KEY.
     logger.warning("SECRET_KEY is not set — generating an ephemeral key; sessions will not survive a restart.")
     return secrets.token_urlsafe(48)
 
 
-SECRET_KEY_CONFIGURED = bool(os.environ.get("SECRET_KEY", "").strip())
 SECRET_KEY = _load_secret_key()
 
 # Demo OTP mode returns a fixed OTP in the API response so the MVP is usable
 # without an SMS provider. It is refused in production.
-APP_ENV = os.environ.get("APP_ENV", "development").strip().lower()
 OTP_DEMO_MODE = os.environ.get("OTP_DEMO_MODE", "true").strip().lower() in ("1", "true", "yes") and APP_ENV != "production"
 
 
