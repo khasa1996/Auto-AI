@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - codex/reconcile-recovery-with-main
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -20,6 +21,7 @@ jobs:
 
       - name: Merge latest main
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin main
