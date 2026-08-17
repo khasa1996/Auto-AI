@@ -29,5 +29,11 @@ jobs:
       - name: Install dependencies
         run: python -m pip install --upgrade pip && pip install -r requirements.txt
 
-      - name: Run provider tests
+      - name: Compile backend Python modules
+        run: python -m compileall -q .
+
+      - name: Run LLM provider tests
         run: pytest -q tests/test_llm_provider.py
+
+      - name: Run Razorpay gateway tests
+        run: pytest -q tests/test_razorpay_gateway.py
