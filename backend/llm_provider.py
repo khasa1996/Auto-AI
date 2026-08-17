@@ -179,9 +179,16 @@ class UserMessage:
 
 
 class LlmChat:
-    def __init__(self, api_key: Optional[str], session_id: str, system_message: str):
+    def __init__(
+        self,
+        api_key: Optional[str],
+        session_id: str,
+        system_message: str,
+        owner_phone: Optional[str] = None,
+    ):
         self.session_id = session_id
         self.system_message = system_message
+        self.owner_phone = owner_phone
         self.model_key: Optional[str] = None
 
     def with_model(self, provider: str, model: str) -> "LlmChat":
@@ -197,24 +204,28 @@ class LlmChat:
         # The server persists chat messages. Loading recent turns here keeps
         # session continuity without requiring a hosted conversation service.
         history: list[dict[str, str]] = []
-        try:
-            server_module = __import__("server")
-            db = getattr(server_module, "db", None)
-            if db is not None:
-                rows = await db.chat_messages.find(
-                    {"session_id": self.session_id}, {"_id": 0, "role": 1, "content": 1}
-                ).sort("ts", 1).to_list(30)
-                history = [
-                    {"role": row["role"], "content": row["content"]}
-                    for row in rows
-                    if row.get("role") in {"user", "assistant"} and row.get("content")
-                ]
-                if history and history[-1]["role"] == "user" and history[-1]["content"] == message.text:
-                    history = history[:-1]
-        except Exception:
-            # Chat generation must not fail merely because optional history
-            # loading is unavailable during startup/tests.
-            history = []
+        # Only authenticated sessions have persisted history. Guest chat is
+        # stateless, preventing an attacker from replaying a guessed session id.
+        if self.owner_phone:
+            try:
+                server_module = __import__("server")
+                db = getattr(server_module, "db", None)
+                if db is not None:
+                    rows = await db.chat_messages.find(
+                        {"session_id": self.session_id, "owner_phone": self.owner_phone},
+                        {"_id": 0, "role": 1, "content": 1},
+                    ).sort("ts", 1).to_list(30)
+                    history = [
+                        {"role": row["role"], "content": row["content"]}
+                        for row in rows
+                        if row.get("role") in {"user", "assistant"} and row.get("content")
+                    ]
+                    if history and history[-1]["role"] == "user" and history[-1]["content"] == message.text:
+                        history = history[:-1]
+            except Exception:
+                # Chat generation must not fail merely because optional history
+                # loading is unavailable during startup/tests.
+                history = []
         result = await generate_text(
             model_key=self.model_key,
             system=self.system_message,

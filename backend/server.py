@@ -332,14 +332,20 @@ def extract_json(text: str):
         return None
 
 
-async def get_chat(session_id: str, system_message: str, model_key: Optional[str] = None) -> LlmChat:
-    """Return an LlmChat pinned to the requested model (default: Claude Sonnet)."""
+async def get_chat(
+    session_id: str,
+    system_message: str,
+    model_key: Optional[str] = None,
+    owner_phone: Optional[str] = None,
+) -> LlmChat:
+    """Return an LlmChat pinned to the requested model and caller-owned history."""
     m = AI_MODELS.get(model_key) if model_key else None
     provider_model = (m["provider"], m["model"]) if m else CLAUDE_MODEL
     chat = LlmChat(
         api_key=None,
         session_id=session_id,
         system_message=system_message,
+        owner_phone=owner_phone,
     ).with_model(*provider_model)
     return chat
 
@@ -766,13 +772,22 @@ def _format_booking_context(bookings: list) -> str:
 @api_router.post("/ai/chat")
 async def ai_chat(req: ChatRequest, caller_phone: Optional[str] = Depends(optional_user_phone)):
     try:
-        await db.chat_messages.insert_one({
-            "id": str(uuid.uuid4()),
-            "session_id": req.session_id,
-            "role": "user",
-            "content": req.message,
-            "ts": datetime.now(timezone.utc).isoformat(),
-        })
+        # Guest chat is intentionally stateless. Authenticated chat is persisted
+        # and bound to the authenticated phone so a session id cannot cross users.
+        if caller_phone:
+            existing = await db.chat_messages.find_one(
+                {"session_id": req.session_id}, {"_id": 0, "owner_phone": 1}
+            )
+            if existing and existing.get("owner_phone") != caller_phone:
+                raise HTTPException(status_code=403, detail="Chat session belongs to another user")
+            await db.chat_messages.insert_one({
+                "id": str(uuid.uuid4()),
+                "session_id": req.session_id,
+                "owner_phone": caller_phone,
+                "role": "user",
+                "content": req.message,
+                "ts": datetime.now(timezone.utc).isoformat(),
+            })
 
         # Fetch booking context if the message looks CRM-ish. Only the signed-in
         # caller's own bookings are ever loaded — a phone number typed into the
@@ -802,17 +817,19 @@ async def ai_chat(req: ChatRequest, caller_phone: Optional[str] = Depends(option
         system = (CHAT_SYSTEM
                   .replace("{LANGUAGE}", req.language or "English")
                   .replace("{BOOKING_CONTEXT}", booking_context))
-        chat = await get_chat(req.session_id, system, req.model)
+        chat = await get_chat(req.session_id, system, req.model, caller_phone)
         response = await chat.send_message(UserMessage(text=req.message))
         chosen = AI_MODELS.get(req.model or DEFAULT_CHAT_MODEL, AI_MODELS[DEFAULT_CHAT_MODEL])
-        await db.chat_messages.insert_one({
-            "id": str(uuid.uuid4()),
-            "session_id": req.session_id,
-            "role": "assistant",
-            "content": response,
-            "model": chosen["label"],
-            "ts": datetime.now(timezone.utc).isoformat(),
-        })
+        if caller_phone:
+            await db.chat_messages.insert_one({
+                "id": str(uuid.uuid4()),
+                "session_id": req.session_id,
+                "owner_phone": caller_phone,
+                "role": "assistant",
+                "content": response,
+                "model": chosen["label"],
+                "ts": datetime.now(timezone.utc).isoformat(),
+            })
         return {"reply": response, "model": chosen["label"]}
     except HTTPException:
         raise
@@ -822,8 +839,10 @@ async def ai_chat(req: ChatRequest, caller_phone: Optional[str] = Depends(option
 
 
 @api_router.get("/ai/chat/{session_id}/history")
-async def chat_history(session_id: str):
-    msgs = await db.chat_messages.find({"session_id": session_id}, {"_id": 0}).sort("ts", 1).to_list(500)
+async def chat_history(session_id: str, caller_phone: str = Depends(current_user_phone)):
+    msgs = await db.chat_messages.find(
+        {"session_id": session_id, "owner_phone": caller_phone}, {"_id": 0}
+    ).sort("ts", 1).to_list(500)
     return msgs
 
 
@@ -1204,8 +1223,7 @@ def _validated_origin(origin_url: str, http_request: Request) -> str:
     candidate = origin_url.rstrip("/")
     allowed = {o.rstrip("/") for o in CORS_ORIGINS if o != "*"}
     allowed.add(str(http_request.base_url).rstrip("/"))
-    request_origin = http_request.headers.get("origin")
-    if candidate in allowed or (request_origin and candidate == request_origin.rstrip("/")):
+    if candidate in allowed:
         return candidate
     raise HTTPException(status_code=400, detail="origin_url is not allowed")
 
