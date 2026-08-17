@@ -14,7 +14,7 @@ from typing import List, Optional
 import uuid
 from datetime import datetime, timezone
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+from llm_provider import LlmChat, UserMessage
 from razorpay_gateway import (
     RAZORPAY_KEY_ID,
     RAZORPAY_KEY_SECRET,
@@ -41,7 +41,6 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY')
 CLAUDE_MODEL = ("anthropic", "claude-sonnet-4-5-20250929")
 
@@ -344,7 +343,7 @@ async def get_chat(session_id: str, system_message: str, model_key: Optional[str
     m = AI_MODELS.get(model_key) if model_key else None
     provider_model = (m["provider"], m["model"]) if m else CLAUDE_MODEL
     chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
+        api_key=None,
         session_id=session_id,
         system_message=system_message,
     ).with_model(*provider_model)
@@ -771,11 +770,21 @@ def _format_booking_context(bookings: list) -> str:
 
 
 @api_router.post("/ai/chat")
-async def ai_chat(req: ChatRequest, caller_phone: Optional[str] = Depends(optional_user_phone)):
+async def ai_chat(req: ChatRequest, caller_phone: str = Depends(current_user_phone)):
     try:
+        existing_session = await db.chat_sessions.find_one({"session_id": req.session_id}, {"_id": 0})
+        if existing_session and existing_session.get("phone") != caller_phone:
+            raise HTTPException(status_code=404, detail="Chat session not found")
+        if not existing_session:
+            await db.chat_sessions.insert_one({
+                "session_id": req.session_id,
+                "phone": caller_phone,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
         await db.chat_messages.insert_one({
             "id": str(uuid.uuid4()),
             "session_id": req.session_id,
+            "owner_phone": caller_phone,
             "role": "user",
             "content": req.message,
             "ts": datetime.now(timezone.utc).isoformat(),
@@ -801,6 +810,7 @@ async def ai_chat(req: ChatRequest, caller_phone: Optional[str] = Depends(option
             await db.notifications.insert_one({
                 "id": str(uuid.uuid4()),
                 "session_id": req.session_id,
+                "owner_phone": caller_phone,
                 "type": "crm_query",
                 "message": req.message[:200],
                 "ts": datetime.now(timezone.utc).isoformat(),
@@ -815,6 +825,7 @@ async def ai_chat(req: ChatRequest, caller_phone: Optional[str] = Depends(option
         await db.chat_messages.insert_one({
             "id": str(uuid.uuid4()),
             "session_id": req.session_id,
+            "owner_phone": caller_phone,
             "role": "assistant",
             "content": response,
             "model": chosen["label"],
@@ -829,8 +840,14 @@ async def ai_chat(req: ChatRequest, caller_phone: Optional[str] = Depends(option
 
 
 @api_router.get("/ai/chat/{session_id}/history")
-async def chat_history(session_id: str):
-    msgs = await db.chat_messages.find({"session_id": session_id}, {"_id": 0}).sort("ts", 1).to_list(500)
+async def chat_history(session_id: str, caller_phone: str = Depends(current_user_phone)):
+    session = await db.chat_sessions.find_one({"session_id": session_id}, {"_id": 0})
+    if session and session.get("phone") != caller_phone:
+        raise HTTPException(status_code=404, detail="Chat session not found")
+    msgs = await db.chat_messages.find(
+        {"session_id": session_id, "owner_phone": caller_phone},
+        {"_id": 0},
+    ).sort("ts", 1).to_list(500)
     return msgs
 
 
