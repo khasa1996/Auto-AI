@@ -1,0 +1,106 @@
+name: Apply chat security migration
+
+on:
+  push:
+    branches:
+      - codex/direct-llm-reconciliation
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: "!contains(github.event.head_commit.message, '[chat-security-migration]')"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+
+      - name: Patch server safely
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('backend/server.py')
+          s = p.read_text()
+
+          replacements = [
+              (
+                  'from emergentintegrations.llm.chat import LlmChat, UserMessage',
+                  'from llm_provider import LlmChat, UserMessage',
+              ),
+              (
+                  "EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')\n",
+                  '',
+              ),
+              (
+                  '        api_key=EMERGENT_LLM_KEY,\n',
+                  '        api_key=None,\n',
+              ),
+              (
+                  'async def ai_chat(req: ChatRequest, caller_phone: Optional[str] = Depends(optional_user_phone)):',
+                  'async def ai_chat(req: ChatRequest, caller_phone: str = Depends(current_user_phone)):',
+              ),
+              (
+                  'async def chat_history(session_id: str):\n    msgs = await db.chat_messages.find({"session_id": session_id}, {"_id": 0}).sort("ts", 1).to_list(500)\n    return msgs',
+                  '''async def chat_history(session_id: str, caller_phone: str = Depends(current_user_phone)):\n    session = await db.chat_sessions.find_one({"session_id": session_id}, {"_id": 0})\n    if session and session.get("phone") != caller_phone:\n        raise HTTPException(status_code=404, detail="Chat session not found")\n    msgs = await db.chat_messages.find(\n        {"session_id": session_id, "owner_phone": caller_phone},\n        {"_id": 0},\n    ).sort("ts", 1).to_list(500)\n    return msgs''',
+              ),
+          ]
+
+          for old, new in replacements:
+              if old not in s:
+                  raise SystemExit(f'Expected source fragment not found: {old[:100]!r}')
+              s = s.replace(old, new, 1)
+
+          marker = 'async def ai_chat(req: ChatRequest, caller_phone: str = Depends(current_user_phone)):\n    try:\n'
+          replacement = '''async def ai_chat(req: ChatRequest, caller_phone: str = Depends(current_user_phone)):\n    try:\n        existing_session = await db.chat_sessions.find_one({"session_id": req.session_id}, {"_id": 0})\n        if existing_session and existing_session.get("phone") != caller_phone:\n            raise HTTPException(status_code=404, detail="Chat session not found")\n        if not existing_session:\n            await db.chat_sessions.insert_one({\n                "session_id": req.session_id,\n                "phone": caller_phone,\n                "created_at": datetime.now(timezone.utc).isoformat(),\n            })\n'''
+          if marker not in s:
+              raise SystemExit('AI chat function marker not found')
+          s = s.replace(marker, replacement, 1)
+
+          # Bind every chat/notification record to the authenticated owner.
+          user_insert = '            "session_id": req.session_id,\n            "role": "user",'
+          user_insert_new = '            "session_id": req.session_id,\n            "owner_phone": caller_phone,\n            "role": "user",'
+          if user_insert not in s:
+              raise SystemExit('User chat insert fragment not found')
+          s = s.replace(user_insert, user_insert_new, 1)
+
+          assistant_insert = '            "session_id": req.session_id,\n            "role": "assistant",'
+          assistant_insert_new = '            "session_id": req.session_id,\n            "owner_phone": caller_phone,\n            "role": "assistant",'
+          if assistant_insert not in s:
+              raise SystemExit('Assistant chat insert fragment not found')
+          s = s.replace(assistant_insert, assistant_insert_new, 1)
+
+          notification_insert = '                "session_id": req.session_id,\n                "type": "crm_query",'
+          notification_insert_new = '                "session_id": req.session_id,\n                "owner_phone": caller_phone,\n                "type": "crm_query",'
+          if notification_insert not in s:
+              raise SystemExit('Notification insert fragment not found')
+          s = s.replace(notification_insert, notification_insert_new, 1)
+
+          p.write_text(s)
+          PY
+
+      - name: Remove obsolete compatibility package
+        run: |
+          rm -rf backend/emergentintegrations
+
+      - name: Verify source migration
+        run: |
+          ! grep -RIn --exclude-dir=.git 'emergentintegrations\|EMERGENT_LLM_KEY' backend
+          grep -n 'from llm_provider import LlmChat, UserMessage' backend/server.py
+          grep -n 'caller_phone: str = Depends(current_user_phone)' backend/server.py
+          grep -n 'owner_phone' backend/server.py
+
+      - name: Run provider and syntax tests
+        working-directory: backend
+        run: |
+          python -m compileall -q .
+          pytest -q tests/test_llm_provider.py
+
+      - name: Commit migration
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add backend/server.py backend/emergentintegrations
+          git commit -m 'fix: migrate chat auth and direct LLM wiring [chat-security-migration]'
+          git push
