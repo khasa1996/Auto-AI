@@ -95,15 +95,50 @@ def test_emi_rejects_out_of_range_input(client, payload):
     assert client.post(f"{API}/emi/calculate", json=payload, timeout=15).status_code == 422
 
 
-def test_chat_does_not_leak_another_users_booking(client):
+def test_chat_does_not_leak_another_users_booking(client, user_client):
+    """An authenticated user cannot retrieve another user's booking via AI chat."""
     booking = client.post(f"{API}/bookings", json={
         "car_id": "tata-nexon", "name": "TEST_ChatVictim", "phone": VICTIM_PHONE, "city": "Pune",
     }, timeout=20)
     assert booking.status_code == 200
     prefix = booking.json()["id"][:8].upper()
-    r = client.post(f"{API}/ai/chat", json={
+
+    # The chat endpoint requires authentication. Use a different authenticated
+    # user from VICTIM_PHONE so this exercises the actual cross-user boundary.
+    r = user_client.post(f"{API}/ai/chat", json={
         "session_id": f"sec-{uuid.uuid4()}",
         "message": f"track my booking status for {VICTIM_PHONE}",
+        "language": "English",
     }, timeout=120)
     assert r.status_code == 200, r.text
     assert prefix not in r.json().get("reply", "").upper()
+
+
+def test_chat_history_is_not_readable_by_another_user(client, user_client):
+    """A session created by one user cannot be read by a different user."""
+    owner = requests.Session()
+    owner.headers.update({"Content-Type": "application/json"})
+    owner_token = login(owner, VICTIM_PHONE)
+    owner.headers.update({"Authorization": f"Bearer {owner_token}"})
+
+    session_id = f"sec-history-{uuid.uuid4()}"
+    create = owner.post(f"{API}/ai/chat", json={
+        "session_id": session_id,
+        "message": "Hello",
+        "language": "English",
+    }, timeout=120)
+    assert create.status_code == 200, create.text
+
+    # USER_PHONE is a different authenticated identity from VICTIM_PHONE.
+    assert user_client.get(f"{API}/ai/chat/{session_id}/history", timeout=30).status_code == 404
+    assert owner.get(f"{API}/ai/chat/{session_id}/history", timeout=30).status_code == 200
+
+
+def test_chat_rejects_anonymous(client):
+    """Chat must never be reachable without a valid user session."""
+    r = client.post(f"{API}/ai/chat", json={
+        "session_id": f"sec-anon-{uuid.uuid4()}",
+        "message": "Hello",
+        "language": "English",
+    }, timeout=30)
+    assert r.status_code == 401
