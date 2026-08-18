@@ -1,105 +1,78 @@
 # Auto-AI India — Product Requirements
 
-## What's Implemented (iteration 6, 2026-02-20)
+## Current Architecture Snapshot
 
 ### Backend
-- 106-car database, Claude Sonnet 4.5 AI engine (compare, recommend, chat)
-- AI-as-CRM (booking tracking via chat), multi-language (8 Indian languages)
-- Bookings with auto partner-lead creation, 9 partners (5 banks + 4 insurers)
-- Image proxy for 106 CarWale CDN photos (bypasses Chrome ORB), pre-warmed cache
-- Phone OTP auth (MVP: 123456)
-- Dealer Command Center endpoints + **dealer self-service apply/list**
-- **Admin panel** with PIN auth for approving dealer applications
-- **Stripe subscriptions**: `/api/checkout/session`, `/api/checkout/status/{id}`, `/api/webhook/stripe`, `/api/me/subscription`
-  - Plans: Premium ₹199/mo, Dealer ₹999/mo
+- Automotive database and AI engine for compare, recommend, and chat
+- AI-as-CRM (booking tracking via chat), multi-language support
+- Bookings with partner-lead creation
+- Image and video proxying for automotive media
+- Phone OTP authentication
+- Dealer Command Center endpoints and dealer self-service flows
+- Admin panel with PIN authentication
+- Razorpay one-time payments with server-side order/signature verification and webhook reconciliation
+- Direct AI provider adapters for Anthropic, OpenAI, and Google Gemini
 
 ### Frontend
 - Routes: `/`, `/compare`, `/recommend`, `/cars`, `/emi`, `/news`, `/book/:id`, `/showroom/:id`, `/premium`, `/dealer`, `/dealers/apply`, `/admin`, `/about`, `/login`, `/my-bookings`
-- Real latest OEM photos for all 106 cars via backend proxy
-- 360° Premium Showroom (drag-rotate, 7 colors, interior toggles, 3-min paywall)
-- Founder page, Dealer onboarding, Admin panel (PIN from the `ADMIN_PIN` env var)
-- Stripe-powered Premium checkout + post-payment status polling
-- PWA (manifest + service worker + install prompt)
-- Multi-language toggle (8 Indian languages)
+- Real OEM/car imagery through the backend media proxy
+- 360° Premium Showroom with interactive rotation and customization
+- Founder page, Dealer onboarding, Admin panel
+- Razorpay-powered Premium checkout
+- PWA and Capacitor mobile packaging
+- Multi-language support
 
-### **NEW — Premium Visual Redesign (iter 6, 2026-02-20)**
-- **framer-motion** installed, all hero/section reveals use spring + stagger motion
-- Overhauled `index.css`: added grain, tracing-beam, glass-strong, dot-grid, corner-notch, btn-shine, breathe, scan-line, shimmer, gradient-amber-text utilities + Outfit/Manrope/Bebas Neue fonts
-- **Home.jsx**: hero now has **looping Pexels driving reel video background** (proxied via backend `/api/video-proxy` with HTTP Range support) + luxury car poster fallback + parallax scroll + italic amber gradient headline + HUD glass card with live zero-wait tracker + floating "AI LIVE" badge
-- **Navbar**: scroll-responsive glass with border glow, animated `layoutId` underline, gradient logo, mobile staggered reveal
-- **CarCard**: glass-chip segment badge, Bebas-Neue price chip, Framer-Motion hover lift, glow overlay, gradient CTA
-- **ChatDrawer**: breathing gradient amber orb FAB + tooltip; drawer slides in with spring on glass-strong surface
-- **Premium.jsx**: tracing-beam animated conic-gradient border on ₹199 plan + MOST POPULAR pill + Bebas-Neue big prices + motion stagger
+## AI Model Integrations
 
-### **NEW — 360° Showroom Fix (iter 7, 2026-02-20)**
-- Previously the Showroom rendered a generic hand-drawn SVG instead of the real car. Now it uses the **actual CarWale OEM photo** (same source as listings, via `getCarImage` + `/api/image-proxy`).
-- Added **3D sway rotation** (Framer Motion rotateY + translateX + perspective) driven by drag/slider/auto-spin — car appears to rotate, flips horizontally past 90° to suggest the rear side.
-- **Paint customization**: color wash overlays (mix-blend-overlay + soft-light) let users preview 7 paint colors on the real photo.
-- **State chips**: Doors Open / Hood Up / Boot Open / Lights ON appear as visible amber chips on the viewer when toggled.
-- **Angle slider** at bottom + touch/swipe support for mobile.
-- **Studio spotlight + floor reflection ring** + paint name readout + FRONT/REAR readout.
-- Interior view renders a luxury SVG cabin diagram.
+Auto-AI uses direct provider APIs. No external app-builder or hosted AI integration layer is required.
 
-### **NEW — Video Proxy Endpoint (iter 7)**
-- `/api/video-proxy` streams from `videos.pexels.com` with full HTTP Range-request passthrough (required for HTML5 `<video>` seeking/buffering). Returns 206 Partial Content on Range, supports HEAD for preflight.
+### OpenAI Chat Models
+- `gpt-flagship` → `gpt-5.4` (OpenAI · Flagship reasoning · versatile)
+- `gpt-mini` → `gpt-5.4-mini` (OpenAI · Fast & efficient)
 
-### Testing
-- iter 1-5: backend + frontend comprehensive (~100% pass)
-- iter 6: design smoke tested on desktop + mobile (Home / Cars / Compare / Premium) — all pages render, chat orb visible, no console errors
+### Gemini Chat Models
+- `gemini-pro` → `gemini-3.1-pro-preview` (Google · Deep analysis · latest)
+- `gemini-flash` → `gemini-3.5-flash` (Google · Blazing fast · concise)
 
-## Known Limits / Not Yet Done
-- Stripe uses TEST keys (not real rupees yet)
-- OTP hardcoded to 123456 (needs Twilio/MSG91)
-- No real-time car data feed (CarDekho/CarWale have no public API)
-- Daily car refresh is simulated
+### Claude Chat Models
+- `claude` → `claude-sonnet-4-6` (Anthropic · Balanced reasoning · unbiased) — DEFAULT
+- `claude-opus` → `claude-opus-4-7` (Anthropic · Deepest reasoning · premium)
+- `claude-haiku` → `claude-haiku-4-5-20251001` (Anthropic · Ultra-fast · lightweight)
 
-### **NEW — OpenAI Chat Models added (iter 10, 2026-02-20)**
-- Extended `AI_MODELS` registry with two OpenAI GPT models via Emergent LLM Key:
-  - `gpt-flagship` → `gpt-5.4` (OpenAI · Flagship reasoning · versatile)
-  - `gpt-mini` → `gpt-5.4-mini` (OpenAI · Fast & efficient)
-- Chat drawer picker now shows **5 models total**: Claude Sonnet 4.6 · GPT-5.4 · GPT-5.4 Mini · Gemini 3.1 Pro · Gemini 3.5 Flash
-- Added distinct `Brain` icon for OpenAI models in the picker (vs `Zap` for Gemini, `Sparkles` for Claude)
-- All 5 models verified via curl — respond correctly with model label returned in response.
+The model registry is exposed through `GET /api/ai/models`. Chat accepts an optional `model` field and returns the selected model label. Compare and Recommend use the configured deep-analysis model.
 
-### **NEW — Gemini Chat Models Integration (iter 9, 2026-02-20)**
-- Added Google Gemini as a selectable chat brain alongside Claude via Emergent LLM Key (`emergentintegrations.LlmChat`)
-- Registry `AI_MODELS` in `server.py`:
-  - `claude` → `claude-sonnet-4-6` (Anthropic · Balanced reasoning · unbiased) — DEFAULT
-  - `gemini-pro` → `gemini-3.1-pro-preview` (Google · Deep analysis · latest)
-  - `gemini-flash` → `gemini-3.5-flash` (Google · Blazing fast · concise)
-- New endpoint `GET /api/ai/models` — lists all pickable models with label + family + strength
-- `POST /api/ai/chat` now accepts optional `model` field; reply includes `model` label so UI shows which brain answered
-- `ChatRequest.model_config = {"protected_namespaces": ()}` added so Pydantic v2 doesn't reserve the `model` field name
-- Compare/Recommend endpoints unchanged (still use Claude for deep unbiased analysis)
-- **UI**: `ChatDrawer.jsx` gets a sleek model picker bar under the header — shows Active AI with dropdown of all 3 models, each with family + strength tagline. Choice persists in localStorage. Switching models opens a fresh session so history stays clean. Each assistant message shows a small `· Gemini 3.5 Flash` badge.
-- Verified all 3 models respond correctly via curl.
+## Mobile App
 
-### **NEW — Capacitor Mobile Wrapper (iter 8, 2026-02-20)**
-- Installed `@capacitor/core@7`, `cli@7`, `android@7`, `ios@7`, `app@7`, `splash-screen@7`, `status-bar@7`
-- Created `/app/frontend/capacitor.config.json`:
-  - appId `com.autoai.india`, appName `Auto-AI India`
-  - **Live Web Wrapper mode** — `server.url` points to deployed site; any web update instantly reflects in mobile app with no APK re-release
-  - Dark splash (`#050505`), dark status bar
-- Added `yarn` scripts: `mobile:init:android`, `mobile:init:ios`, `mobile:sync`, `mobile:open:android`, `mobile:open:ios`
-- Wrote **`/app/MOBILE_APP_GUIDE.md`** — full step-by-step for Android Studio + Xcode build, Play Store + App Store submission, icon/splash generation (@capacitor/assets), cost summary ($25 Play + $99/yr Apple), troubleshooting
-- User must run native builds on their own Mac/PC (Android Studio or Xcode required — can't run in cloud container)
+- Capacitor 7 packaging is configured for Android/iOS.
+- Live web-wrapper mode can point the mobile shell at the deployed Auto-AI frontend.
+- Native Android/iOS builds require Android Studio or Xcode on a local development machine.
+
+## Testing
+
+- Backend unit tests cover provider adapters, security, and payment gateway behavior.
+- Frontend production builds are validated in CI.
+- Deployment reconciliation includes checks for retired external integration references.
+
+## Production Requirements
+
+- Never commit `.env` files, API keys, payment secrets, database credentials, or session secrets.
+- Configure provider credentials only in the deployment environment.
+- Use `APP_ENV=production` and disable demo OTP mode in production.
+- Use explicit production CORS origins.
+- Use isolated staging infrastructure for integration tests.
 
 ## Go-Live Checklist
-1. Replace STRIPE_API_KEY with live key → real payments live
-2. Get Twilio/MSG91 account → replace OTP stub for real SMS
-3. Upload founder photo to replace "A" initials on /about
-4. Generate PWA + mobile app icons (`resources/icon.png` + `resources/splash.png` 1024+2732px) then `npx @capacitor/assets generate`
-5. Follow `/app/MOBILE_APP_GUIDE.md` to ship Android + iOS apps
+1. Configure live Razorpay credentials and webhook secret.
+2. Configure production OTP delivery when moving beyond demo/staging flows.
+3. Configure founder and product assets.
+4. Generate PWA/mobile assets where required.
+5. Run authenticated staging smoke tests before production promotion.
+6. Verify all enabled direct AI providers in staging.
 
-## Backlog (ROADMAP)
+## Backlog
 - **P1** Real SMS OTP via Twilio/MSG91
 - **P1** Hard-gate Premium features (lock unlimited compares / priority booking for free tier)
-- **P1** Daily live price sync (scheduled scrape from CarDekho/CarWale)
-- **P2** Transactional email (SendGrid/Resend) for booking + dealer lead notifications
-- **P2** Android/iOS wrapper via Capacitor
-- **P3** Refactor `server.py` (650+ lines) into modular route files
-
-## Mobile App Paths
-- **Now**: PWA is live. Users tap "Install" (Android) or Share→Add to Home (iOS).
-- **Next**: Capacitor wrapper for Play Store + App Store (~₹4,200 fees, 2–4 weeks).
-- **Future**: React Native rewrite (2–3 months).
+- **P1** Daily live price sync
+- **P2** Transactional email for booking and dealer lead notifications
+- **P2** Android/iOS store release via Capacitor
+- **P3** Refactor `server.py` into modular route files
