@@ -1,0 +1,35 @@
+name: Auto-AI independence validation
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Block retired external integration references
+        run: |
+          if git grep -niE 'emergentintegrations|EMERGENT_LLM_KEY|@emergentbase|assets\.emergent\.sh|\.emergent|emergentagent\.com' -- . ':(exclude).github/workflows/independence-validation.yml' ':(exclude)test_reports/*'; then
+            echo 'Retired external integration references found in the active project.'
+            exit 1
+          fi
+
+      - name: Verify direct LLM adapter exists
+        run: test -f backend/llm_provider.py
+
+      - name: Verify retired dependency is absent
+        run: '! grep -ni "emergentintegrations" backend/requirements.txt'
+
+      - name: Compile backend
+        run: python -m compileall -q backend
