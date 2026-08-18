@@ -26,8 +26,7 @@ Production deployments must fail closed when critical authentication or browser-
 | `RAZORPAY_KEY_SECRET` | Razorpay server-side verification | Required for paid checkout |
 | `RAZORPAY_WEBHOOK_SECRET` | Razorpay webhook signature verification | Required when webhooks are enabled |
 
-Never configure `EMERGENT_LLM_KEY` or any Emergent-specific variable. Auto-AI's
-LLM integrations are direct provider integrations and do not depend on Emergent.
+Only configure provider credentials that are required by enabled production features. Keep all credentials in the deployment secret store and never commit them to Git.
 
 ## Authentication model
 
