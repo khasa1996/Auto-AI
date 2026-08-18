@@ -13,7 +13,7 @@ Auto-AI India is an independent automotive intelligence platform for Indian car 
 
 ## Independence requirement
 
-Auto-AI does **not** depend on Emergent. The repository contains no Emergent SDK, Emergent LLM key, Emergent cron/webhook infrastructure, or Emergent visual-edit integration.
+Auto-AI is a standalone application. The active repository contains no hosted app-builder SDK, hosted LLM client, hosted payment integration, project/cron/webhook metadata, preview-server integration, or visual-edit integration from the retired development stack. AI providers and payment processing are accessed directly through Auto-AI's own server-side adapters.
 
 ## Security
 
