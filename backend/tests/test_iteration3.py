@@ -1,4 +1,4 @@
-"""Backend tests for iteration 3: Partners (commission pipeline) + AI CRM chat."""
+"""Backend integration tests for partner leads and authenticated CRM chat."""
 import uuid
 import pytest
 import requests
@@ -20,7 +20,6 @@ def test_partners_list_returns_9(client):
     data = r.json()
     assert isinstance(data, list)
     assert len(data) == 9, f"Expected 9 partners, got {len(data)}"
-    # All have commission_pct
     assert all("commission_pct" in p for p in data)
     names = {p["name"] for p in data}
     expected_loan = {"HDFC Bank", "SBI", "ICICI Bank", "Axis Bank", "Bajaj Finserv"}
@@ -51,7 +50,6 @@ def test_partner_leads_requires_admin(client):
 
 
 def test_booking_with_loan_and_insurance_creates_leads(client, admin_client):
-    # Get current leads count first
     r0 = admin_client.get(f"{API}/partners/leads", timeout=15)
     assert r0.status_code == 200
     before = len(r0.json().get("leads", []))
@@ -59,7 +57,7 @@ def test_booking_with_loan_and_insurance_creates_leads(client, admin_client):
     payload = {
         "car_id": "tata-nexon",
         "name": "TEST_Lead User",
-        "phone": "9876543210",
+        "phone": USER_PHONE,
         "city": "Mumbai",
         "needs_loan": True,
         "needs_insurance": True,
@@ -67,38 +65,29 @@ def test_booking_with_loan_and_insurance_creates_leads(client, admin_client):
     }
     r = client.post(f"{API}/bookings", json=payload, timeout=20)
     assert r.status_code == 200, r.text
-    booking = r.json()
-    booking_id = booking["id"]
+    booking_id = r.json()["id"]
 
     r2 = admin_client.get(f"{API}/partners/leads", timeout=15)
     assert r2.status_code == 200
     out = r2.json()
     assert "leads" in out and "total_commission" in out and "by_partner" in out
     leads = out["leads"]
-    assert len(leads) >= before + 2, "Expected 2 new leads (loan+insurance)"
-
-    # Filter down to leads for this booking
+    assert len(leads) >= before + 2
     our = [l for l in leads if l.get("booking_id") == booking_id]
     assert len(our) == 2
     types = {l["partner_type"] for l in our}
     assert types == {"loan", "insurance"}
-    # First partners as per assignment
     loan_lead = next(l for l in our if l["partner_type"] == "loan")
     ins_lead = next(l for l in our if l["partner_type"] == "insurance")
     assert loan_lead["partner_name"] == "HDFC Bank"
     assert ins_lead["partner_name"] == "Bajaj Allianz"
     assert loan_lead["expected_commission"] > 0
     assert ins_lead["expected_commission"] > 0
-
-    # by_partner aggregation contains HDFC Bank
     assert "HDFC Bank" in out["by_partner"]
     assert out["by_partner"]["HDFC Bank"]["count"] >= 1
 
 
 def test_booking_without_finance_no_leads(client, admin_client):
-    r0 = admin_client.get(f"{API}/partners/leads", timeout=15)
-    before_ids = {l["booking_id"] for l in r0.json().get("leads", [])}
-
     payload = {
         "car_id": "tata-nexon",
         "name": "TEST_NoLead",
@@ -110,33 +99,22 @@ def test_booking_without_finance_no_leads(client, admin_client):
     r = client.post(f"{API}/bookings", json=payload, timeout=20)
     assert r.status_code == 200
     bid = r.json()["id"]
+    after = (awaitable := admin_client.get(f"{API}/partners/leads", timeout=15))
+    assert after.status_code == 200
+    assert bid not in {l["booking_id"] for l in after.json().get("leads", [])}
 
-    r2 = admin_client.get(f"{API}/partners/leads", timeout=15)
-    after = r2.json().get("leads", [])
-    assert bid not in {l["booking_id"] for l in after}
 
-
-# ---- AI CRM chat: booking context ----
-def test_ai_chat_track_booking_requires_own_session(client):
-    """An anonymous caller naming a phone number must not receive that user's booking."""
-    phone = USER_PHONE
-    rb = client.post(f"{API}/bookings", json={
-        "car_id": "tata-nexon", "name": "TEST_CRM Leak", "phone": phone, "city": "Pune",
-    }, timeout=20)
-    assert rb.status_code == 200
-    id_prefix = rb.json()["id"][:8].upper()
-
+# ---- Authenticated AI CRM chat ----
+def test_ai_chat_track_booking_requires_authentication(client):
+    """Anonymous callers cannot use CRM chat and therefore cannot receive booking data."""
     r = client.post(f"{API}/ai/chat", json={
         "session_id": f"test-crm-anon-{uuid.uuid4()}",
-        "message": f"track my booking {phone}",
-    }, timeout=120)
-    assert r.status_code == 200, r.text
-    assert id_prefix not in r.json().get("reply", "").upper()
+        "message": f"track my booking {USER_PHONE}",
+    }, timeout=30)
+    assert r.status_code == 401
 
 
 def test_ai_chat_track_booking_by_phone(user_client):
-    # Seed a booking for the signed-in phone
-    client = user_client
     phone = USER_PHONE
     bp = {
         "car_id": "tata-nexon",
@@ -146,21 +124,19 @@ def test_ai_chat_track_booking_by_phone(user_client):
         "needs_loan": True,
         "test_drive": True,
     }
-    rb = client.post(f"{API}/bookings", json=bp, timeout=20)
+    rb = user_client.post(f"{API}/bookings", json=bp, timeout=20)
     assert rb.status_code == 200
     booking = rb.json()
     id_prefix = booking["id"][:8].upper()
 
     session = f"test-crm-{uuid.uuid4()}"
-    r = client.post(f"{API}/ai/chat", json={
+    r = user_client.post(f"{API}/ai/chat", json={
         "session_id": session,
         "message": f"track my booking {phone}",
     }, timeout=120)
     assert r.status_code == 200, r.text
     reply = r.json().get("reply", "")
     assert reply
-    # Reply should reference booking specifics: dealer name fragment OR id prefix OR car name
-    # Dealer for Pune is 'Koregaon Park'
     hit = (
         id_prefix in reply.upper()
         or "koregaon" in reply.lower()
