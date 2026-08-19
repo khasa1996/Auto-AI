@@ -22,7 +22,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.13'
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
@@ -32,8 +32,8 @@ jobs:
       - name: Compile backend Python modules
         run: python -m compileall -q .
 
-      - name: Run LLM provider tests
+      - name: Run LLM provider unit tests
         run: pytest -q tests/test_llm_provider.py
 
-      - name: Run Razorpay gateway tests
+      - name: Run Razorpay gateway unit tests
         run: pytest -q tests/test_razorpay_gateway.py
