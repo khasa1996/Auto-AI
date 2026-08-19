@@ -15,7 +15,13 @@ import uuid
 from datetime import datetime, timezone
 
 from llm_provider import LlmChat, UserMessage
-from stripe_provider import StripeCheckout, CheckoutSessionRequest
+from razorpay_gateway import (
+    RAZORPAY_KEY_ID,
+    create_order as razorpay_create_order,
+    fetch_payment as razorpay_fetch_payment,
+    is_configured as razorpay_is_configured,
+    verify_payment_signature as razorpay_verify_payment_signature,
+)
 from cars_data import CARS_SEED, NEWS_SEED
 import security
 from security import RateLimiter
@@ -1203,180 +1209,207 @@ async def admin_reject_dealer(dealer_id: str, req: AdminActionReq, _: str = Depe
     return updated
 
 
-# ---------- Stripe subscriptions ----------
-STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY")
+# ---------- Razorpay one-time payments ----------
+RAZORPAY_WEBHOOK_SECRET = os.environ.get("RAZORPAY_WEBHOOK_SECRET", "").strip()
 
 PLANS = {
-    "premium": {"name": "Premium", "amount": 199.00, "currency": "inr"},
-    "dealer": {"name": "Dealer", "amount": 999.00, "currency": "inr"},
+    "premium": {"name": "Premium", "amount": 199.00, "amount_paise": 19900, "currency": "INR"},
+    "dealer": {"name": "Dealer / Business", "amount": 999.00, "amount_paise": 99900, "currency": "INR"},
 }
 
 
 class CheckoutRequest(BaseModel):
     plan_id: str = Field(max_length=40)
-    origin_url: str = Field(max_length=300)
 
 
-def _validated_origin(origin_url: str, http_request: Request) -> str:
-    """Only ever redirect back to an origin we control — an attacker-supplied
-    origin_url would otherwise turn Stripe's return flow into an open redirect."""
-    candidate = origin_url.rstrip("/")
-    allowed = {o.rstrip("/") for o in CORS_ORIGINS if o != "*"}
-    allowed.add(str(http_request.base_url).rstrip("/"))
-    if candidate in allowed:
-        return candidate
-    raise HTTPException(status_code=400, detail="origin_url is not allowed")
+class CheckoutVerifyRequest(BaseModel):
+    plan_id: str = Field(max_length=40)
+    razorpay_order_id: str = Field(max_length=80)
+    razorpay_payment_id: str = Field(max_length=80)
+    razorpay_signature: str = Field(max_length=256)
 
+def _activate_entitlement(tx: dict, payment_id: str):
+    return db.entitlements.update_one(
+        {"phone": tx["phone"], "plan_id": tx["plan_id"]},
+        {"$set": {
+            "status": "active",
+            "purchase_type": "one_time",
+            "order_id": tx["order_id"],
+            "payment_id": payment_id,
+            "amount": tx["amount"],
+            "currency": tx["currency"],
+            "activated_at": datetime.now(timezone.utc).isoformat(),
+        }, "$setOnInsert": {
+            "id": str(uuid.uuid4()),
+            "phone": tx["phone"],
+            "plan_id": tx["plan_id"],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
 
-@api_router.post("/checkout/session")
-async def create_checkout(
+@api_router.post("/checkout/order")
+async def create_checkout_order(
     req: CheckoutRequest,
-    http_request: Request,
     customer_phone: str = Depends(current_user_phone),
 ):
     if req.plan_id not in PLANS:
         raise HTTPException(status_code=400, detail="Invalid plan")
-    origin_url = _validated_origin(req.origin_url, http_request)
-    if not STRIPE_API_KEY:
-        raise HTTPException(status_code=503, detail="Stripe not configured")
+    if not razorpay_is_configured():
+        raise HTTPException(status_code=503, detail="Razorpay not configured")
 
     plan = PLANS[req.plan_id]
-    host_url = str(http_request.base_url).rstrip("/")
-    webhook_url = f"{host_url}/api/webhook/stripe"
-    checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
-
-    success_url = f"{origin_url}/premium?session_id={{CHECKOUT_SESSION_ID}}"
-    cancel_url = f"{origin_url}/premium"
-
-    ck_req = CheckoutSessionRequest(
-        amount=plan["amount"],
-        currency=plan["currency"],
-        success_url=success_url,
-        cancel_url=cancel_url,
-        metadata={"plan_id": req.plan_id, "phone": customer_phone},
-    )
-    session = await checkout.create_checkout_session(ck_req)
+    receipt = f"aai_{uuid.uuid4().hex[:24]}"
+    try:
+        order = await razorpay_create_order(
+            amount_paise=plan["amount_paise"],
+            currency=plan["currency"],
+            receipt=receipt,
+            notes={"plan_id": req.plan_id, "phone": customer_phone},
+        )
+    except Exception:
+        logging.exception("Razorpay order creation failed")
+        raise HTTPException(status_code=502, detail="Payment gateway unavailable")
 
     await db.payment_transactions.insert_one({
         "id": str(uuid.uuid4()),
-        "session_id": session.session_id,
+        "order_id": order["id"],
+        "receipt": receipt,
         "plan_id": req.plan_id,
         "amount": plan["amount"],
+        "amount_paise": plan["amount_paise"],
         "currency": plan["currency"],
         "phone": customer_phone,
         "payment_status": "initiated",
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
-    return {"url": session.url, "session_id": session.session_id}
 
-
-@api_router.get("/checkout/status/{session_id}")
-async def checkout_status(
-    session_id: str,
-    http_request: Request,
-    caller_phone: str = Depends(current_user_phone),
-):
-    if not STRIPE_API_KEY:
-        raise HTTPException(status_code=503, detail="Stripe not configured")
-    tx = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
-    if not tx or tx.get("phone") != caller_phone:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    if tx.get("payment_status") == "paid":
-        return {"payment_status": "paid", "status": "complete"}
-
-    host_url = str(http_request.base_url).rstrip("/")
-    webhook_url = f"{host_url}/api/webhook/stripe"
-    status = None
-    try:
-        checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
-        status = await checkout.get_checkout_status(session_id)
-    except Exception as e:
-        logging.warning("Stripe status fetch failed (likely unpaid/pending): %s", e)
-        # Return the DB-known state rather than 500ing
-        return {
-            "payment_status": tx.get("payment_status", "initiated"),
-            "status": "open",
-            "amount_total": None,
-            "currency": tx.get("currency", "inr"),
-        }
-
-    if status is None:
-        # Defensive guard — should not reach here since except returns above
-        return {
-            "payment_status": tx.get("payment_status", "initiated"),
-            "status": "open",
-            "amount_total": None,
-            "currency": tx.get("currency", "inr"),
-        }
-
-    if tx.get("payment_status") != "paid" and status.payment_status == "paid":
-        await db.payment_transactions.update_one(
-            {"session_id": session_id},
-            {"$set": {"payment_status": "paid", "status": status.status, "paid_at": datetime.now(timezone.utc).isoformat()}},
-        )
-        if tx.get("phone"):
-            await db.subscriptions.update_one(
-                {"phone": tx["phone"], "plan_id": tx["plan_id"]},
-                {"$setOnInsert": {
-                    "id": str(uuid.uuid4()),
-                    "phone": tx["phone"],
-                    "plan_id": tx["plan_id"],
-                    "session_id": session_id,
-                    "status": "active",
-                    "started_at": datetime.now(timezone.utc).isoformat(),
-                }},
-                upsert=True,
-            )
     return {
-        "payment_status": status.payment_status,
-        "status": status.status,
-        "amount_total": status.amount_total,
-        "currency": status.currency,
+        "key_id": RAZORPAY_KEY_ID,
+        "order_id": order["id"],
+        "amount": order["amount"],
+        "currency": order["currency"],
+        "plan_id": req.plan_id,
+        "plan_name": plan["name"],
+        "customer_phone": customer_phone,
     }
 
+@api_router.post("/checkout/verify")
+async def verify_checkout(
+    req: CheckoutVerifyRequest,
+    caller_phone: str = Depends(current_user_phone),
+):
+    tx = await db.payment_transactions.find_one(
+        {"order_id": req.razorpay_order_id, "phone": caller_phone},
+        {"_id": 0},
+    )
+    if not tx or tx.get("plan_id") != req.plan_id:
+        raise HTTPException(status_code=404, detail="Payment order not found")
 
-@app.post("/api/webhook/stripe")
-async def stripe_webhook(request: Request):
-    if not STRIPE_API_KEY:
-        return {"ok": False}
-    body = await request.body()
-    sig = request.headers.get("Stripe-Signature", "")
-    host_url = str(request.base_url).rstrip("/")
-    webhook_url = f"{host_url}/api/webhook/stripe"
-    checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+    if not razorpay_verify_payment_signature(
+        order_id=tx["order_id"],
+        payment_id=req.razorpay_payment_id,
+        signature=req.razorpay_signature,
+    ):
+        raise HTTPException(status_code=400, detail="Payment signature verification failed")
+
     try:
-        evt = await checkout.handle_webhook(body, sig)
+        payment = await razorpay_fetch_payment(req.razorpay_payment_id)
     except Exception:
-        logging.exception("webhook error")
-        return JSONResponse({"ok": False, "err": "invalid webhook"}, status_code=400)
+        logging.exception("Razorpay payment lookup failed")
+        raise HTTPException(status_code=502, detail="Could not verify payment status")
 
-    if evt.payment_status == "paid" and evt.session_id:
-        await db.payment_transactions.update_one(
-            {"session_id": evt.session_id},
-            {"$set": {"payment_status": "paid", "webhook_event": evt.event_type, "paid_at": datetime.now(timezone.utc).isoformat()}},
-        )
-        meta = evt.metadata or {}
-        if meta.get("phone") and meta.get("plan_id"):
-            await db.subscriptions.update_one(
-                {"phone": meta["phone"], "plan_id": meta["plan_id"]},
-                {"$setOnInsert": {
-                    "id": str(uuid.uuid4()),
-                    "phone": meta["phone"],
-                    "plan_id": meta["plan_id"],
-                    "session_id": evt.session_id,
-                    "status": "active",
-                    "started_at": datetime.now(timezone.utc).isoformat(),
+    if payment.get("order_id") != tx["order_id"]:
+        raise HTTPException(status_code=400, detail="Payment/order mismatch")
+    if payment.get("status") != "captured":
+        raise HTTPException(status_code=409, detail=f"Payment is not captured: {payment.get('status', 'unknown')}")
+    if int(payment.get("amount", 0)) != int(tx["amount_paise"]):
+        raise HTTPException(status_code=400, detail="Payment amount mismatch")
+
+    await db.payment_transactions.update_one(
+        {"order_id": tx["order_id"]},
+        {"$set": {
+            "payment_status": "paid",
+            "payment_id": req.razorpay_payment_id,
+            "signature_verified": True,
+            "paid_at": datetime.now(timezone.utc).isoformat(),
+        }},
+    )
+    await _activate_entitlement(tx, req.razorpay_payment_id)
+    return {"ok": True, "payment_status": "paid", "plan_id": tx["plan_id"]}
+
+@api_router.get("/checkout/status/{order_id}")
+async def checkout_status(
+    order_id: str,
+    caller_phone: str = Depends(current_user_phone),
+):
+    tx = await db.payment_transactions.find_one(
+        {"order_id": order_id, "phone": caller_phone}, {"_id": 0}
+    )
+    if not tx:
+        raise HTTPException(status_code=404, detail="Payment order not found")
+    return {
+        "order_id": order_id,
+        "payment_status": tx.get("payment_status", "initiated"),
+        "status": "complete" if tx.get("payment_status") == "paid" else "open",
+        "plan_id": tx.get("plan_id"),
+    }
+
+@app.post("/api/webhook/razorpay")
+async def razorpay_webhook(request: Request):
+    if not RAZORPAY_WEBHOOK_SECRET:
+        return {"ok": False}
+
+    import hashlib
+    import hmac
+
+    body = await request.body()
+    received = request.headers.get("X-Razorpay-Signature", "")
+    expected = hmac.new(
+        RAZORPAY_WEBHOOK_SECRET.encode("utf-8"), body, hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(expected, received):
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
+
+    event_id = request.headers.get("x-razorpay-event-id", "")
+    if event_id:
+        try:
+            await db.processed_payment_events.insert_one({
+                "_id": event_id,
+                "received_at": datetime.now(timezone.utc).isoformat(),
+            })
+        except Exception:
+            # Duplicate event IDs are expected; treat them as already processed.
+            return {"ok": True, "duplicate": True}
+
+    payload = json.loads(body.decode("utf-8"))
+    event = payload.get("event", "")
+    payment_entity = payload.get("payload", {}).get("payment", {}).get("entity", {})
+    order_id = payment_entity.get("order_id")
+    payment_id = payment_entity.get("id")
+
+    if event == "payment.captured" and order_id and payment_id:
+        tx = await db.payment_transactions.find_one({"order_id": order_id}, {"_id": 0})
+        if tx:
+            await db.payment_transactions.update_one(
+                {"order_id": order_id},
+                {"$set": {
+                    "payment_status": "paid",
+                    "payment_id": payment_id,
+                    "webhook_event": event,
+                    "paid_at": datetime.now(timezone.utc).isoformat(),
                 }},
-                upsert=True,
             )
+            await _activate_entitlement(tx, payment_id)
+
     return {"ok": True}
 
-
-@api_router.get("/me/subscription")
-async def my_subscription(phone: str = Depends(current_user_phone)):
-    sub = await db.subscriptions.find_one({"phone": phone, "status": "active"}, {"_id": 0})
-    return sub or {"status": "none"}
+@api_router.get("/me/access")
+async def my_access(phone: str = Depends(current_user_phone)):
+    items = await db.entitlements.find(
+        {"phone": phone, "status": "active"}, {"_id": 0}
+    ).sort("activated_at", -1).to_list(20)
+    return {"entitlements": items}
 
 
 def _assign_partners_to_booking(booking: Booking, car: dict):
