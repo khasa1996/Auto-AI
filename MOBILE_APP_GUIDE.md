@@ -7,11 +7,11 @@ This guide explains how to package Auto-AI India as Android and iOS apps using C
 ## 📋 What's Already Done
 
 - ✅ Capacitor v7 installed (`@capacitor/core`, `@capacitor/cli`, `@capacitor/android`, `@capacitor/ios`)
-- ✅ `capacitor.config.json` configured with:
+- ✅ Capacitor configuration uses:
   - App ID: `com.autoai.india`
   - App Name: `Auto-AI India`
   - Bundled web build mode (`webDir: build`)
-  - Dark splash screen (`#050505`) + dark status bar
+  - Dark splash screen + dark status bar
 - ✅ Helper scripts in `package.json`:
   - `yarn mobile:init:android`
   - `yarn mobile:init:ios`
@@ -24,23 +24,26 @@ This guide explains how to package Auto-AI India as Android and iOS apps using C
 ## 🚨 BEFORE YOU START
 
 ### 1. Get the repository directly from GitHub
-Clone the Auto-AI repository to your computer using Git:
+
+Clone the Auto-AI repository to your computer and enter the frontend directory:
+
 ```bash
 git clone <your-auto-ai-github-repository>
 cd Auto-AI/frontend
 ```
 
-### 2. Install Node 22+
-Capacitor 7 needs Node.js `>= 22`.
+### 2. Get Node.js 22+
+
+Capacitor 7 requires a modern Node.js runtime.
 
 ```bash
-# macOS with Homebrew
-brew install node@22
-# Or with nvm:
-nvm install 22 && nvm use 22
+# with nvm
+nvm install 22
+nvm use 22
 ```
 
-### 3. Install project dependencies
+### 3. Install dependencies
+
 ```bash
 yarn install
 ```
@@ -52,11 +55,13 @@ No external app-builder preview URL is required. The native application uses the
 ## 🤖 ANDROID (Play Store)
 
 ### What you need
-- **Android Studio**
-- **Java JDK 17**
-- **Google Play Console account**
 
-### Step-by-step
+- Android Studio
+- Java JDK 17
+- Google Play Console account
+
+### Build
+
 ```bash
 yarn build
 yarn mobile:init:android
@@ -64,30 +69,20 @@ yarn mobile:sync
 yarn mobile:open:android
 ```
 
-Android Studio will open. Then:
-
-1. Wait for Gradle sync to finish.
-2. Click **Run ▶** to test on an emulator or connected phone.
-3. When satisfied, use **Build → Generate Signed Bundle / APK → Android App Bundle (AAB)**.
-4. Store the signing keystore securely.
-5. Upload the signed `.aab` to Play Console.
-
-### Play Console
-1. Create the app under **Auto & Vehicles**.
-2. Upload the AAB and store screenshots.
-3. Complete the content-rating and policy forms.
-4. Submit for review.
+Then run the app on an emulator/device. When ready, use **Build → Generate Signed Bundle / APK** and upload the signed Android App Bundle to Play Console.
 
 ---
 
 ## 🍎 iOS (App Store)
 
 ### What you need
-- **Mac**
-- **Xcode 15+**
-- **Apple Developer Program**
 
-### Step-by-step
+- Mac
+- Xcode 15+
+- Apple Developer Program
+
+### Build
+
 ```bash
 yarn build
 yarn mobile:init:ios
@@ -96,22 +91,17 @@ cd ios/App && pod install && cd ../..
 yarn mobile:open:ios
 ```
 
-In Xcode:
-
-1. Select the **App** target.
-2. Configure **Signing & Capabilities** with your Apple Developer team.
-3. Confirm the Bundle Identifier is `com.autoai.india`.
-4. Test on a device or simulator.
-5. Use **Product → Archive** and distribute through App Store Connect.
+Configure signing in Xcode, verify the bundle identifier `com.autoai.india`, test on a device/simulator, then archive and distribute through App Store Connect.
 
 ---
 
 ## 🎨 App Icon & Splash Screen
 
-1. Create a **1024 × 1024 PNG** logo.
+1. Create a `1024 × 1024` PNG logo.
 2. Put it at `frontend/resources/icon.png`.
-3. Create the splash artwork and put it at `frontend/resources/splash.png`.
+3. Put splash artwork at `frontend/resources/splash.png`.
 4. Generate platform assets:
+
 ```bash
 yarn add -D @capacitor/assets
 npx @capacitor/assets generate --iconBackgroundColor "#050505" --splashBackgroundColor "#050505"
@@ -128,35 +118,43 @@ Run the app on a real device:
 - [ ] Cars page and images
 - [ ] 360° Showroom and paint switching
 - [ ] Chat orb and AI responses
-- [ ] Stripe Premium checkout
+- [ ] Razorpay one-time Premium checkout and payment verification
 - [ ] Navigation and language toggle
 - [ ] Splash screen
 - [ ] Android back navigation
 
 ---
 
+## 💳 Payment Notes
+
+Premium uses Razorpay one-time payments. The mobile client must never contain the Razorpay secret key. The backend creates the order, verifies the checkout signature, confirms captured payment status, and activates the entitlement. Configure the required Razorpay environment variables on the backend before testing payments.
+
+---
+
 ## 🚀 Updating the app
 
-With bundled web assets, changes to the website/frontend are included in the next native build:
+With bundled web assets, frontend changes are included in the next native build:
 
 1. Pull the latest GitHub code.
 2. Run `yarn build`.
 3. Run `yarn mobile:sync`.
 4. Build and distribute the updated Android/iOS package when required.
 
-Native plugin changes also require a new native build.
+Native plugin changes require a new native build.
 
 ---
 
 ## 🆘 Common Issues
 
-**Gradle sync failed** → Open Android Studio → Invalidate Caches / Restart and retry the sync.
+**Gradle sync failed** → Open Android Studio → Invalidate Caches / Restart and retry.
 
-**No signing certificate found** → Configure your Apple Developer account in Xcode.
+**No signing certificate found** → Configure the Apple Developer account in Xcode.
 
-**SafeArea overlap** → The Capacitor configuration already sets `contentInset: always` for iOS.
+**SafeArea overlap** → Verify the Capacitor iOS configuration and safe-area handling.
 
 **App shows stale frontend content** → Run `yarn build` followed by `yarn mobile:sync` before opening the native project.
+
+**Payment starts but verification fails** → Check the backend Razorpay key configuration, webhook secret, order/payment IDs, and server-side signature verification logs. Never put `RAZORPAY_KEY_SECRET` in the frontend.
 
 ---
 
