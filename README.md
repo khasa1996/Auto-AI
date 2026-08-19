@@ -13,7 +13,7 @@ Auto-AI runs as an independent application stack:
 - **Voice:** ElevenLabs API integration.
 - **Deployment:** GitHub + Vercel frontend/preview infrastructure with an independently deployable backend.
 
-The active application does not depend on Emergent or another external app-builder/integration layer.
+The active application does not depend on any external app-builder or hosted integration layer.
 
 ## Major product capabilities
 
