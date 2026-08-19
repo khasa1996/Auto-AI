@@ -1,0 +1,306 @@
+name: One-time Razorpay recovery migration
+
+on:
+  push:
+    branches:
+      - codex/integrate-razorpay-recovery
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: ${{ !contains(github.event.head_commit.message, 'apply isolated Razorpay migration') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout isolated recovery branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply payment migration without touching legacy recovery code
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          server = Path('backend/server.py')
+          text = server.read_text()
+
+          text = text.replace(
+              'from stripe_provider import StripeCheckout, CheckoutSessionRequest\n',
+              '''from razorpay_gateway import (\n'
+              '    RAZORPAY_KEY_ID,\n'
+              '    create_order as razorpay_create_order,\n'
+              '    fetch_payment as razorpay_fetch_payment,\n'
+              '    is_configured as razorpay_is_configured,\n'
+              '    verify_payment_signature as razorpay_verify_payment_signature,\n'
+              ')\n'''.replace("'", '')
+          )
+
+          start = text.index('# ---------- Stripe subscriptions ----------')
+          end = text.index('def _assign_partners_to_booking', start)
+
+          payment_block = r'''# ---------- Razorpay one-time payments ----------
+RAZORPAY_WEBHOOK_SECRET = os.environ.get("RAZORPAY_WEBHOOK_SECRET", "").strip()
+
+PLANS = {
+    "premium": {"name": "Premium", "amount": 199.00, "amount_paise": 19900, "currency": "INR"},
+    "dealer": {"name": "Dealer / Business", "amount": 999.00, "amount_paise": 99900, "currency": "INR"},
+}
+
+
+class CheckoutRequest(BaseModel):
+    plan_id: str = Field(max_length=40)
+
+
+class CheckoutVerifyRequest(BaseModel):
+    plan_id: str = Field(max_length=40)
+    razorpay_order_id: str = Field(max_length=80)
+    razorpay_payment_id: str = Field(max_length=80)
+    razorpay_signature: str = Field(max_length=256)
+
+
+def _activate_entitlement(tx: dict, payment_id: str):
+    return db.entitlements.update_one(
+        {"phone": tx["phone"], "plan_id": tx["plan_id"]},
+        {"$set": {
+            "status": "active",
+            "purchase_type": "one_time",
+            "order_id": tx["order_id"],
+            "payment_id": payment_id,
+            "amount": tx["amount"],
+            "currency": tx["currency"],
+            "activated_at": datetime.now(timezone.utc).isoformat(),
+        }, "$setOnInsert": {
+            "id": str(uuid.uuid4()),
+            "phone": tx["phone"],
+            "plan_id": tx["plan_id"],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+
+
+@api_router.post("/checkout/order")
+async def create_checkout_order(
+    req: CheckoutRequest,
+    customer_phone: str = Depends(current_user_phone),
+):
+    if req.plan_id not in PLANS:
+        raise HTTPException(status_code=400, detail="Invalid plan")
+    if not razorpay_is_configured():
+        raise HTTPException(status_code=503, detail="Razorpay not configured")
+
+    plan = PLANS[req.plan_id]
+    receipt = f"aai_{uuid.uuid4().hex[:24]}"
+    try:
+        order = await razorpay_create_order(
+            amount_paise=plan["amount_paise"],
+            currency=plan["currency"],
+            receipt=receipt,
+            notes={"plan_id": req.plan_id, "phone": customer_phone},
+        )
+    except Exception:
+        logging.exception("Razorpay order creation failed")
+        raise HTTPException(status_code=502, detail="Payment gateway unavailable")
+
+    await db.payment_transactions.insert_one({
+        "id": str(uuid.uuid4()),
+        "order_id": order["id"],
+        "receipt": receipt,
+        "plan_id": req.plan_id,
+        "amount": plan["amount"],
+        "amount_paise": plan["amount_paise"],
+        "currency": plan["currency"],
+        "phone": customer_phone,
+        "payment_status": "initiated",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+    return {
+        "key_id": RAZORPAY_KEY_ID,
+        "order_id": order["id"],
+        "amount": order["amount"],
+        "currency": order["currency"],
+        "plan_id": req.plan_id,
+        "plan_name": plan["name"],
+        "customer_phone": customer_phone,
+    }
+
+
+@api_router.post("/checkout/verify")
+async def verify_checkout(
+    req: CheckoutVerifyRequest,
+    caller_phone: str = Depends(current_user_phone),
+):
+    tx = await db.payment_transactions.find_one(
+        {"order_id": req.razorpay_order_id, "phone": caller_phone}, {"_id": 0}
+    )
+    if not tx or tx.get("plan_id") != req.plan_id:
+        raise HTTPException(status_code=404, detail="Payment order not found")
+
+    if not razorpay_verify_payment_signature(
+        order_id=tx["order_id"],
+        payment_id=req.razorpay_payment_id,
+        signature=req.razorpay_signature,
+    ):
+        raise HTTPException(status_code=400, detail="Payment signature verification failed")
+
+    try:
+        payment = await razorpay_fetch_payment(req.razorpay_payment_id)
+    except Exception:
+        logging.exception("Razorpay payment lookup failed")
+        raise HTTPException(status_code=502, detail="Could not verify payment status")
+
+    if payment.get("order_id") != tx["order_id"]:
+        raise HTTPException(status_code=400, detail="Payment/order mismatch")
+    if payment.get("status") != "captured":
+        raise HTTPException(status_code=409, detail=f"Payment is not captured: {payment.get('status', 'unknown')}")
+    if int(payment.get("amount", 0)) != int(tx["amount_paise"]):
+        raise HTTPException(status_code=400, detail="Payment amount mismatch")
+    if (payment.get("currency") or "").upper() != tx["currency"]:
+        raise HTTPException(status_code=400, detail="Payment currency mismatch")
+
+    await db.payment_transactions.update_one(
+        {"order_id": tx["order_id"], "phone": caller_phone},
+        {"$set": {
+            "payment_status": "paid",
+            "payment_id": req.razorpay_payment_id,
+            "signature_verified": True,
+            "paid_at": datetime.now(timezone.utc).isoformat(),
+        }},
+    )
+    await _activate_entitlement(tx, req.razorpay_payment_id)
+    return {"ok": True, "payment_status": "paid", "plan_id": tx["plan_id"]}
+
+
+@api_router.get("/checkout/status/{order_id}")
+async def checkout_status(
+    order_id: str,
+    caller_phone: str = Depends(current_user_phone),
+):
+    tx = await db.payment_transactions.find_one(
+        {"order_id": order_id, "phone": caller_phone}, {"_id": 0}
+    )
+    if not tx:
+        raise HTTPException(status_code=404, detail="Payment order not found")
+    return {
+        "order_id": order_id,
+        "payment_status": tx.get("payment_status", "initiated"),
+        "status": "complete" if tx.get("payment_status") == "paid" else "open",
+        "plan_id": tx.get("plan_id"),
+    }
+
+
+@app.post("/api/webhook/razorpay")
+async def razorpay_webhook(request: Request):
+    if not RAZORPAY_WEBHOOK_SECRET:
+        raise HTTPException(status_code=503, detail="Razorpay webhook not configured")
+
+    import hashlib
+    import hmac
+    from pymongo.errors import DuplicateKeyError
+
+    body = await request.body()
+    received = request.headers.get("X-Razorpay-Signature", "")
+    expected = hmac.new(
+        RAZORPAY_WEBHOOK_SECRET.encode("utf-8"), body, hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(expected, received):
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
+
+    event_id = request.headers.get("x-razorpay-event-id", "")
+    if event_id:
+        try:
+            await db.processed_payment_events.insert_one({
+                "_id": event_id,
+                "received_at": datetime.now(timezone.utc).isoformat(),
+            })
+        except DuplicateKeyError:
+            return {"ok": True, "duplicate": True}
+
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise HTTPException(status_code=400, detail="Invalid webhook JSON")
+
+    event = payload.get("event", "")
+    payment_entity = payload.get("payload", {}).get("payment", {}).get("entity", {})
+    order_id = payment_entity.get("order_id")
+    payment_id = payment_entity.get("id")
+
+    if event == "payment.captured" and order_id and payment_id:
+        tx = await db.payment_transactions.find_one({"order_id": order_id}, {"_id": 0})
+        if tx:
+            if int(payment_entity.get("amount", 0)) != int(tx.get("amount_paise", 0)):
+                raise HTTPException(status_code=400, detail="Webhook payment amount mismatch")
+            if (payment_entity.get("currency") or "").upper() != str(tx.get("currency", "")).upper():
+                raise HTTPException(status_code=400, detail="Webhook payment currency mismatch")
+            await db.payment_transactions.update_one(
+                {"order_id": order_id},
+                {"$set": {
+                    "payment_status": "paid",
+                    "payment_id": payment_id,
+                    "webhook_event": event,
+                    "paid_at": datetime.now(timezone.utc).isoformat(),
+                }},
+            )
+            await _activate_entitlement(tx, payment_id)
+
+    return {"ok": True}
+
+
+@api_router.get("/me/access")
+async def my_access(phone: str = Depends(current_user_phone)):
+    items = await db.entitlements.find(
+        {"phone": phone, "status": "active"}, {"_id": 0}
+    ).sort("activated_at", -1).to_list(20)
+    return {"entitlements": items}
+
+
+@api_router.get("/me/subscription")
+async def my_subscription_compat(phone: str = Depends(current_user_phone)):
+    """Compatibility response for older clients; source of truth is entitlements."""
+    latest = await db.entitlements.find_one(
+        {"phone": phone, "status": "active"},
+        {"_id": 0},
+        sort=[("activated_at", -1)],
+    )
+    return latest or {"status": "none"}
+
+
+'''
+          text = text[:start] + payment_block + text[end:]
+          server.write_text(text)
+
+          workflow = Path('.github/workflows/integration-tests.yml')
+          if workflow.exists():
+              w = workflow.read_text()
+              w = re.sub(r'\n\s*run_stripe:\n(?:\s+.*\n){4}', '\n', w, count=1)
+              w = re.sub(r'\n\s*RUN_STRIPE:.*\n', '\n', w)
+              w = re.sub(r'\n\s*- name: Run Stripe staging integration suite\n\s*if:.*\n\s*working-directory: backend\n\s*run: \|\n\s*PYTHONPATH=.*\n', '\n', w)
+              w = w.replace('echo "Stripe tests enabled: $RUN_STRIPE"\n', '')
+              workflow.write_text(w)
+
+          legacy = Path('backend/stripe_provider.py')
+          if legacy.exists():
+              legacy.unlink()
+
+          # This workflow is intentionally self-deleting after the migration commit.
+          Path('.github/workflows/one-time-razorpay-migration.yml').unlink()
+
+      - name: Validate migration
+        run: |
+          python -m compileall -q backend
+          ! grep -RniE 'stripe_provider|STRIPE_API_KEY|STRIPE_WEBHOOK_SECRET|StripeCheckout|CheckoutSessionRequest|RUN_STRIPE|Stripe staging integration' backend .github --exclude-dir='__pycache__'
+          grep -n 'razorpay_gateway\|/checkout/order\|/checkout/verify\|/api/webhook/razorpay' backend/server.py
+
+      - name: Commit migration
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add backend/server.py backend/stripe_provider.py .github/workflows/integration-tests.yml .github/workflows/one-time-razorpay-migration.yml
+          git diff --cached --check
+          git commit -m 'apply isolated Razorpay migration'
+          git push
