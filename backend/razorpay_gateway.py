@@ -41,7 +41,7 @@ async def create_order(
         "currency": currency.upper(),
         "receipt": receipt[:40],
         "notes": notes,
-        "payment_capture": 1,
+        "capture": "automatic",
     }
     async with httpx.AsyncClient(timeout=15.0) as client:
         response = await client.post(
