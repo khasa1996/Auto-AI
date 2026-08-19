@@ -2,7 +2,7 @@
 
 Secrets are read only from environment variables. This module performs
 server-side order creation, payment/order lookups, and checkout signature
-verification. It intentionally has no dependency on Stripe or Emergent.
+verification. It has no dependency on external hosted integration layers.
 """
 
 from __future__ import annotations
