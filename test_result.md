@@ -67,26 +67,26 @@
 #    - Add implementation details to the status_history
 #    - Set needs_retesting to true for tasks that need testing
 #    - Update the test_plan section to guide testing priorities
-#    - Add a message to agent_communication explaining what you've done
+#    - Add a message in agent_communication explaining what you've done
 #
 # 2. Incorporate User Feedback:
 #    - When the user provides feedback that something is or isn't working, add this information to the relevant task's status_history
 #    - Update the working status based on user feedback
 #    - If the user reports an issue with a task that was marked as working, increment the stuck_count
 #    - Whenever user reports issue in the app, if we have testing agent and task_result.md file so find the appropriate task for that and append in status_history of that task to contain the user concern and problem as well 
-#
+
 # 3. Track Stuck Tasks:
 #    - Monitor which tasks have high stuck_count values or where we are fixing same issue again and again, analyze that when you read task_result.md
 #    - For persistent issues, use websearch tool to find solutions
 #    - Pay special attention to tasks in the stuck_tasks list
 #    - When you fix an issue with a stuck task, don't reset the stuck_count until the testing agent confirms it's working
-#
+
 # 4. Provide Context to Testing Agent:
 #    - When calling the testing agent, provide clear instructions about:
 #      - Which tasks need testing (reference the test_plan)
 #      - Any authentication details or configuration needed
 #      - Specific test scenarios or edge cases to focus on
-#
+
 # 5. Call the testing agent with specific instructions referring to test_result.md
 #
 # IMPORTANT: Main agent must ALWAYS update test_result.md BEFORE calling the testing agent, as it relies on this file to understand what to test next.
@@ -100,7 +100,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Validate the independent Auto-AI recovery branch and complete the Emergent-removal merge gates without modifying main."
+user_problem_statement: "Validate the independent Auto-AI recovery branch and complete the retired-integration removal merge gates without modifying main."
 backend:
   - task: "Independent provider gateway"
     implemented: true
@@ -179,7 +179,7 @@ test_plan:
   current_focus:
     - "Wait for latest recovery CI run 22 to complete after the strengthened independence scan."
     - "Run/confirm authenticated backend smoke tests for AI, auth, bookings and Stripe against the configured staging backend."
-    - "Verify production environment variables independently of the retired integration layer."
+    - "Verify required production environment variables independently of the retired hosted integration layer."
     - "Review current Vercel preview and backend deployment configuration before marking PR 5 ready."
   stuck_tasks:
     - "Authenticated backend runtime smoke tests cannot yet be confirmed because the backend deployment URL and production/staging environment access are not exposed through the currently available connectors."
@@ -188,4 +188,4 @@ test_plan:
 
 agent_communication:
   - agent: "main"
-    message: "Recovery branch audit continued. Removed active Emergent project files/configuration in prior work; cleaned README and PRD; added independent deployment/runtime smoke-test documentation; strengthened CI to scan project docs/memory for retired integration references while excluding only historical generated test_reports. Main remains untouched."
+    message: "Recovery branch audit continued. Removed active retired-integration project files/configuration in prior work; cleaned README and PRD; added independent deployment/runtime smoke-test documentation; strengthened CI to scan project docs/memory for retired integration references while excluding only historical generated test_reports. Main remains untouched."
