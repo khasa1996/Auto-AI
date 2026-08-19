@@ -83,6 +83,10 @@ jobs:
           server_path.write_text(server)
 
           subprocess.run(["git", "rm", "-f", "backend/stripe_provider.py"], check=True)
+          retired_test = Path("backend/tests/test_iteration5.py")
+          if retired_test.exists():
+              subprocess.run(["git", "rm", "-f", str(retired_test)], check=True)
+
           unit_path = Path("backend/tests/unit/test_provider_adapters.py")
           unit = unit_path.read_text()
           unit = unit.replace("import hashlib\nimport hmac\nimport time\n\n", "")
@@ -154,4 +158,4 @@ jobs:
           rm -f .github/workflows/codex-razorpay-recovery-integration.yml
           git add -A
           git commit -m "feat: integrate Razorpay into independent recovery branch"
-          git push origin HEAD:codex/integrate-razorpay-recovery
+          git push origin HEAD:codex/integrate-razpay-recovery
