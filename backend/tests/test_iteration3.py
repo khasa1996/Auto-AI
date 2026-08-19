@@ -99,7 +99,7 @@ def test_booking_without_finance_no_leads(client, admin_client):
     r = client.post(f"{API}/bookings", json=payload, timeout=20)
     assert r.status_code == 200
     bid = r.json()["id"]
-    after = (awaitable := admin_client.get(f"{API}/partners/leads", timeout=15))
+    after = admin_client.get(f"{API}/partners/leads", timeout=15)
     assert after.status_code == 200
     assert bid not in {l["booking_id"] for l in after.json().get("leads", [])}
 
