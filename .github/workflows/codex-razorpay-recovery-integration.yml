@@ -87,9 +87,7 @@ jobs:
           unit = unit_path.read_text()
           unit = unit.replace("import hashlib\nimport hmac\nimport time\n\n", "")
           unit = unit.replace("from stripe_provider import verify_webhook_signature\n", "")
-          unit = re.sub(r"\n\ndef test_stripe_webhook_signature_is_verified\(\):.*?\n(?=\ndef |\Z)", "", unit, flags=re.S)
-          unit = re.sub(r"\n\ndef test_stripe_webhook_signature_rejects_wrong_payload\(\):.*?\n(?=\ndef |\Z)", "", unit, flags=re.S)
-          unit = re.sub(r"\n\ndef test_stripe_webhook_signature_rejects_expired_timestamp\(\):.*?\n(?=\ndef |\Z)", "", unit, flags=re.S)
+          unit = re.sub(r"\n+def test_stripe_webhook_signature_[A-Za-z0-9_]+\(\):.*?(?=\n+def |\Z)", "", unit, flags=re.S)
           unit_path.write_text(unit.rstrip() + "\n")
 
           active = []
