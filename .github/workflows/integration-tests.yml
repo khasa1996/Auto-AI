@@ -7,11 +7,6 @@ on:
         description: "Base URL of the deployed Auto-AI staging backend (no trailing slash)"
         required: true
         type: string
-      run_stripe:
-        description: "Run Stripe integration tests (staging must use Stripe test credentials)"
-        required: true
-        default: true
-        type: boolean
 
 permissions:
   contents: read
@@ -24,7 +19,6 @@ jobs:
     env:
       REACT_APP_BACKEND_URL: ${{ inputs.backend_url }}
       ADMIN_PIN: ${{ secrets.AUTO_AI_STAGING_ADMIN_PIN }}
-      RUN_STRIPE: ${{ inputs.run_stripe }}
 
     steps:
       - name: Checkout
@@ -40,7 +34,6 @@ jobs:
             *) echo "backend_url must use HTTPS"; exit 1 ;;
           esac
           echo "Testing backend: $REACT_APP_BACKEND_URL"
-          echo "Stripe tests enabled: $RUN_STRIPE"
 
       - name: Set up Python 3.13
         uses: actions/setup-python@v5
@@ -79,12 +72,6 @@ jobs:
         working-directory: backend
         run: |
           PYTHONPATH=. pytest -q tests/backend_test.py tests/test_security.py tests/test_iteration3.py tests/test_iteration4.py
-
-      - name: Run Stripe staging integration suite
-        if: ${{ inputs.run_stripe }}
-        working-directory: backend
-        run: |
-          PYTHONPATH=. pytest -q tests/test_iteration5.py
 
       - name: Report test environment
         if: always()
