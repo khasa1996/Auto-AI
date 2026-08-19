@@ -34,11 +34,11 @@
 ##     working: true  # or false or "NA"
 ##     file: "file_path.js"
 ##     stuck_count: 0
-##     priority: "high"  # or "medium" or "low"
+##     priority: "high"
 ##     needs_retesting: false
 ##     status_history:
 ##         -working: true  # or false or "NA"
-##         -agent: "main"  # or "testing" or "user"
+##         -agent: "main" # or "testing" or "user"
 ##         -comment: "Detailed comment about status"
 ##
 ## metadata:
@@ -70,23 +70,22 @@
 #    - Add a message in agent_communication explaining what you've done
 #
 # 2. Incorporate User Feedback:
-#    - When the user provides feedback that something is or isn't working, add this information to the relevant task's status_history
-#    - Update the working status based on user feedback
-#    - If the user reports an issue with a task that was marked as working, increment the stuck_count
-#    - Whenever user reports issue in the app, if we have testing agent and task_result.md file so find the appropriate task for that and append in status_history of that task to contain the user concern and problem as well 
-
+#    - When the user provides feedback about something is or isn't working, add this information to the relevant task's status_history
+#    - Set working status based on user feedback
+#    - If the user reports issue in the app, if we have testing agent and task_result.md file so find the appropriate task for that and append in status_history of that task to contain the user concern and problem as well
+#
 # 3. Track Stuck Tasks:
 #    - Monitor which tasks have high stuck_count values or where we are fixing same issue again and again, analyze that when you read task_result.md
 #    - For persistent issues, use websearch tool to find solutions
 #    - Pay special attention to tasks in the stuck_tasks list
 #    - When you fix an issue with a stuck task, don't reset the stuck_count until the testing agent confirms it's working
-
+#
 # 4. Provide Context to Testing Agent:
 #    - When calling the testing agent, provide clear instructions about:
 #      - Which tasks need testing (reference the test_plan)
 #      - Any authentication details or configuration needed
 #      - Specific test scenarios or edge cases to focus on
-
+#
 # 5. Call the testing agent with specific instructions referring to test_result.md
 #
 # IMPORTANT: Main agent must ALWAYS update test_result.md BEFORE calling the testing agent, as it relies on this file to understand what to test next.
