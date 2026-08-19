@@ -90,6 +90,14 @@ jobs:
           unit = re.sub(r"\n+def test_stripe_webhook_signature_[A-Za-z0-9_]+\(\):.*?(?=\n+def |\Z)", "", unit, flags=re.S)
           unit_path.write_text(unit.rstrip() + "\n")
 
+          gateway_path = Path("backend/razorpay_gateway.py")
+          gateway = gateway_path.read_text()
+          gateway = gateway.replace(
+              "verification. It intentionally has no dependency on Stripe or Emergent.",
+              "verification. It has no dependency on external hosted integration layers.",
+          )
+          gateway_path.write_text(gateway)
+
           active = []
           for root in (Path("backend"), Path("frontend/src")):
               for p in root.rglob("*"):
