@@ -1,6 +1,6 @@
 # Independent Deployment Guide
 
-This document defines the runtime configuration required to run Auto-AI without Emergent or another external app-builder/hosted integration layer.
+This document defines the runtime configuration required to run Auto-AI as a fully independent application stack without an external app-builder or hosted integration layer.
 
 ## Required backend variables
 
@@ -131,7 +131,7 @@ Before production promotion:
 
 ## Independence verification
 
-Repository CI should fail if active application files contain references to the retired external integration layer. The scan covers the tracked application tree while excluding only the validation workflow's own search patterns and historical generated test reports.
+Repository CI should fail if active application files contain references to retired external integration layers. The scan covers the tracked application tree while excluding only the validation workflow's own search patterns and historical generated test reports.
 
 ## Runtime smoke-test checklist
 
