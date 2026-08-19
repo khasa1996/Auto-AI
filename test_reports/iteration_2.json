@@ -20,7 +20,7 @@
       },
       {
         "component": "ChatDrawer floating button",
-        "issue": "Playwright .click() is intercepted by 'Made with Emergent' badge in preview env (both at bottom-right). Works via JS click. Bumping chat-open-btn z-index from z-40 to z-[60] would avoid overlap. User can still open chat (badge has narrow hit area), but positioning collision is visible.",
+        "issue": "Playwright .click() is intercepted by a legacy preview badge in preview env (both at bottom-right). Works via JS click. Bumping chat-open-btn z-index from z-40 to z-[60] would avoid overlap. User can still open chat, but positioning collision is visible.",
         "selector": "[data-testid='chat-open-btn']",
         "priority": "LOW"
       }
@@ -54,6 +54,6 @@
   "seed_data_creation": "Created 3 test bookings (Mumbai, Bengaluru, UI-submitted) via POST /api/bookings during tests; not cleaned up (no delete endpoint). Bookings collection harmless.",
   "retest_needed": false,
   "should_main_agent_self_test": true,
-  "context_for_next_testing_agent": "Backend test file /app/backend/tests/backend_test.py covers cars (100+ count, 19 brand coverage), bookings (create+get+404+dealer mapping), and chat language (Hindi Devanagari + English). Chat UI floating button can be occluded by Emergent preview badge — use page.evaluate(\"...click()\") instead of page.click() in Playwright to test chat-open-btn reliably. Booking success page testid = 'booking-success-page'. Cities: send title-cased ('Mumbai', 'Bengaluru', etc.) to hit mapped dealer names.",
+  "context_for_next_testing_agent": "Backend test file /app/backend/tests/backend_test.py covers cars (100+ count, 19 brand coverage), bookings (create+get+404+dealer mapping), and chat language (Hindi Devanagari + English). Chat UI floating button can be occluded by a legacy preview badge — use page.evaluate(\"...click()\") instead of page.click() in Playwright to test chat-open-btn reliably. Booking success page testid = 'booking-success-page'. Cities: send title-cased ('Mumbai', 'Bengaluru', etc.) to hit mapped dealer names.",
   "rca_of_the_issue": "Nested <button> hydration warning: LanguageToggle uses Radix DropdownMenuTrigger (a <button>) and is placed inside the Navbar mobile-toggle <button> (or similar wrapper). Radix's asChild=true pattern should be used, or LanguageToggle should be a sibling of (not a child of) the mobile toggle button."
 }
