@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+env:
+  # Integration tests target the deployed API. Keep the base URL configurable
+  # through a repository variable, with the current Render service as fallback.
+  REACT_APP_BACKEND_URL: ${{ vars.AUTO_AI_API_URL || 'https://auto-ai-api.onrender.com' }}
+
 jobs:
   backend-tests:
     runs-on: ubuntu-latest
