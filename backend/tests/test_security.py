@@ -1,0 +1,144 @@
+"""Security regression tests for the auth, authorization and proxy surfaces."""
+import os
+import uuid
+
+import pytest
+import requests
+
+from conftest import API, login
+
+VICTIM_PHONE = "9876511111"
+
+
+@pytest.fixture(scope="module")
+def client():
+    s = requests.Session()
+    s.headers.update({"Content-Type": "application/json"})
+    return s
+
+
+@pytest.mark.parametrize("path", [
+    "/bookings",
+    "/me/bookings",
+    "/me/subscription",
+    "/dealer/leads",
+    "/partners/leads",
+    "/dealers",
+    "/admin/dealers",
+])
+def test_protected_endpoints_reject_anonymous(client, path):
+    assert client.get(f"{API}{path}", timeout=15).status_code == 401
+
+
+def test_booking_is_not_readable_by_another_user(client, user_client):
+    victim = client.post(f"{API}/bookings", json={
+        "car_id": "tata-nexon", "name": "TEST_Victim", "phone": VICTIM_PHONE, "city": "Delhi",
+    }, timeout=20)
+    assert victim.status_code == 200
+    bid = victim.json()["id"]
+    # Anonymous and cross-user reads are indistinguishable from a missing record.
+    assert client.get(f"{API}/bookings/{bid}", timeout=15).status_code == 404
+    assert user_client.get(f"{API}/bookings/{bid}", timeout=15).status_code == 404
+    # The owner can read it.
+    owner = requests.Session()
+    owner.headers.update({"Authorization": f"Bearer {login(owner, VICTIM_PHONE)}"})
+    assert owner.get(f"{API}/bookings/{bid}", timeout=15).status_code == 200
+
+
+def test_session_token_is_revoked_on_logout(client):
+    s = requests.Session()
+    token = login(s, "9876522222")
+    s.headers.update({"Authorization": f"Bearer {token}"})
+    assert s.get(f"{API}/me/bookings", timeout=15).status_code == 200
+    assert s.post(f"{API}/auth/logout", json={}, timeout=15).status_code == 200
+    assert s.get(f"{API}/me/bookings", timeout=15).status_code == 401
+
+
+def test_admin_rejects_the_old_default_pin(client):
+    r = client.post(f"{API}/admin/verify", json={"pin": "108108"}, timeout=15)
+    assert r.status_code in (401, 429, 503)
+
+
+def test_admin_pin_is_not_accepted_as_query_param(client):
+    pin = os.environ.get("ADMIN_PIN", "").strip()
+    if not pin:
+        pytest.skip("ADMIN_PIN is not set")
+    assert client.get(f"{API}/admin/dealers", params={"pin": pin}, timeout=15).status_code == 401
+
+
+def test_user_token_cannot_reach_admin_endpoints(user_client):
+    assert user_client.get(f"{API}/admin/dealers", timeout=15).status_code == 401
+
+
+def test_otp_send_is_rate_limited(client):
+    phone = "9876533333"
+    codes = [client.post(f"{API}/auth/send-otp", json={"phone": phone}, timeout=15).status_code
+             for _ in range(12)]
+    assert 429 in codes, f"expected throttling, got {codes}"
+
+
+@pytest.mark.parametrize("payload", [
+    {"car_id": "tata-nexon", "name": "X", "phone": "not-a-phone", "city": "Mumbai"},
+    {"car_id": "tata-nexon", "name": "", "phone": "9876500001", "city": "Mumbai"},
+    {"car_id": "tata-nexon", "name": "X" * 500, "phone": "9876500001", "city": "Mumbai"},
+])
+def test_booking_rejects_invalid_input(client, payload):
+    assert client.post(f"{API}/bookings", json=payload, timeout=15).status_code == 422
+
+
+@pytest.mark.parametrize("payload", [
+    {"principal": -1, "annual_rate": 9, "tenure_months": 60},
+    {"principal": 500000, "annual_rate": 9, "tenure_months": 0},
+    {"principal": 500000, "annual_rate": 500, "tenure_months": 60},
+])
+def test_emi_rejects_out_of_range_input(client, payload):
+    assert client.post(f"{API}/emi/calculate", json=payload, timeout=15).status_code == 422
+
+
+def test_chat_does_not_leak_another_users_booking(client, user_client):
+    """An authenticated user cannot retrieve another user's booking via AI chat."""
+    booking = client.post(f"{API}/bookings", json={
+        "car_id": "tata-nexon", "name": "TEST_ChatVictim", "phone": VICTIM_PHONE, "city": "Pune",
+    }, timeout=20)
+    assert booking.status_code == 200
+    prefix = booking.json()["id"][:8].upper()
+
+    # The chat endpoint requires authentication. Use a different authenticated
+    # user from VICTIM_PHONE so this exercises the actual cross-user boundary.
+    r = user_client.post(f"{API}/ai/chat", json={
+        "session_id": f"sec-{uuid.uuid4()}",
+        "message": f"track my booking status for {VICTIM_PHONE}",
+        "language": "English",
+    }, timeout=120)
+    assert r.status_code == 200, r.text
+    assert prefix not in r.json().get("reply", "").upper()
+
+
+def test_chat_history_is_not_readable_by_another_user(client, user_client):
+    """A session created by one user cannot be read by a different user."""
+    owner = requests.Session()
+    owner.headers.update({"Content-Type": "application/json"})
+    owner_token = login(owner, VICTIM_PHONE)
+    owner.headers.update({"Authorization": f"Bearer {owner_token}"})
+
+    session_id = f"sec-history-{uuid.uuid4()}"
+    create = owner.post(f"{API}/ai/chat", json={
+        "session_id": session_id,
+        "message": "Hello",
+        "language": "English",
+    }, timeout=120)
+    assert create.status_code == 200, create.text
+
+    # USER_PHONE is a different authenticated identity from VICTIM_PHONE.
+    assert user_client.get(f"{API}/ai/chat/{session_id}/history", timeout=30).status_code == 404
+    assert owner.get(f"{API}/ai/chat/{session_id}/history", timeout=30).status_code == 200
+
+
+def test_chat_rejects_anonymous(client):
+    """Chat must never be reachable without a valid user session."""
+    r = client.post(f"{API}/ai/chat", json={
+        "session_id": f"sec-anon-{uuid.uuid4()}",
+        "message": "Hello",
+        "language": "English",
+    }, timeout=30)
+    assert r.status_code == 401

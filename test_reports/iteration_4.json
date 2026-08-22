@@ -1,0 +1,61 @@
+{
+  "summary": "Iteration 4 features verified end-to-end. Backend 9/9 new pytests pass (image-proxy allow/deny, send-otp, verify-otp success+wrong, /me/bookings, /dealer/leads aggregates + city filter). Frontend: /cars renders REAL car photos via /api/image-proxy (Swift, Brezza, Baleno, Creta, Venue, i20, Nexon, Punch, Harrier, Curvv, Thar, XUV700, Scorpio-N, XUV3XO, Seltos, Carens, Fortuner visible). 11 cars without CAR_IMAGES entry correctly fall back to SVG silhouette (Sonet, Urban Cruiser Hyryder, Innova Hycross, Elevate, Amaze, City, etc.). Phone OTP login → /my-bookings flow works (3 bookings shown for 9876543210). Dealer page shows 4 KPI cards, ₹1.64 L commission, 14 leads, city filter works (Mumbai filter correctly filters rows).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/image-proxy", "issue": "Wikimedia returns HTTP 429 (rate-limit) on bursty fresh-visit loads (~75 simultaneous proxied requests from /cars). Once cached in-memory they serve fine, but first-time visits produce many 429s in console. Consider: (a) serve a persistent disk cache OR (b) add User-Agent with a contact URL (current is OK but could use token+email) OR (c) add a small concurrency semaphore / delay between fetches OR (d) return a fallback 1x1 transparent PNG on 429 so browser doesn't show broken image."},
+      {"endpoint": "POST /api/bookings", "issue": "Still returns 200 instead of 201 Created (flagged iter-2, iter-3, still not fixed)."},
+      {"endpoint": "POST /api/bookings", "issue": "No pydantic validator on phone (accepts any string) — flagged iter-2, iter-3, still open."},
+      {"endpoint": "/api/auth/verify-otp", "issue": "Token is not signed/JWT — it's a plain UUID string stored in mongo. Acceptable for MVP but no server verifies it on /me/bookings (endpoint accepts phone as query param without auth). Any attacker can fetch any user's bookings given a phone. HIGH priority before prod."},
+      {"endpoint": "/api/dealer/leads", "issue": "No auth — public endpoint exposes PII (customer names, phones, cities). Intentional per MVP note, but add admin token before any external demo."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Cars page / CarVisual", "issue": "On fresh load, several car images show broken (429 rate-limit from Wikimedia through proxy). Network tab shows 19+ 429s per page load. Once-cached they work. Visually 18/75 imgs loaded on first paint in automation run.", "selector": "img[src*='/api/image-proxy']", "priority": "MEDIUM"},
+      {"component": "Home hero stats", "issue": "Still shows '29+ CARS INDEXED' (should be 106+) — flagged iterations 2+3, still not fixed.", "selector": "home stats section", "priority": "LOW"},
+      {"component": "Compare page Select", "issue": "React hydration warning '<span> cannot be a child of <option>' (flagged iteration 3, still present).", "selector": "Compare car pickers", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dealer page", "issues": ["Title uppercased via CSS (font-display uppercase) so DOM text reads 'EVERY LEAD. LIVE.' — matches design intent. No issue, just noting for test assertions."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration4.py",
+    "/app/test_reports/pytest/iteration4_results.xml",
+    "/app/backend/tests/test_iteration3.py",
+    "/app/backend/tests/backend_test.py"
+  ],
+  "action_items": [
+    "HIGH: Protect /api/me/bookings — currently accepts raw phone query with no auth/token check. Validate the session token issued by /verify-otp and filter by the token→phone mapping from db.user_sessions.",
+    "HIGH: Protect /api/dealer/leads and /api/partners/leads behind an admin/dealer token (env-configurable).",
+    "MEDIUM: Mitigate Wikimedia 429 in /api/image-proxy — add persistent disk cache, reduce concurrency from client (lazy-load below-the-fold), serve 1×1 transparent PNG on 429 so broken-image icon doesn't show, or move to a self-hosted/CDN mirror for the 95 verified URLs.",
+    "LOW: Booking create should return 201 (still 200 after 3 iterations).",
+    "LOW: Add pydantic validator on BookingRequest.phone (10 digits, numeric).",
+    "LOW: Update Home hero '29+ CARS INDEXED' → '106+'.",
+    "LOW: Fix <span>-in-<option> hydration warning on Compare."
+  ],
+  "critical_code_review_comments": [
+    "/api/me/bookings has NO authentication — it's a simple `GET /me/bookings?phone=X` that returns anyone's bookings. Whole point of OTP login is defeated. Must verify token from Authorization header or from user_sessions collection.",
+    "/api/auth/verify-otp stores the token, but nothing ever reads user_sessions to validate subsequent requests. Add a dependency like get_current_phone(token: str = Header(...)).",
+    "/api/image-proxy has a 500-item in-memory dict cache that is lost on each backend restart and not shared across pods. For a photo-heavy page with 75 URLs this is wasteful. Use disk/Redis cache or stream through a reverse proxy (Caddy/nginx).",
+    "server.py is now ~720 lines with image proxy + OTP + dealer + bookings + AI + partners. Split into routers/ before it grows (already flagged iter-3).",
+    "MyBookings.jsx imports formatINR but never uses it (dead import).",
+    "carImages.js is 95 hardcoded URLs; when a new car is added without an entry it silently falls back to silhouette — add a build-time lint or test to warn.",
+    "Login.jsx catches `catch {` without checking error.response?.status — any network blip shows 'Invalid OTP' or 'Could not send OTP' with no distinction."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration4.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9 new + 11/11 prior = 20/20 overall)",
+    "frontend": "90% (login, OTP, my-bookings, dealer, navbar, /cars dual CTAs all verified; image 429 rate-limit causes visible broken imgs on first visit)"
+  },
+  "test_credentials": "Demo OTP: 123456. Test phone with 3 existing bookings: 9876543210. Dealer page is public (no auth).",
+  "seed_data_creation": "Created TEST_ bookings during run: phone 9876501234 (Nexon/Mumbai), 9000000100 (Nexon/Mumbai loan+insurance), 9000000201 (Nexon/Delhi), 9000000202 (Nexon/Mumbai). Plus 3 from iter-3 for 9876543210. Harmless.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration-4 tests in /app/backend/tests/test_iteration4.py cover image-proxy, OTP auth, /me/bookings, /dealer/leads. Phone 9876543210 has 3+ bookings. For login automation: fill '9876543210' → click send-otp → fill '123456' → verify → lands at /my-bookings. Dealer page title renders UPPERCASE via CSS; use case-insensitive assertions. Cars page visual fallback is acceptable for the 11 cars lacking CAR_IMAGES URLs. 429 errors in console on /cars are Wikimedia rate-limiting — not a bug in our code but should be mitigated. /api/me/bookings currently has NO auth — flagged as HIGH security issue to main agent.",
+  "rca_of_the_issue": "Wikimedia 429s: upstream throttles ~75 parallel requests from the same backend IP within <1s. Browser fires proxy requests in parallel for every <img>. The in-memory _IMAGE_CACHE helps after first successful hit but the first burst overflows Wikimedia's limits. Mitigation ranked by effort: (1) quickest — serve a tiny transparent PNG + Cache-Control=0 on 502/429 so the browser retries on next visit; (2) medium — add asyncio.Semaphore(8) around httpx.get; (3) best — persistent Redis cache with TTL 30 days."
+}

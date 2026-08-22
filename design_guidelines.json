@@ -1,0 +1,142 @@
+{
+  "theme": "dark",
+  "archetype": "5",
+  "archetype_name": "Jewel & Luxury (Indian Premium Automotive Context)",
+  "design_philosophy": "A confident, high-end automotive marketplace blending futuristic aesthetics with deep Indian cultural warmth. Think Porsche configurator meets Tesla UI, accented with rich metallic copper and stark white typography against deep obsidian. We avoid generic purple/blue 'AI slop' by using 'Structural Grayscale' and 'Optical Clarity' glassmorphism.",
+  "colors": {
+    "background": "#050505",
+    "surface": "#0A0A0A",
+    "surface_glass": "rgba(255, 255, 255, 0.03)",
+    "surface_elevated": "#121212",
+    "primary": "#C5832B",
+    "primary_hover": "#D9933B",
+    "secondary": "#E2E8F0",
+    "text_primary": "#FFFFFF",
+    "text_secondary": "#A1A1AA",
+    "text_muted": "#52525B",
+    "border_subtle": "rgba(255, 255, 255, 0.08)",
+    "border_highlight": "rgba(197, 131, 43, 0.3)",
+    "error": "#FF453A",
+    "success": "#32D74B",
+    "gradient_hero": "radial-gradient(circle at top right, rgba(197, 131, 43, 0.15) 0%, rgba(5, 5, 5, 1) 50%)",
+    "gradient_accent": "linear-gradient(135deg, #C5832B 0%, #8A5A19 100%)"
+  },
+  "typography": {
+    "heading_font": "Outfit, sans-serif",
+    "body_font": "Manrope, sans-serif",
+    "number_font": "Bebas Neue, sans-serif",
+    "scales": {
+      "h1": "text-5xl sm:text-6xl+ font-black tracking-tighter leading-none",
+      "h2": "text-4xl sm:text-5xl font-bold tracking-tight leading-tight",
+      "h3": "text-2xl sm:text-3xl font-semibold tracking-tight",
+      "h4": "text-xl font-medium",
+      "body": "text-base leading-relaxed text-[#A1A1AA]",
+      "body_sm": "text-sm leading-normal text-[#A1A1AA]",
+      "overline": "text-xs font-bold uppercase tracking-[0.2em] text-[#C5832B]"
+    }
+  },
+  "layout_spacing": {
+    "container": "max-w-7xl mx-auto px-6 lg:px-12",
+    "section_gap": "py-24 sm:py-32",
+    "bento_grid_home": "grid grid-cols-1 md:grid-cols-12 gap-6",
+    "bento_grid_dashboard": "grid grid-cols-1 md:grid-cols-4 gap-4",
+    "card_padding": "p-8 md:p-10",
+    "border_radius": {
+      "sm": "rounded-sm",
+      "md": "rounded-md",
+      "lg": "rounded-2xl",
+      "xl": "rounded-[2rem]"
+    }
+  },
+  "surfaces_and_textures": {
+    "crystal_glass": {
+      "bg": "bg-white/5",
+      "blur": "backdrop-blur-2xl",
+      "border": "border border-white/10",
+      "shadow": "shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
+    },
+    "technical_grid": {
+      "bg": "bg-transparent",
+      "border": "border border-white/5",
+      "pattern": "bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:4rem_4rem]"
+    },
+    "tracing_beam": {
+      "description": "Used for Premium Subscription cards and AI result highlights. Requires Framer Motion to animate a border path."
+    }
+  },
+  "components_guidance": {
+    "navbar": "Sticky, crystal glass effect (bg-black/60 backdrop-blur-2xl border-b border-white/10). Clean layout with Language Toggle and Premium CTA.",
+    "buttons": {
+      "primary": "bg-gradient-to-r from-[#C5832B] to-[#8A5A19] text-white font-medium px-8 py-3 rounded-full hover:shadow-[0_0_20px_rgba(197,131,43,0.4)] transition-all",
+      "secondary": "bg-white/5 border border-white/10 text-white font-medium px-8 py-3 rounded-full hover:bg-white/10 backdrop-blur-md transition-all"
+    },
+    "inputs": "Shadcn based. bg-[#121212] border-white/10 focus:border-[#C5832B] focus:ring-1 focus:ring-[#C5832B] rounded-lg text-white",
+    "cards_bento": "Use crystal_glass style. Ensure internal padding is generous (p-8). Hover state should lift (-translate-y-1) and increase border opacity to white/20.",
+    "ai_chat_drawer": "Floating orb bottom right that expands into a sleek, glassmorphic sidebar. Avoid robot icons; use a sleek metallic emblem or abstract glowing orb."
+  },
+  "motion_language": {
+    "engine": "Framer Motion",
+    "scroll": "Lenis for smooth scrolling momentum",
+    "page_transition": "Fade in with a slight upwards shift (y: 20 -> 0, opacity: 0 -> 1, duration: 0.6s, ease: 'easeOut')",
+    "hover": "Subtle scale up (1.02) and border illumination",
+    "stagger": "Children in bento grids must stagger in with 0.1s delay"
+  },
+  "page_blueprints": {
+    "Home": {
+      "hero": "Full screen (min-h-[90vh]). Dark abstract texture background. Large typography ('Unbiased AI. Uncompromising Luxury.'). Massive 3D/HD car image cutting through the center. Primary and Secondary CTAs. Bottom marquee of OEM logos.",
+      "bento_features": "12-col grid. 8-col 'AI Search', 4-col '360 Showroom', etc.",
+      "testimonials": "Sleek sliding cards with minimal avatars and high-contrast text.",
+      "cta": "Premium subscription prompt with Tracing Beam effect."
+    },
+    "Cars": {
+      "layout": "Sidebar filters (left, 3 cols) + Car Grid (right, 9 cols).",
+      "filters": "Accordions, minimal borders. Clean sliders for budget.",
+      "car_card": "Image heavily prioritized. Dark gradient overlay at bottom for text. Quick specs in mono font."
+    },
+    "Compare": {
+      "layout": "Side-by-side vertical split. AI Verdict banner spanning the top of the comparison area."
+    },
+    "Showroom": {
+      "layout": "Immersive full-screen. Minimal UI overlay. Use React Three Fiber if 3D, or an interactive image spinner."
+    },
+    "Admin/Dealer": {
+      "layout": "Strict 'Control Room' mode B grid. Tight padding, heavily data-focused. High contrast text.",
+      "components": "Shadcn charts, tables with border-b border-white/5."
+    }
+  },
+  "images": {
+    "hero_car": {
+      "url": "https://images.unsplash.com/photo-1763165561886-a9391b2132c1?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2MzR8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBjYXIlMjBzaG93cm9vbSUyMGRhcmt8ZW58MHx8fHwxNzc2Njg1NzQzfDA&ixlib=rb-4.1.0&q=85",
+      "description": "High-end luxury car in dark showroom."
+    },
+    "background_texture": {
+      "url": "https://images.unsplash.com/photo-1763805508094-901f2a79ff77?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA0MTJ8MHwxfHNlYXJjaHwxfHxkYXJrJTIwYWJzdHJhY3QlMjBjYXJib24lMjBmaWJlciUyMHRleHR1cmV8ZW58MHx8fHwxNzc2Njg1NzQ3fDA&ixlib=rb-4.1.0&q=85",
+      "description": "Dark metallic carbon abstract texture."
+    },
+    "copper_accent_bg": {
+      "url": "https://images.unsplash.com/photo-1773681907265-7cd9f0b129c3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA0MTJ8MHwxfHNlYXJjaHwxfHxmdXR1cmlzdGljJTIwbWV0YWxsaWMlMjBjb3BwZXIlMjBhYnN0cmFjdCUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzc2Njg1NzQ3fDA&ixlib=rb-4.1.0&q=85",
+      "description": "Metallic copper abstract background."
+    },
+    "showroom_interior": {
+      "url": "https://images.unsplash.com/photo-1763165562062-91d744691c65?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2MzR8MHwxfHNlYXJjaHw0fHxsdXh1cnklMjBjYXIlMjBzaG93cm9vbSUyMGRhcmt8ZW58MHx8fHwxNzc2Njg1NzQzfDA&ixlib=rb-4.1.0&q=85",
+      "description": "Sleek black sports car indoors."
+    }
+  },
+  "libraries_to_install": [
+    "framer-motion",
+    "@studio-freight/lenis",
+    "lucide-react",
+    "clsx",
+    "tailwind-merge"
+  ],
+  "accessibility_and_testing": {
+    "contrast": "Ensure text over images has a gradient overlay or text-shadow.",
+    "testing": "All interactive elements MUST have a data-testid attribute in kebab-case (e.g., data-testid='hero-cta-button')."
+  },
+  "avoid_patterns": [
+    "No generic purple/blue gradients.",
+    "No pure white backgrounds; use tinted dark surfaces.",
+    "Do not use default Bootstrap-like column grids; use asymmetric Bento or Technical grids.",
+    "Do not use standard generic Sans (Inter/Roboto) for headings. Use Outfit."
+  ]
+}

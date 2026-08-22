@@ -1,0 +1,48 @@
+name: Auto-AI independence validation
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Block retired external integration references
+        run: |
+          # Build retired integration markers from split literals so this guard
+          # does not itself reintroduce the retired vendor name into the repo.
+          retired_root="emer""gent"
+          retired_pkg="${retired_root}integrations"
+          retired_key="EMER""GENT_LLM_KEY"
+          retired_scope="@${retired_root}base"
+          retired_assets="assets.${retired_root}.sh"
+          retired_dir=".${retired_root}"
+          retired_domain="${retired_root}agent.com"
+
+          if git grep -niE "${retired_pkg}|${retired_key}|${retired_scope}|${retired_assets}|${retired_dir}|${retired_domain}" -- . ':(exclude).github/workflows/independence-validation.yml' ':(exclude)test_reports/*'; then
+            echo 'Retired external integration references found in the active project.'
+            exit 1
+          fi
+
+      - name: Verify direct LLM adapter exists
+        run: test -f backend/llm_provider.py
+
+      - name: Verify retired dependency is absent
+        run: |
+          retired_root="emer""gent"
+          retired_pkg="${retired_root}integrations"
+          ! grep -ni "$retired_pkg" backend/requirements.txt
+
+      - name: Compile backend
+        run: python -m compileall -q backend
