@@ -1,0 +1,38 @@
+name: One-time final lint fix
+
+on:
+  push:
+    branches:
+      - fix/production-image-prewarm
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Remove unused BookCar i18n import
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("frontend/src/pages/BookCar.jsx")
+          text = path.read_text(encoding="utf-8")
+          old = 'import { useI18n } from "../lib/i18n";\n'
+          if old not in text:
+              raise SystemExit("Expected unused import was not found")
+          path.write_text(text.replace(old, "", 1), encoding="utf-8")
+          PY
+
+      - name: Commit fix and remove workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/src/pages/BookCar.jsx .github/workflows/one-time-final-lint-fix.yml
+          git rm .github/workflows/one-time-final-lint-fix.yml
+          git commit -m "fix: remove unused BookCar import"
+          git push origin HEAD:fix/production-image-prewarm
