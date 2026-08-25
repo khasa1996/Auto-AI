@@ -1,0 +1,44 @@
+name: One-time image prewarm fix
+
+on:
+  push:
+    branches:
+      - fix/production-image-prewarm
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch image prewarm asyncio reference
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("backend/server.py")
+          text = path.read_text(encoding="utf-8")
+          old1 = "    import asyncio as _asyncio\n    task = _asyncio.create_task("
+          new1 = "    task = asyncio.create_task("
+          old2 = "        await _asyncio.sleep(0.1)"
+          new2 = "        await asyncio.sleep(0.1)"
+          if old1 not in text:
+              raise SystemExit("startup _asyncio reference not found")
+          if old2 not in text:
+              raise SystemExit("prewarm _asyncio.sleep reference not found")
+          text = text.replace(old1, new1, 1).replace(old2, new2, 1)
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Commit fix and remove one-time workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/server.py .github/workflows/one-time-image-prewarm-fix.yml
+          git rm .github/workflows/one-time-image-prewarm-fix.yml
+          git commit -m "fix: correct image prewarm asyncio reference"
+          git push origin HEAD:fix/production-image-prewarm
