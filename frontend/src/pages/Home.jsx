@@ -265,7 +265,7 @@ export default function Home() {
           transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
           className="max-w-2xl mb-14"
         >
-          <div className="chip mb-5">/// the engine room</div>
+          <div className="chip mb-5">{'/// the engine room'}</div>
           <h2 className="font-display text-4xl md:text-5xl lg:text-6xl tracking-tight font-light leading-[1.05]">
             Five AI pillars.
             <br />
@@ -300,7 +300,7 @@ export default function Home() {
             viewport={{ once: true }}
             transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
           >
-            <div className="chip mb-5">/// the unbiased pledge</div>
+            <div className="chip mb-5">{'/// the unbiased pledge'}</div>
             <h2 className="font-display text-4xl md:text-5xl lg:text-6xl tracking-tight font-light leading-[1.02]">
               No dealership
               <br />
@@ -357,7 +357,7 @@ export default function Home() {
           className="flex items-end justify-between mb-12 flex-wrap gap-4"
         >
           <div>
-            <div className="chip mb-5">/// trending right now</div>
+            <div className="chip mb-5">{'/// trending right now'}</div>
             <h2 className="font-display text-4xl md:text-5xl tracking-tight font-light">
               Most searched <span className="text-[#F59E0B]">in India</span>
             </h2>
@@ -398,7 +398,7 @@ export default function Home() {
           <div className="absolute top-0 right-0 w-80 h-80 bg-[#F59E0B]/15 blur-3xl pointer-events-none" />
           <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#C5832B]/10 blur-3xl pointer-events-none" />
           <div className="relative">
-            <div className="chip mb-6">/// final word</div>
+            <div className="chip mb-6">{'/// final word'}</div>
             <h2 className="font-display text-4xl md:text-6xl lg:text-7xl tracking-tighter font-light uppercase max-w-4xl leading-[0.95]">
               Buying a car in India
               <br />

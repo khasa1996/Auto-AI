@@ -148,7 +148,7 @@ export default function Premium() {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
           <div className="flex items-center gap-3 mb-5">
             <Crown size={16} className="text-[#F59E0B]" />
-            <span className="chip">/// auto-ai premium</span>
+            <span className="chip">{'/// auto-ai premium'}</span>
           </div>
           <h1 className="font-display text-5xl lg:text-7xl tracking-tighter font-light uppercase max-w-4xl leading-[0.95]">
             Every car. Every angle.{" "}
@@ -223,7 +223,7 @@ export default function Premium() {
         </div>
 
         <div className="mt-24">
-          <div className="text-[10px] uppercase tracking-[0.35em] text-[#F59E0B] font-bold font-mono mb-4">/// why go premium</div>
+          <div className="text-[10px] uppercase tracking-[0.35em] text-[#F59E0B] font-bold font-mono mb-4">{'/// why go premium'}</div>
           <h2 className="font-display text-4xl lg:text-5xl tracking-tight font-light max-w-3xl">
             Insight that used to be <span className="text-[#F59E0B]">dealer-only</span>.
           </h2>

@@ -1,10 +1,9 @@
 import { useState, useRef, useEffect } from "react";
-import { X, Send, Sparkles, Trash2, ChevronDown, Cpu, Zap, Brain, Mic } from "lucide-react";
+import { X, Send, Sparkles, Trash2, ChevronDown, Cpu, Zap } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { api, USER_TOKEN_KEY } from "../lib/api";
-import { useI18n, LANGUAGES } from "../lib/i18n";
-import { SpeakButton, getVoicePref, setVoicePref } from "../lib/tts";
+import { useI18n } from "../lib/i18n";
 
 const QUICK_PROMPTS = {
   en: ["Creta vs Seltos — which is safer?", "Best car under ₹10 lakh for city", "Why is Thar waiting so long?", "Hybrid or EV in 2026?"],
@@ -43,9 +42,6 @@ export default function ChatDrawer() {
   const [modelId, setModelId] = useState(() => localStorage.getItem("autoai_chat_model") || "claude");
   const [showPicker, setShowPicker] = useState(false);
 
-  // Voice picker (ElevenLabs TTS)
-  const [voice, setVoice] = useState(() => getVoicePref());
-  const changeVoice = (v) => { setVoice(v); setVoicePref(v); };
 
   useEffect(() => {
     api.get("/ai/models").then((r) => setModels(r.data.models || [])).catch(() => {});

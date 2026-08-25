@@ -227,8 +227,7 @@ async def seed_db():
     if not ADMIN_PIN:
         logger.warning("ADMIN_PIN is not configured — the admin API will refuse all requests.")
 
-    import asyncio as _asyncio
-    task = _asyncio.create_task(
+    task = asyncio.create_task(
         _prewarm_images(),
         name="auto-ai-image-prewarm",
     )
@@ -278,7 +277,7 @@ async def _prewarm_images_impl() -> None:
                 exc_info=True,
             )
 
-        await _asyncio.sleep(0.1)
+        await asyncio.sleep(0.1)
 
 
 async def get_chat(

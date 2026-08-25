@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Zap, Instagram, Twitter, Youtube } from "lucide-react";
+import { Zap } from "lucide-react";
 
 export default function Footer() {
   return (
@@ -21,17 +21,6 @@ export default function Footer() {
           <p className="text-sm text-slate-400 leading-relaxed max-w-sm">
             100% Unbiased. 0% Promotion. India's first AI-first car buying companion built on trust, powered by transparent data.
           </p>
-          <div className="flex items-center gap-2 mt-5">
-            {[Instagram, Twitter, Youtube].map((Icon, i) => (
-              <a
-                key={i}
-                href="#"
-                className="w-9 h-9 border border-white/10 flex items-center justify-center text-slate-400 hover:border-[#F59E0B]/40 hover:text-[#F59E0B] transition-all"
-              >
-                <Icon size={14} />
-              </a>
-            ))}
-          </div>
         </div>
 
         <div>

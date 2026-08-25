@@ -68,7 +68,7 @@ export default function InstallPWA() {
         <Smartphone size={18} className="text-black" />
       </div>
       <div className="flex-1">
-        <div className="text-[10px] uppercase tracking-[0.25em] text-[#F59E0B] font-bold">/// install the app</div>
+        <div className="text-[10px] uppercase tracking-[0.25em] text-[#F59E0B] font-bold">{"/// install the app"}</div>
         <div className="font-display text-base mt-1">Auto-AI India on your home screen</div>
         <p className="text-xs text-slate-400 mt-1">
           {isIOS
