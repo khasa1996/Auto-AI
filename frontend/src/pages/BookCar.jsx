@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { api, formatINR, createIdempotencyKey } from "../lib/api";
 import { Check, ChevronLeft, Loader2, Phone, CheckCircle2 } from "lucide-react";
-import { useI18n } from "../lib/i18n";
 import CarVisual from "../components/CarVisual";
 
 const CITIES = ["Mumbai", "Delhi", "Bengaluru", "Hyderabad", "Pune", "Chennai", "Kolkata", "Ahmedabad", "Jaipur", "Lucknow", "Chandigarh"];
