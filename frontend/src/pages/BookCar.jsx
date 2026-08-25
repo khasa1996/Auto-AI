@@ -10,7 +10,6 @@ const CITIES = ["Mumbai", "Delhi", "Bengaluru", "Hyderabad", "Pune", "Chennai", 
 export default function BookCar() {
   const bookingIdempotencyKey = useRef(createIdempotencyKey()).current;
   const { carId } = useParams();
-  const { t } = useI18n();
   const [car, setCar] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [booking, setBooking] = useState(null);
@@ -136,7 +135,7 @@ export default function BookCar() {
           <div className="lg:col-span-7">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-px bg-[#F59E0B]" />
-              <span className="text-[10px] uppercase tracking-[0.35em] text-[#F59E0B] font-bold font-mono">/// dealer booking</span>
+              <span className="text-[10px] uppercase tracking-[0.35em] text-[#F59E0B] font-bold font-mono">{'/// dealer booking'}/span>
             </div>
             <h1 className="font-display text-4xl lg:text-5xl tracking-tighter font-light uppercase">
               Book your <span className="text-[#F59E0B]">zero-wait</span> test drive

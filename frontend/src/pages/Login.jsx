@@ -45,7 +45,7 @@ export default function Login() {
       <div className="w-full max-w-md">
         <div className="flex items-center gap-3 mb-6">
           <Shield size={16} className="text-[#F59E0B]" />
-          <span className="text-[10px] uppercase tracking-[0.35em] text-[#F59E0B] font-bold font-mono">/// secure login</span>
+          <span className="text-[10px] uppercase tracking-[0.35em] text-[#F59E0B] font-bold font-mono">{'/// secure login'}/span>
         </div>
         <h1 className="font-display text-4xl lg:text-5xl tracking-tighter font-light uppercase">
           Track your <span className="text-[#F59E0B]">bookings.</span>

@@ -74,7 +74,7 @@ export default function DealerApply() {
       <div className="max-w-5xl mx-auto px-6 lg:px-10 py-16">
         <div className="flex items-center gap-3 mb-4">
           <Briefcase size={16} className="text-[#F59E0B]" />
-          <span className="text-[10px] uppercase tracking-[0.35em] text-[#F59E0B] font-bold font-mono">/// partner with auto-ai india</span>
+          <span className="text-[10px] uppercase tracking-[0.35em] text-[#F59E0B] font-bold font-mono">{'/// partner with auto-ai india'}/span>
         </div>
         <h1 className="font-display text-5xl lg:text-6xl tracking-tighter font-light uppercase leading-[0.95]">
           Stop buying ads.<br />Start buying <span className="text-[#F59E0B]">leads.</span>

@@ -46,7 +46,7 @@ export default function Dealer() {
       <div className="max-w-7xl mx-auto px-6 lg:px-10 py-12">
         <div className="flex items-center gap-3 mb-4">
           <Briefcase size={16} className="text-[#F59E0B]" />
-          <span className="text-[10px] uppercase tracking-[0.35em] text-[#F59E0B] font-bold font-mono">/// dealer command center</span>
+          <span className="text-[10px] uppercase tracking-[0.35em] text-[#F59E0B] font-bold font-mono">{'/// dealer command center'}/span>
         </div>
         <h1 className="font-display text-4xl lg:text-6xl tracking-tighter font-light uppercase">
           Every lead. <span className="text-[#F59E0B]">Live.</span>

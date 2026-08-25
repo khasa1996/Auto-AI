@@ -40,9 +40,7 @@ export default function Compare() {
       <div className="max-w-7xl mx-auto px-6 lg:px-10 py-16">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-px bg-[#F59E0B]" />
-          <span className="text-[10px] uppercase tracking-[0.35em] text-[#F59E0B] font-bold font-mono">
-            /// ai comparison engine
-          </span>
+          <span className="text-[10px] uppercase tracking-[0.35em] text-[#F59E0B] font-bold font-mono">{'\n            /// ai comparison engine\n          '}/span>
         </div>
         <h1 className="font-display text-5xl lg:text-6xl tracking-tighter font-light uppercase max-w-3xl">
           Two cars enter.<br />One <span className="text-[#F59E0B]">true verdict</span>.
@@ -143,7 +141,7 @@ function Verdict({ result }) {
       </div>
 
       <div className="mt-6 border border-[#262626] bg-[#0A0A0A] p-6">
-        <div className="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-mono mb-4">/// score breakdown</div>
+        <div className="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-mono mb-4">{'/// score breakdown'}/div>
         <div className="grid md:grid-cols-5 gap-6">
           {Object.entries(analysis.scores || {}).map(([k, v]) => (
             <ScoreBar key={k} label={k} a={v.a} b={v.b} aLabel={car_a.model} bLabel={car_b.model} />
