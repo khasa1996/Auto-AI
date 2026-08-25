@@ -41,7 +41,7 @@ export default function Recommend() {
       <div className="max-w-7xl mx-auto px-6 lg:px-10 py-16">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-px bg-[#F59E0B]" />
-          <span className="text-[10px] uppercase tracking-[0.35em] text-[#F59E0B] font-bold font-mono">{'\n            /// ai recommender\n          '}/span>
+          <span className="text-[10px] uppercase tracking-[0.35em] text-[#F59E0B] font-bold font-mono">{'\n            /// ai recommender\n          '}</span>
         </div>
         <h1 className="font-display text-5xl lg:text-6xl tracking-tighter font-light uppercase max-w-3xl">
           Your budget. Your need.<br /><span className="text-[#F59E0B]">Our verdict.</span>
@@ -132,7 +132,7 @@ export default function Recommend() {
         {result && (
           <div className="mt-10 fade-up" data-testid="recommend-result">
             <div className="border border-[#F59E0B] bg-[#0A0A0A] p-6 mb-6">
-              <div className="text-[10px] uppercase tracking-[0.3em] text-[#F59E0B] font-mono mb-2">{'/// ai guidance'}/div>
+              <div className="text-[10px] uppercase tracking-[0.3em] text-[#F59E0B] font-mono mb-2">{'/// ai guidance'}</div>
               <p className="text-lg text-slate-200">{result.summary}</p>
             </div>
 

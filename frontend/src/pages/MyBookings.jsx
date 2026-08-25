@@ -31,7 +31,7 @@ export default function MyBookings() {
       <div className="max-w-5xl mx-auto px-6 lg:px-10 py-12">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <div className="text-[10px] uppercase tracking-[0.35em] text-[#F59E0B] font-bold font-mono mb-2">{'/// your dashboard'}/div>
+            <div className="text-[10px] uppercase tracking-[0.35em] text-[#F59E0B] font-bold font-mono mb-2">{'/// your dashboard'}</div>
             <h1 className="font-display text-4xl lg:text-5xl tracking-tighter font-light uppercase">My Bookings</h1>
             <div className="flex items-center gap-2 mt-2 text-sm text-slate-400">
               <Phone size={12} /> +91 {phone}

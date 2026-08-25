@@ -74,7 +74,7 @@ export default function Admin() {
         <div className="w-full max-w-md">
           <div className="flex items-center gap-3 mb-6">
             <Lock size={16} className="text-[#F59E0B]" />
-            <span className="text-[10px] uppercase tracking-[0.35em] text-[#F59E0B] font-bold font-mono">{'/// admin access'}/span>
+            <span className="text-[10px] uppercase tracking-[0.35em] text-[#F59E0B] font-bold font-mono">{'/// admin access'}</span>
           </div>
           <h1 className="font-display text-4xl lg:text-5xl tracking-tighter font-light uppercase">
             Owner <span className="text-[#F59E0B]">console</span>
@@ -116,7 +116,7 @@ export default function Admin() {
           <div>
             <div className="flex items-center gap-3 mb-4">
               <ShieldCheck size={16} className="text-[#F59E0B]" />
-              <span className="text-[10px] uppercase tracking-[0.35em] text-[#F59E0B] font-bold font-mono">{'/// owner admin console'}/span>
+              <span className="text-[10px] uppercase tracking-[0.35em] text-[#F59E0B] font-bold font-mono">{'/// owner admin console'}</span>
             </div>
             <h1 className="font-display text-4xl lg:text-5xl tracking-tighter font-light uppercase">
               Dealer <span className="text-[#F59E0B]">applications</span>

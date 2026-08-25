@@ -7,7 +7,7 @@ export default function About() {
       <div className="max-w-6xl mx-auto px-6 lg:px-10 py-16">
         <div className="flex items-center gap-3 mb-4">
           <Award size={16} className="text-[#F59E0B]" />
-          <span className="text-[10px] uppercase tracking-[0.35em] text-[#F59E0B] font-bold font-mono">{'/// the founder'}/span>
+          <span className="text-[10px] uppercase tracking-[0.35em] text-[#F59E0B] font-bold font-mono">{'/// the founder'}</span>
         </div>
         <h1 className="font-display text-5xl lg:text-7xl tracking-tighter font-light uppercase max-w-4xl leading-[0.95]">
           Built by one Indian<br />who saw the <span className="text-[#F59E0B]">truth.</span>
@@ -26,7 +26,7 @@ export default function About() {
                   <div className="text-[10px] uppercase tracking-[0.4em] text-slate-400 mt-4">Founder · CEO</div>
                 </div>
               </div>
-              <div className="absolute top-4 left-4 text-[10px] uppercase tracking-[0.3em] text-[#F59E0B] font-bold font-mono">{'\n                /// auto-ai india\n              '}/div>
+              <div className="absolute top-4 left-4 text-[10px] uppercase tracking-[0.3em] text-[#F59E0B] font-bold font-mono">{'\n                /// auto-ai india\n              '}</div>
               <div className="absolute bottom-4 right-4 text-[10px] uppercase tracking-[0.25em] text-slate-500 font-mono">
                 EST. 2026
               </div>
@@ -45,7 +45,7 @@ export default function About() {
 
             {/* Contact card */}
             <div className="mt-8 border border-[#262626] bg-[#0A0A0A] p-6 space-y-3">
-              <div className="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-bold mb-3">{'/// contact the founder'}/div>
+              <div className="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-bold mb-3">{'/// contact the founder'}</div>
               <ContactLine icon={<Mail size={14} />} label="Email" value="abhishek@autoai.in" />
               <ContactLine icon={<Phone size={14} />} label="Phone" value="+91 9XXXX XXXXX" muted />
               <ContactLine icon={<MapPin size={14} />} label="Based in" value="India" />
