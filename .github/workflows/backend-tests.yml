@@ -33,9 +33,5 @@ jobs:
       - name: Compile backend Python modules
         run: python -m compileall -q .
 
-      - name: Run backend unit and hardening tests
-        run: |
-          pytest -q \
-            tests/test_llm_provider.py \
-            tests/test_razorpay_gateway.py \
-            tests/test_hardening.py
+      - name: Run complete backend test suite
+        run: pytest -q
