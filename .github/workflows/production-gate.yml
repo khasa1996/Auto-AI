@@ -42,12 +42,8 @@ jobs:
       - name: Compile
         run: python -m compileall -q .
 
-      - name: Unit and hardening tests
-        run: |
-          pytest -q \
-            tests/test_llm_provider.py \
-            tests/test_razorpay_gateway.py \
-            tests/test_hardening.py
+      - name: Complete backend test suite
+        run: pytest -q
 
   frontend:
     runs-on: ubuntu-latest
