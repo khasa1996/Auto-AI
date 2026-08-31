@@ -1,4 +1,4 @@
-import { Suspense, useMemo, useState } from "react";
+import { Component, Suspense, useMemo } from "react";
 import { Canvas } from "@react-three/fiber";
 import {
   Bounds,
@@ -9,31 +9,72 @@ import {
   useGLTF,
 } from "@react-three/drei";
 
+class ViewerErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex h-full min-h-[420px] items-center justify-center bg-[#050505] p-8 text-center">
+          <div className="max-w-md">
+            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-red-300">
+              3D asset unavailable
+            </div>
+            <p className="mt-3 text-sm leading-6 text-white/50">
+              The configured vehicle model could not be loaded. Auto AI India will not silently replace a failed 3D asset with a fake rotation.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 function VehicleModel({ url, paint }) {
   const { scene } = useGLTF(url);
-  const clonedScene = useMemo(() => scene.clone(true), [scene]);
-
-  clonedScene.traverse((object) => {
-    if (!object.isMesh || !object.material) return;
-    const materials = Array.isArray(object.material)
-      ? object.material
-      : [object.material];
-
-    materials.forEach((material) => {
-      if (!material.color) return;
-      const name = String(material.name || object.name || "").toLowerCase();
-      const isPaintSurface =
-        name.includes("paint") ||
-        name.includes("body") ||
-        name.includes("exterior") ||
-        name.includes("shell");
-
-      if (isPaintSurface) {
-        material.color.set(paint);
-        material.needsUpdate = true;
-      }
+  const clonedScene = useMemo(() => {
+    const clone = scene.clone(true);
+    clone.traverse((object) => {
+      if (!object.isMesh || !object.material) return;
+      object.material = Array.isArray(object.material)
+        ? object.material.map((material) => material.clone())
+        : object.material.clone();
     });
-  });
+    return clone;
+  }, [scene]);
+
+  useMemo(() => {
+    clonedScene.traverse((object) => {
+      if (!object.isMesh || !object.material) return;
+      const materials = Array.isArray(object.material)
+        ? object.material
+        : [object.material];
+
+      materials.forEach((material) => {
+        if (!material.color) return;
+        const name = String(material.name || object.name || "").toLowerCase();
+        const isPaintSurface =
+          name.includes("paint") ||
+          name.includes("body") ||
+          name.includes("exterior") ||
+          name.includes("shell");
+
+        if (isPaintSurface) {
+          material.color.set(paint);
+          material.needsUpdate = true;
+        }
+      });
+    });
+  }, [clonedScene, paint]);
 
   return <primitive object={clonedScene} />;
 }
@@ -48,26 +89,7 @@ function LoadingState() {
   );
 }
 
-function ViewerError({ message }) {
-  return (
-    <Html center>
-      <div className="max-w-xs rounded-2xl border border-red-400/20 bg-black/90 p-5 text-center shadow-2xl backdrop-blur-xl">
-        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-red-300">
-          3D asset unavailable
-        </div>
-        <p className="mt-2 text-xs leading-5 text-white/60">{message}</p>
-      </div>
-    </Html>
-  );
-}
-
 function Scene({ modelUrl, paint }) {
-  const [failed, setFailed] = useState(false);
-
-  if (failed) {
-    return <ViewerError message="The vehicle does not have a valid GLB/GLTF asset available yet." />;
-  }
-
   return (
     <>
       <color attach="background" args={["#050505"]} />
@@ -77,10 +99,7 @@ function Scene({ modelUrl, paint }) {
       <Environment preset="studio" />
       <Bounds fit clip observe margin={1.25}>
         <Suspense fallback={<LoadingState />}>
-          <group
-            position={[0, -0.7, 0]}
-            onError={() => setFailed(true)}
-          >
+          <group position={[0, -0.7, 0]}>
             <VehicleModel url={modelUrl} paint={paint} />
           </group>
         </Suspense>
@@ -123,13 +142,15 @@ export default function Premium3DViewer({ modelUrl, paint = "#ffffff" }) {
   }
 
   return (
-    <Canvas
-      shadows
-      dpr={[1, 1.75]}
-      camera={{ position: [4.6, 1.8, 5.8], fov: 35 }}
-      gl={{ antialias: true, powerPreference: "high-performance" }}
-    >
-      <Scene modelUrl={modelUrl} paint={paint} />
-    </Canvas>
+    <ViewerErrorBoundary>
+      <Canvas
+        shadows
+        dpr={[1, 1.75]}
+        camera={{ position: [4.6, 1.8, 5.8], fov: 35 }}
+        gl={{ antialias: true, powerPreference: "high-performance" }}
+      >
+        <Scene modelUrl={modelUrl} paint={paint} />
+      </Canvas>
+    </ViewerErrorBoundary>
   );
 }
