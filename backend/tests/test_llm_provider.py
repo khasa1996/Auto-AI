@@ -13,8 +13,8 @@ def test_default_model_is_anthropic():
         ("claude", ("anthropic", "claude-sonnet-4-6")),
         ("claude-opus", ("anthropic", "claude-opus-4-7")),
         ("claude-haiku", ("anthropic", "claude-haiku-4-5-20251001")),
-        ("gpt-flagship", ("openai", "gpt-5.4")),
-        ("gpt-mini", ("openai", "gpt-5.4-mini")),
+        ("gpt-flagship", ("openai", "gpt-5.6")),
+        ("gpt-mini", ("openai", "gpt-5.6-luna")),
         ("gemini-pro", ("gemini", "gemini-3.1-pro-preview")),
         ("gemini-flash", ("gemini", "gemini-3.5-flash")),
     ],
@@ -41,7 +41,7 @@ async def test_missing_anthropic_key_fails_closed(monkeypatch):
 @pytest.mark.asyncio
 async def test_missing_openai_key_fails_closed(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    chat = LlmChat(None, "test-session", "test system").with_model("openai", "gpt-5.4")
+    chat = LlmChat(None, "test-session", "test system").with_model("openai", "gpt-5.6")
     with pytest.raises(LLMProviderError, match="OPENAI_API_KEY is not configured"):
         await chat.send_message(UserMessage("hello"))
 
@@ -67,3 +67,8 @@ async def test_unconfigured_provider_fails_closed():
 def test_with_model_is_chainable():
     chat = LlmChat(None, "test-session", "test system")
     assert chat.with_model("anthropic", "claude-sonnet-4-6") is chat
+
+
+def test_legacy_openai_model_id_is_normalized():
+    chat = LlmChat(None, "test-session", "test system").with_model("openai", "gpt-5.4")
+    assert chat.model == "gpt-5.6"
