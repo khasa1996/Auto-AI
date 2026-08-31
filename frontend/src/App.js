@@ -2,7 +2,7 @@ import "@/App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
-import ChatDrawer from "./components/ChatDrawer";
+import ChatDrawer from "./components/ChatDrawerFixed";
 import Home from "./pages/Home";
 import Compare from "./pages/Compare";
 import Recommend from "./pages/Recommend";
