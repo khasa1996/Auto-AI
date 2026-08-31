@@ -16,6 +16,13 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    env:
+      APP_ENV: test
+      SECRET_KEY: ci-test-secret
+      MONGO_URL: mongodb://localhost:27017
+      DB_NAME: autoai_ci
+      ADMIN_PIN: ci-admin-pin
+      OTP_DEMO_MODE: "true"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
