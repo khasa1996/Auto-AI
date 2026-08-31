@@ -1,0 +1,1 @@
+Production health endpoint should be registered on the FastAPI application and return HTTP 200 with status=ok and service=auto-ai-api.
