@@ -1,4 +1,4 @@
-import { Component, Suspense, useMemo } from "react";
+import { Component, Suspense, useEffect, useMemo } from "react";
 import { Canvas } from "@react-three/fiber";
 import {
   Bounds,
@@ -52,7 +52,7 @@ function VehicleModel({ url, paint }) {
     return clone;
   }, [scene]);
 
-  useMemo(() => {
+  useEffect(() => {
     clonedScene.traverse((object) => {
       if (!object.isMesh || !object.material) return;
       const materials = Array.isArray(object.material)
