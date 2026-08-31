@@ -1,0 +1,1 @@
+Health endpoint implementation is tracked separately; this note is temporary documentation.
