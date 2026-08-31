@@ -36,10 +36,18 @@ MODEL_ALIASES = {
     "claude": ("anthropic", "claude-sonnet-4-6"),
     "claude-opus": ("anthropic", "claude-opus-4-7"),
     "claude-haiku": ("anthropic", "claude-haiku-4-5-20251001"),
-    "gpt-flagship": ("openai", "gpt-5.4"),
-    "gpt-mini": ("openai", "gpt-5.4-mini"),
+    "gpt-flagship": ("openai", "gpt-5.6"),
+    "gpt-mini": ("openai", "gpt-5.6-luna"),
     "gemini-pro": ("gemini", "gemini-3.1-pro-preview"),
     "gemini-flash": ("gemini", "gemini-3.5-flash"),
+}
+
+# Keep already-deployed server registries compatible while they transition to
+# the current OpenAI model IDs. The server passes explicit model IDs to this
+# adapter, so normalization belongs at this provider boundary.
+_OPENAI_MODEL_COMPATIBILITY = {
+    "gpt-5.4": "gpt-5.6",
+    "gpt-5.4-mini": "gpt-5.6-luna",
 }
 
 
@@ -74,6 +82,8 @@ class LlmChat:
         self.model: Optional[str] = None
 
     def with_model(self, provider: str, model: str) -> "LlmChat":
+        if provider == "openai":
+            model = _OPENAI_MODEL_COMPATIBILITY.get(model, model)
         self.provider = provider
         self.model = model
         return self
