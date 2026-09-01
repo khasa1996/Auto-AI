@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest';
 import { normalize3DAsset } from './threeDAsset';
 
 describe('normalize3DAsset', () => {
@@ -18,6 +17,13 @@ describe('normalize3DAsset', () => {
     expect(normalize3DAsset({ model3dUrl: 'https://cdn.example.com/car.glb' })).toMatchObject({
       enabled: true,
       modelUrl: 'https://cdn.example.com/car.glb',
+    });
+  });
+
+  it('rejects an ordinary image URL as a 3D model', () => {
+    expect(normalize3DAsset({ model3dUrl: 'https://cdn.example.com/car.jpg' })).toMatchObject({
+      enabled: false,
+      modelUrl: null,
     });
   });
 });
