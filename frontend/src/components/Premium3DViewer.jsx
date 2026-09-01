@@ -19,6 +19,10 @@ class ViewerErrorBoundary extends Component {
     return { hasError: true };
   }
 
+  componentDidCatch(error) {
+    if (typeof console !== "undefined") console.error("Premium 3D viewer error", error);
+  }
+
   render() {
     if (this.state.hasError) {
       return (
@@ -55,10 +59,7 @@ function VehicleModel({ url, paint }) {
   useEffect(() => {
     clonedScene.traverse((object) => {
       if (!object.isMesh || !object.material) return;
-      const materials = Array.isArray(object.material)
-        ? object.material
-        : [object.material];
-
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
       materials.forEach((material) => {
         if (!material.color) return;
         const name = String(material.name || object.name || "").toLowerCase();
@@ -67,7 +68,6 @@ function VehicleModel({ url, paint }) {
           name.includes("body") ||
           name.includes("exterior") ||
           name.includes("shell");
-
         if (isPaintSurface) {
           material.color.set(paint);
           material.needsUpdate = true;
@@ -89,7 +89,7 @@ function LoadingState() {
   );
 }
 
-function Scene({ modelUrl, paint }) {
+function Scene({ modelUrl, paint, autoRotate }) {
   return (
     <>
       <color attach="background" args={["#050505"]} />
@@ -104,27 +104,25 @@ function Scene({ modelUrl, paint }) {
           </group>
         </Suspense>
       </Bounds>
-      <ContactShadows
-        position={[0, -1.05, 0]}
-        opacity={0.55}
-        scale={12}
-        blur={2.8}
-        far={4}
-      />
+      <ContactShadows position={[0, -1.05, 0]} opacity={0.55} scale={12} blur={2.8} far={4} />
       <OrbitControls
         makeDefault
         enablePan={false}
+        autoRotate={autoRotate}
+        autoRotateSpeed={1.1}
         minDistance={2.2}
         maxDistance={8}
         minPolarAngle={Math.PI / 4}
         maxPolarAngle={Math.PI / 2.05}
         rotateSpeed={0.7}
+        enableDamping
+        dampingFactor={0.08}
       />
     </>
   );
 }
 
-export default function Premium3DViewer({ modelUrl, paint = "#ffffff" }) {
+export default function Premium3DViewer({ modelUrl, paint = "#ffffff", autoRotate = false }) {
   if (!modelUrl) {
     return (
       <div className="flex h-full min-h-[420px] items-center justify-center bg-[#050505] p-8 text-center">
@@ -149,7 +147,7 @@ export default function Premium3DViewer({ modelUrl, paint = "#ffffff" }) {
         camera={{ position: [4.6, 1.8, 5.8], fov: 35 }}
         gl={{ antialias: true, powerPreference: "high-performance" }}
       >
-        <Scene modelUrl={modelUrl} paint={paint} />
+        <Scene modelUrl={modelUrl} paint={paint} autoRotate={autoRotate} />
       </Canvas>
     </ViewerErrorBoundary>
   );
