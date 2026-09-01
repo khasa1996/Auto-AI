@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Car, Palette, Rotate3D, Sparkles } from "lucide-react";
 import { api } from "../lib/api";
 import Premium3DViewer from "../components/Premium3DViewer";
+import { normalize3DAsset } from "../lib/threeDAsset";
 
 const PAINTS = [
   { name: "Obsidian", value: "#0A0A0A" },
@@ -12,20 +13,6 @@ const PAINTS = [
   { name: "British Racing", value: "#14532D" },
   { name: "Sangria Red", value: "#991B1B" },
 ];
-
-function resolveModelUrl(car) {
-  if (!car || typeof car !== "object") return null;
-  const candidates = [
-    car.model3dUrl,
-    car.model3DUrl,
-    car.model_3d_url,
-    car.glbUrl,
-    car.glb_url,
-    car.gltfUrl,
-    car.gltf_url,
-  ];
-  return candidates.find((value) => typeof value === "string" && value.trim()) || null;
-}
 
 export default function PremiumShowroom3D() {
   const { carId } = useParams();
@@ -62,7 +49,8 @@ export default function PremiumShowroom3D() {
     };
   }, [carId]);
 
-  const modelUrl = useMemo(() => resolveModelUrl(car), [car]);
+  const asset = useMemo(() => normalize3DAsset(car), [car]);
+  const modelUrl = asset.enabled ? asset.modelUrl : null;
 
   if (loading) {
     return (
@@ -92,7 +80,7 @@ export default function PremiumShowroom3D() {
     <main className="min-h-screen bg-[#050505] pt-20 text-white">
       <section className="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 lg:px-10">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
-          <Link to={`/cars`} className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/50 hover:text-white">
+          <Link to="/cars" className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/50 hover:text-white">
             <ArrowLeft size={14} /> Exit showroom
           </Link>
           <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-400/5 px-4 py-2 text-[10px] uppercase tracking-[0.22em] text-amber-300">
