@@ -18,6 +18,7 @@ from datetime import datetime, timedelta, timezone
 
 from llm_provider import LlmChat, UserMessage
 from ai_utils import extract_json
+from configurator_routes import make_configurator_router
 from razorpay_gateway import (
     RAZORPAY_KEY_ID,
     RAZORPAY_KEY_SECRET,
@@ -221,6 +222,28 @@ async def seed_db():
     await db.processed_payment_events.create_index("expires_at", expireAfterSeconds=0)
     await db.chat_sessions.create_index([("session_id", 1), ("phone", 1)], unique=True)
     await db.chat_messages.create_index([("session_id", 1), ("owner_phone", 1), ("ts", 1)])
+
+    # ── Phase 2: Vehicle data + configurator indexes ──────────────────────
+    await db.brands.create_index("brand_id", unique=True)
+    await db.brands.create_index("name")
+    await db.models.create_index("model_id", unique=True)
+    await db.models.create_index("brand_id")
+    await db.variants.create_index("variant_id", unique=True)
+    await db.variants.create_index([("brand_id", 1), ("model_id", 1)])
+    await db.variants.create_index("legacy_car_id", sparse=True)
+    await db.variant_pricing.create_index("variant_id", unique=True)
+    await db.variant_colors.create_index([("variant_id", 1), ("color_id", 1)], unique=True)
+    await db.variant_wheels.create_index([("variant_id", 1), ("wheel_id", 1)], unique=True)
+    await db.variant_interiors.create_index([("variant_id", 1), ("interior_id", 1)], unique=True)
+    await db.configurator_assets.create_index("asset_id", unique=True)
+    await db.configurator_assets.create_index([("variant_id", 1), ("published", 1)])
+    await db.configurator_options.create_index("option_id", unique=True)
+    await db.configurator_options.create_index([("variant_id", 1), ("option_type", 1)])
+    await db.configurator_rules.create_index("rule_id", unique=True)
+    await db.configurator_rules.create_index([("variant_id", 1), ("active", 1)])
+    await db.configurations.create_index("config_id", unique=True)
+    await db.configurations.create_index("share_token", unique=True, sparse=True)
+    await db.configurations.create_index("owner_phone", sparse=True)
 
     if not security.SECRET_KEY_CONFIGURED:
         logger.warning("SECRET_KEY is not configured — sessions and OTPs will be invalidated on restart.")
@@ -884,3 +907,5 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(api_router)
+# Phase 2: vehicle data + configurator routes (additive, does not replace /api/)
+app.include_router(make_configurator_router(db))
