@@ -18,6 +18,7 @@ import Admin from "./pages/Admin";
 import About from "./pages/About";
 import Login from "./pages/Login";
 import MyBookings from "./pages/MyBookings";
+import CarConfigurator from "./pages/CarConfigurator";
 import InstallPWA from "./components/InstallPWA";
 import { Toaster } from "./components/ui/sonner";
 import { I18nProvider } from "./lib/i18n";
@@ -47,6 +48,7 @@ function App() {
               <Route path="/about" element={<About />} />
               <Route path="/login" element={<Login />} />
               <Route path="/my-bookings" element={<MyBookings />} />
+              <Route path="/configurator/:variantId" element={<CarConfigurator />} />
             </Routes>
           </main>
           <Footer />
