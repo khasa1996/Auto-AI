@@ -17,19 +17,19 @@
  * Status: FOUNDATION — renders real GLB when URL provided.
  */
 
-import { useRef } from 'react';
-import { Canvas } from '@react-three/fiber';
+import { useRef } from "react";
+import { Canvas } from "@react-three/fiber";
 import {
   Bounds,
   ContactShadows,
   Environment,
-} from '@react-three/drei';
+} from "@react-three/drei";
 
-import VehicleModel from '../three/VehicleModel';
-import { AssetSuspense, AssetUnavailable } from '../three/AssetLoader';
-import { useLightingController } from '../three/LightingController';
-import { ConfiguratorControls, useCameraPreset } from '../three/CameraPresets';
-import { useConfiguratorStore } from '../state/configuratorStore';
+import VehicleModel from "../../three/VehicleModel";
+import { AssetSuspense, AssetUnavailable } from "../../three/AssetLoader";
+import { useLightingController } from "../../three/LightingController";
+import { ConfiguratorControls, useCameraPreset } from "../../three/CameraPresets";
+import { useConfiguratorStore } from "../../state/configuratorStore";
 
 // Inner scene — rendered inside Canvas context
 function ConfiguratorScene({ modelUrl, paintColorHex, paintMaterialNames, sceneRef }) {
@@ -45,9 +45,9 @@ function ConfiguratorScene({ modelUrl, paintColorHex, paintMaterialNames, sceneR
 
   return (
     <>
-      <color attach="background" args={['#060606']} />
+      <color attach="background" args={["#060606"]} />
       <ambientLight intensity={0.6} />
-      <directionalLight position={[5, 8, 5]}  intensity={2.0} castShadow />
+      <directionalLight position={[5, 8, 5]} intensity={2.0} castShadow />
       <directionalLight position={[-4, 4, -4]} intensity={0.8} />
       <Environment preset="studio" />
 
@@ -94,16 +94,16 @@ export default function ConfiguratorViewer({ style }) {
       <div
         style={{
           minHeight: 480,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: '#080808',
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#080808",
           borderRadius: 20,
-          color: 'rgba(255,255,255,0.3)',
-          fontFamily: 'monospace',
+          color: "rgba(255,255,255,0.3)",
+          fontFamily: "monospace",
           fontSize: 12,
-          letterSpacing: '0.15em',
-          textTransform: 'uppercase',
+          letterSpacing: "0.15em",
+          textTransform: "uppercase",
           ...style,
         }}
       >
@@ -127,12 +127,12 @@ export default function ConfiguratorViewer({ style }) {
   const paintMaterialNames = asset.paintMaterialNames || [];
 
   return (
-    <div style={{ width: '100%', minHeight: 480, borderRadius: 20, overflow: 'hidden', ...style }}>
+    <div style={{ width: "100%", minHeight: 480, borderRadius: 20, overflow: "hidden", ...style }}>
       <Canvas
         shadows
         dpr={[1, 1.75]}
         camera={{ position: [4.5, 1.6, 5.5], fov: 38 }}
-        gl={{ antialias: true, powerPreference: 'high-performance' }}
+        gl={{ antialias: true, powerPreference: "high-performance" }}
       >
         <ConfiguratorScene
           modelUrl={asset.url}
