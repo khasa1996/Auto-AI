@@ -5,9 +5,9 @@
  * This layer never invents data.
  */
 
-import { api } from './api';
+import { api } from "../lib/api";
 
-const V1 = '/v1';
+const V1 = "/v1";
 
 export const configuratorApi = {
   // Brands
