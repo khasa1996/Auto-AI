@@ -160,10 +160,6 @@ export default function CarConfigurator() {
       ? formatINR(variant.price_on_road)
       : null;
 
-  const variantName = variant
-    ? `${variant.brand || ''} ${variant.model || variant.name || ''}`.trim()
-    : variantId;
-
   return (
     <main className="min-h-screen bg-[#050505] pt-20 text-white">
       <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:px-10">
@@ -289,15 +285,15 @@ function InteractionPanel() {
   const { doors, hoodOpen, bootOpen, lighting } = store.interaction;
 
   const controls = [
-    { label: 'Hood',      active: hoodOpen,             action: () => store.toggleHood() },
-    { label: 'Boot',      active: bootOpen,             action: () => store.toggleBoot() },
-    { label: 'Headlights',active: lighting.headlights,  action: () => store.toggleLight('headlights') },
-    { label: 'DRL',       active: lighting.drl,         action: () => store.toggleLight('drl') },
-    { label: 'Hazard',    active: lighting.hazard,      action: () => store.toggleHazard() },
-    { label: 'Door FL',   active: doors.frontLeft,      action: () => store.toggleDoor('frontLeft') },
-    { label: 'Door FR',   active: doors.frontRight,     action: () => store.toggleDoor('frontRight') },
-    { label: 'Door RL',   active: doors.rearLeft,       action: () => store.toggleDoor('rearLeft') },
-    { label: 'Door RR',   active: doors.rearRight,      action: () => store.toggleDoor('rearRight') },
+    { label: 'Hood',       active: hoodOpen,            action: () => store.toggleHood() },
+    { label: 'Boot',       active: bootOpen,            action: () => store.toggleBoot() },
+    { label: 'Headlights', active: lighting.headlights, action: () => store.toggleLight('headlights') },
+    { label: 'DRL',        active: lighting.drl,        action: () => store.toggleLight('drl') },
+    { label: 'Hazard',     active: lighting.hazard,     action: () => store.toggleHazard() },
+    { label: 'Door FL',    active: doors.frontLeft,     action: () => store.toggleDoor('frontLeft') },
+    { label: 'Door FR',    active: doors.frontRight,    action: () => store.toggleDoor('frontRight') },
+    { label: 'Door RL',    active: doors.rearLeft,      action: () => store.toggleDoor('rearLeft') },
+    { label: 'Door RR',    active: doors.rearRight,     action: () => store.toggleDoor('rearRight') },
   ];
 
   return (
