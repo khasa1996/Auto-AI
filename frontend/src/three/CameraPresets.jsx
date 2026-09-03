@@ -8,23 +8,23 @@
  * Status: IMPLEMENTED
  */
 
-import { useEffect, useRef } from 'react';
-import { OrbitControls } from '@react-three/drei';
-import { useThree } from '@react-three/fiber';
-import * as THREE from 'three';
+import { useEffect, useRef } from "react";
+import { OrbitControls } from "@react-three/drei";
+import { useThree } from "@react-three/fiber";
+import * as THREE from "three";
 
 /** Preset camera positions. All coordinates are world-space. */
 export const CAMERA_PRESETS = {
-  exterior:   { position: [4.5, 1.6, 5.5],  target: [0, 0.3, 0]  },
-  front:      { position: [0,   1.2, 5.5],  target: [0, 0.5, 0]  },
-  rear:       { position: [0,   1.2, -5.5], target: [0, 0.5, 0]  },
-  left:       { position: [-5.5, 1.2, 0],   target: [0, 0.5, 0]  },
-  right:      { position: [5.5,  1.2, 0],   target: [0, 0.5, 0]  },
-  top:        { position: [0,   6.0, 0.1],  target: [0, 0,   0]  },
-  interior:   { position: [0,   1.1, 0.8],  target: [0, 1.0, 0]  },
-  cockpit:    { position: [-0.4, 1.2, 0.5], target: [0, 1.1, -2] },
-  boot:       { position: [0,   1.2, -4.5], target: [0, 0.6, -2] },
-  wheel:      { position: [2.2, 0.4, 1.8],  target: [1.5, 0.3, 1.5] },
+  exterior: { position: [4.5, 1.6, 5.5], target: [0, 0.3, 0] },
+  front: { position: [0, 1.2, 5.5], target: [0, 0.5, 0] },
+  rear: { position: [0, 1.2, -5.5], target: [0, 0.5, 0] },
+  left: { position: [-5.5, 1.2, 0], target: [0, 0.5, 0] },
+  right: { position: [5.5, 1.2, 0], target: [0, 0.5, 0] },
+  top: { position: [0, 6.0, 0.1], target: [0, 0, 0] },
+  interior: { position: [0, 1.1, 0.8], target: [0, 1.0, 0] },
+  cockpit: { position: [-0.4, 1.2, 0.5], target: [0, 1.1, -2] },
+  boot: { position: [0, 1.2, -4.5], target: [0, 0.6, -2] },
+  wheel: { position: [2.2, 0.4, 1.8], target: [1.5, 0.3, 1.5] },
 };
 
 /**
@@ -37,7 +37,7 @@ export function useCameraPreset(preset, controlsRef) {
   const { camera } = useThree();
 
   useEffect(() => {
-    if (!preset || !CAMERA_PRESETS[preset]) return;
+    if (!preset || !CAMERA_PRESETS[preset]) return undefined;
     const { position, target } = CAMERA_PRESETS[preset];
 
     // Smoothly lerp camera position
@@ -48,7 +48,7 @@ export function useCameraPreset(preset, controlsRef) {
     let frame = 0;
     const FRAMES = 30;
     const id = setInterval(() => {
-      frame++;
+      frame += 1;
       const t = Math.min(frame / FRAMES, 1);
       const ease = 1 - Math.pow(1 - t, 3); // cubic ease-out
       camera.position.lerpVectors(startPos, targetPos, ease);
@@ -60,7 +60,7 @@ export function useCameraPreset(preset, controlsRef) {
     }, 16);
 
     return () => clearInterval(id);
-  }, [preset]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [camera, controlsRef, preset]);
 }
 
 /**
@@ -71,11 +71,13 @@ export function useCameraPreset(preset, controlsRef) {
  * @param {React.RefObject}  controlsRef
  */
 export function ConfiguratorControls({ autoRotate, onInteract, controlsRef }) {
-  const internalRef = controlsRef || useRef();
+  // Hooks must always execute in the same order on every render.
+  const internalRef = useRef();
+  const resolvedRef = controlsRef || internalRef;
 
   return (
     <OrbitControls
-      ref={internalRef}
+      ref={resolvedRef}
       makeDefault
       enablePan={false}
       autoRotate={autoRotate}
