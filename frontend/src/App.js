@@ -11,6 +11,7 @@ import EMI from "./pages/EMI";
 import News from "./pages/News";
 import BookCar from "./pages/BookCar";
 import Showroom from "./pages/Showroom";
+import CarConfigurator from "./pages/CarConfigurator";
 import Premium from "./pages/Premium";
 import Dealer from "./pages/Dealer";
 import DealerApply from "./pages/DealerApply";
@@ -40,6 +41,7 @@ function App() {
               <Route path="/news" element={<News />} />
               <Route path="/book/:carId" element={<BookCar />} />
               <Route path="/showroom/:carId" element={<Showroom />} />
+              <Route path="/configurator/:variantId" element={<CarConfigurator />} />
               <Route path="/premium" element={<Premium />} />
               <Route path="/dealer" element={<Dealer />} />
               <Route path="/dealers/apply" element={<DealerApply />} />
