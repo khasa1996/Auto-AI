@@ -2,7 +2,7 @@ name: Backend Tests
 
 on:
   push:
-    branches: [main, 'codex/**', 'fix/**']
+    branches: [main, 'codex/**', 'fix/**', 'phase-2/**']
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -38,4 +38,5 @@ jobs:
           pytest -q \
             tests/test_llm_provider.py \
             tests/test_razorpay_gateway.py \
-            tests/test_hardening.py
+            tests/test_hardening.py \
+            tests/test_configurator_security.py
