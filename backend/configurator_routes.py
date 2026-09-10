@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from configurator_schemas import (
@@ -23,13 +23,14 @@ from pricing_engine import calculate_configuration_price, validate_asset_url
 from rules_engine import validate_configuration, get_available_options_for_variant
 
 
-async def _resolve_optional_user_phone(authorization: Optional[str] = None) -> Optional[str]:
+async def _resolve_optional_user_phone(
+    authorization: Optional[str] = Header(None),
+) -> Optional[str]:
     """Resolve the application's canonical optional auth dependency lazily.
 
-    The configurator router is imported by server.py, so importing the canonical
-    dependency at request-registration time would create an import cycle. The
-    lazy resolution keeps one authentication implementation without duplicating
-    token/session logic in this module.
+    server.py imports this router, so importing the canonical dependency at
+    module-import time would create a cycle. Runtime resolution keeps the
+    existing token/session validation in one place.
     """
     from server import optional_user_phone
     return await optional_user_phone(authorization)
@@ -242,17 +243,11 @@ def make_configurator_router(
         auth_phone: Optional[str] = Depends(auth_dependency),
     ):
         """Load a private configuration by owner or a public share token."""
-        shared_doc = await db.configurations.find_one(
-            {"share_token": config_id},
-            {"_id": 0},
-        )
+        shared_doc = await db.configurations.find_one({"share_token": config_id}, {"_id": 0})
         if shared_doc:
             return _public_configuration_response(shared_doc)
 
-        doc = await db.configurations.find_one(
-            {"config_id": config_id},
-            {"_id": 0},
-        )
+        doc = await db.configurations.find_one({"config_id": config_id}, {"_id": 0})
         if not doc:
             raise HTTPException(status_code=404, detail="Configuration not found")
         if not auth_phone:
