@@ -1,3 +1,7 @@
+import inspect
+
+from fastapi.params import Header as HeaderParam
+
 from configurator_asset_admin_routes import AssetManifestValidationRequest, _require_admin
 from configurator_schemas import AssetProvenance, ConfiguratorAssetCreate
 
@@ -37,5 +41,5 @@ def test_publishable_asset_requires_review_and_validation():
 
 
 def test_admin_dependency_is_header_bound():
-    authorization_header = _require_admin.__annotations__["authorization"]
-    assert authorization_header is not None
+    parameter = inspect.signature(_require_admin).parameters["authorization"]
+    assert isinstance(parameter.default, HeaderParam)
