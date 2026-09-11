@@ -111,5 +111,5 @@
 - [ ] Run frontend tests, lint, and production build.
 - [ ] Run production smoke tests and exact-head CI.
 - [ ] Verify Vercel preview and Render production deployment after merge.
-- [ ] Review branch for stale temporary workflows, Emergent references, Supabase dependency, invented vehicle data, or unverified assets.
+- [ ] Review branch for stale temporary workflows, retired vendor references, inactive integration dependencies, invented vehicle data, or unverified assets.
 - [ ] Complete final code review before release.
