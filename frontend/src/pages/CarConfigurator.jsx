@@ -16,6 +16,16 @@ import { useConfiguratorStore } from '../state/configuratorStore';
 import { configuratorApi } from '../services/configuratorApi';
 import { formatINR } from '../lib/api';
 
+function getErrorMessage(error, fallback) {
+  const detail = error?.response?.data?.detail;
+  if (typeof detail === 'string' && detail.trim()) return detail;
+  if (detail && typeof detail.message === 'string' && detail.message.trim()) return detail.message;
+  if (detail && Array.isArray(detail.errors) && detail.errors.length > 0) {
+    return detail.errors.filter((item) => typeof item === 'string').join(' · ');
+  }
+  return error?.message || fallback;
+}
+
 export default function CarConfigurator() {
   const { variantId } = useParams();
   const [loading, setLoading] = useState(true);
@@ -70,9 +80,7 @@ export default function CarConfigurator() {
           if (!cancelled) setOptions(null);
         }
       } catch (err) {
-        if (!cancelled) {
-          setError(err?.response?.data?.detail || err.message || 'Failed to load vehicle');
-        }
+        if (!cancelled) setError(getErrorMessage(err, 'Failed to load vehicle'));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -104,7 +112,7 @@ export default function CarConfigurator() {
       useConfiguratorStore.getState().setPriceResult(res.data);
     } catch (err) {
       useConfiguratorStore.getState().setPriceError(
-        err?.response?.data?.detail || 'Price calculation failed',
+        getErrorMessage(err, 'Price calculation failed'),
       );
     }
   }, []);
