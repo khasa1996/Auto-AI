@@ -36,13 +36,14 @@ function ConfiguratorScene({ modelUrl, paintColorHex, paintMaterialNames, wheelM
 }
 
 export default function ConfiguratorViewer({ style, options }) {
+  const sceneRef = useRef();
+  const canvasRef = useRef(null);
   const [cinematic, setCinematic] = useState(false);
   const [captureState, setCaptureState] = useState(null);
   const asset = useConfiguratorStore((state) => state.asset);
   const purchasable = useConfiguratorStore((state) => state.purchasable);
   const interaction = useConfiguratorStore((state) => state.interaction);
   const isInitialized = useConfiguratorStore((state) => state.isInitialized);
-  const canvasRef = useRef(null);
   if (!isInitialized) return <div style={{ minHeight: 480, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#080808', borderRadius: 20, color: 'rgba(255,255,255,0.3)', fontFamily: 'monospace', fontSize: 12, letterSpacing: '0.15em', textTransform: 'uppercase', ...style }}>Select a vehicle to open the configurator</div>;
   if (!asset.available || !asset.url) return <AssetUnavailable status={asset.configuratorStatus} variantName={purchasable.variantId} />;
   const selectedPaint = options?.colors?.find((color) => color.color_id === purchasable.paintId);
@@ -73,7 +74,7 @@ export default function ConfiguratorViewer({ style, options }) {
 
   return <div ref={canvasRef} className={`auto-ai-configurator-canvas relative w-full overflow-hidden rounded-[20px] transition-all duration-700 ${cinematic ? 'min-h-[680px] ring-1 ring-amber-400/30' : 'min-h-[480px]'}`} style={style}>
     <Canvas shadows dpr={[1, 1.75]} camera={{ position: [4.5, 1.6, 5.5], fov: 38 }} gl={{ antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: true }}>
-      <ConfiguratorScene modelUrl={asset.url} paintColorHex={selectedPaint?.primary_hex || null} paintMaterialNames={asset.paintMaterialNames || []} wheelMeshNames={asset.wheelMeshNames || {}} optionMeshNames={asset.optionMeshNames || {}} purchasable={purchasable} interaction={interaction} sceneRef={null} />
+      <ConfiguratorScene modelUrl={asset.url} paintColorHex={selectedPaint?.primary_hex || null} paintMaterialNames={asset.paintMaterialNames || []} wheelMeshNames={asset.wheelMeshNames || {}} optionMeshNames={asset.optionMeshNames || {}} purchasable={purchasable} interaction={interaction} sceneRef={sceneRef} />
     </Canvas>
     <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between p-4">
       <div className="pointer-events-auto rounded-full border border-white/10 bg-black/45 px-3 py-1.5 text-[9px] uppercase tracking-[0.2em] text-white/50 backdrop-blur">Verified asset only</div>
