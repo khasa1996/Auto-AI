@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from typing import Awaitable, Callable, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -18,9 +18,9 @@ from configurator_schemas import (
     SavedConfigurationCreate,
     ValidationResult,
 )
-from vehicle_schemas import BrandSummary, ModelSummary, VariantDetail, VariantSummary, ConfiguratorStatus
+from vehicle_schemas import BrandSummary, ConfiguratorStatus, ModelSummary, VariantDetail, VariantSummary
 from pricing_engine import calculate_configuration_price, validate_asset_url
-from rules_engine import validate_configuration, get_available_options_for_variant
+from rules_engine import get_available_options_for_variant, validate_configuration
 
 
 async def _resolve_optional_user_phone(
@@ -33,6 +33,7 @@ async def _resolve_optional_user_phone(
     existing token/session validation in one place.
     """
     from server import optional_user_phone
+
     return await optional_user_phone(authorization)
 
 
@@ -42,7 +43,7 @@ def _utcnow_iso() -> str:
 
 def make_configurator_router(
     db: AsyncIOMotorDatabase,
-    optional_user_phone: Optional[Callable[..., Any]] = None,
+    optional_user_phone: Optional[Callable[..., Awaitable[Optional[str]]]] = None,
 ) -> APIRouter:
     """Build the versioned configurator router with database/auth dependencies."""
     auth_dependency = optional_user_phone or _resolve_optional_user_phone
@@ -50,7 +51,7 @@ def make_configurator_router(
 
     @router.get("/brands", response_model=List[BrandSummary])
     async def list_brands(active_only: bool = Query(True)):
-        query: Dict[str, Any] = {"active_in_india": True} if active_only else {}
+        query: Dict[str, object] = {"active_in_india": True} if active_only else {}
         return await db.brands.find(query, {"_id": 0}).sort("name", 1).to_list(200)
 
     @router.get("/brands/{brand_id}")
@@ -67,7 +68,7 @@ def make_configurator_router(
         segment: Optional[str] = Query(None, max_length=40),
         include_discontinued: bool = Query(False),
     ):
-        query: Dict[str, Any] = {}
+        query: Dict[str, object] = {}
         if brand_id:
             query["brand_id"] = brand_id
         if body_type:
@@ -92,7 +93,7 @@ def make_configurator_router(
         fuel: Optional[str] = Query(None, max_length=40),
         active_only: bool = Query(True),
     ):
-        query: Dict[str, Any] = {}
+        query: Dict[str, object] = {}
         if model_id:
             query["model_id"] = model_id
         if brand_id:
@@ -215,7 +216,10 @@ def make_configurator_router(
         request: SavedConfigurationCreate,
         auth_phone: Optional[str] = Depends(auth_dependency),
     ):
-        """Persist a configuration and bind ownership to the authenticated user."""
+        """Persist a configuration and require authenticated ownership."""
+        if not auth_phone:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
         config_id = str(uuid.uuid4())
         share_token = uuid.uuid4().hex
         now = _utcnow_iso()
@@ -277,7 +281,7 @@ def make_configurator_router(
     return router
 
 
-def _public_configuration_response(doc: Dict[str, Any]) -> Dict[str, Any]:
+def _public_configuration_response(doc: Dict[str, object]) -> Dict[str, object]:
     """Return only fields intentionally exposed through a share link."""
     public_fields = (
         "config_id",
