@@ -14,11 +14,8 @@ class FakeDatabase:
 def _payload() -> dict[str, object]:
     return {
         "configuration": {
-            "purchasable": {
-                "variant_id": "variant-1",
-                "paint_id": "invalid-paint",
-            },
-            "interaction": {},
+            "variant_id": "variant-1",
+            "paint_id": "invalid-paint",
         },
         "city": "Delhi",
     }
