@@ -8,10 +8,10 @@ is created here.
 """
 
 from server import app, db, optional_user_phone
-from configurator_routes import make_configurator_router
+from configurator_composition import mount_configurator_router
 
 
-app.include_router(make_configurator_router(db, optional_user_phone))
+mount_configurator_router(app, db, optional_user_phone)
 
 
 @app.on_event("startup")
