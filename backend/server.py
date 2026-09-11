@@ -27,6 +27,7 @@ from razorpay_gateway import (
     verify_payment_signature as razorpay_verify_payment_signature,
 )
 from cars_data import CARS_SEED, NEWS_SEED
+from configurator_composition import mount_configurator_router
 import security
 
 ROOT_DIR = Path(__file__).parent
@@ -173,6 +174,8 @@ async def seed_db():
     await db.processed_payment_events.create_index("expires_at", expireAfterSeconds=0)
     await db.chat_sessions.create_index([("session_id", 1), ("phone", 1)], unique=True)
     await db.chat_messages.create_index([("session_id", 1), ("owner_phone", 1), ("ts", 1)])
+    await db.configurations.create_index("config_id", unique=True)
+    await db.configurations.create_index("share_token", unique=True, sparse=True)
     if not security.SECRET_KEY_CONFIGURED:
         logger.warning("SECRET_KEY is not configured — sessions and OTPs will be invalidated on restart.")
     if not ADMIN_PIN:
@@ -522,3 +525,4 @@ async def chat_history(session_id: str, phone: Optional[str] = Depends(optional_
 
 app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_credentials=ALLOW_CREDENTIALS, allow_methods=["*"], allow_headers=["*"])
 app.include_router(api_router)
+mount_configurator_router(app, db, optional_user_phone)
