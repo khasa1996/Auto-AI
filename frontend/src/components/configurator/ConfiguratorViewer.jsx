@@ -25,7 +25,7 @@ function ConfiguratorScene({
   const controlsRef = useRef();
 
   useCameraPreset(interaction.cameraPreset, controlsRef);
-  useLightingController(sceneRef.current, interaction.lighting);
+  useLightingController(sceneRef, interaction.lighting);
 
   return (
     <>
