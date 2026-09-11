@@ -66,10 +66,15 @@ def _pick_by_description(description: Optional[str], options: Iterable[Dict[str,
 
 
 def _allowed_ids(catalog: Dict[str, List[Dict[str, Any]]]) -> Dict[str, set[str]]:
-    return {
-        key: {option_id for option in (_option_id(item) for item in values) if option_id}
-        for key, values in catalog.items()
-    }
+    allowed: Dict[str, set[str]] = {}
+    for key, values in catalog.items():
+        ids: set[str] = set()
+        for item in values:
+            option_id = _option_id(item)
+            if option_id:
+                ids.add(option_id)
+        allowed[key] = ids
+    return allowed
 
 
 def _safe_selection(candidate: Dict[str, Any], catalog: Dict[str, List[Dict[str, Any]]]) -> PurchasableConfiguration:
