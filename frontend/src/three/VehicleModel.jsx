@@ -1,86 +1,135 @@
 /**
- * VehicleModel — GLB/GLTF loader with semantic material system.
+ * VehicleModel — GLB/GLTF loader with semantic material and animation systems.
  *
  * Rules enforced:
  *  - Never loads or substitutes a non-GLB/GLTF asset as a 3D model.
  *  - Paint changes use asset-provided material name list, not fragile heuristics.
- *  - When no asset URL is provided, renders nothing (caller shows Coming Soon).
- *  - Clones scene to avoid shared material mutation across instances.
- *  - Disposes geometry/materials on unmount to prevent GPU memory leaks.
- *
- * Status: FOUNDATION — renders real GLB assets when provided.
- *   Material mapping:    IMPLEMENTED (metadata-driven via paintMaterialNames)
- *   Wheel mesh swap:     FOUNDATION (wheelMeshNames mapping defined, swap Phase 3)
- *   Animation playback:  see AnimationController.jsx
+ *  - Animations use the semantic clip contract from AnimationController.
+ *  - Missing animation clips are ignored; no fake movement is substituted.
+ *  - Clones scene and materials to isolate instances.
+ *  - Disposes cloned geometry/materials on unmount to prevent GPU leaks.
  */
 
 import { useEffect, useMemo, useRef } from 'react';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
+import { ANIMATION_NAMES, useVehicleAnimations } from './AnimationController';
 
-/**
- * Apply a paint color to all body-paint materials in the scene.
- * Uses the asset's declared paintMaterialNames list — never guesses by name substring.
- *
- * @param {THREE.Object3D} scene - Cloned scene root
- * @param {string} colorHex - e.g. "#B91C1C"
- * @param {string[]} paintMaterialNames - From asset metadata, e.g. ["MAT_BODY_PAINT"]
- */
 function applyPaintColor(scene, colorHex, paintMaterialNames) {
   if (!scene || !colorHex || !paintMaterialNames?.length) return;
 
-  const targetNames = new Set(paintMaterialNames.map((n) => n.toLowerCase()));
+  const targetNames = new Set(paintMaterialNames.map((name) => name.toLowerCase()));
   const color = new THREE.Color(colorHex);
 
   scene.traverse((node) => {
     if (!node.isMesh) return;
     const materials = Array.isArray(node.material) ? node.material : [node.material];
-    materials.forEach((mat) => {
-      if (!mat) return;
-      const matName = (mat.name || '').toLowerCase();
-      if (targetNames.has(matName)) {
-        mat.color.copy(color);
-        mat.needsUpdate = true;
+    materials.forEach((material) => {
+      if (!material) return;
+      const materialName = (material.name || '').toLowerCase();
+      if (targetNames.has(materialName)) {
+        material.color.copy(color);
+        material.needsUpdate = true;
       }
     });
   });
 }
 
-/**
- * Inner component — only rendered when a verified URL is available.
- * Separated so useGLTF is not called with an empty/null URL.
- */
-function LoadedVehicle({ url, paintColorHex, paintMaterialNames }) {
-  const { scene } = useGLTF(url);
+function LoadedVehicle({
+  url,
+  paintColorHex,
+  paintMaterialNames,
+  interaction,
+}) {
+  const { scene, animations } = useGLTF(url);
   const groupRef = useRef();
+  const previousInteractionRef = useRef(null);
 
-  // Clone scene so material mutations don't affect the shared GLTF cache
   const clonedScene = useMemo(() => {
     const clone = scene.clone(true);
     clone.traverse((node) => {
       if (!node.isMesh) return;
-      // Deep-clone materials so paint changes are isolated to this instance
       node.material = Array.isArray(node.material)
-        ? node.material.map((m) => m.clone())
+        ? node.material.map((material) => material.clone())
         : node.material.clone();
     });
     return clone;
   }, [scene]);
 
-  // Apply paint color when it changes
+  const { play } = useVehicleAnimations(animations, groupRef);
+
   useEffect(() => {
     if (paintColorHex && paintMaterialNames?.length) {
       applyPaintColor(clonedScene, paintColorHex, paintMaterialNames);
     }
   }, [clonedScene, paintColorHex, paintMaterialNames]);
 
-  // Dispose cloned materials on unmount
+  useEffect(() => {
+    const previous = previousInteractionRef.current;
+    previousInteractionRef.current = interaction;
+    if (!previous) return;
+
+    const playToggle = (current, before, openName, closeName) => {
+      if (current === before) return;
+      play(current ? openName : closeName);
+    };
+
+    playToggle(
+      interaction.doors.frontLeft,
+      previous.doors.frontLeft,
+      ANIMATION_NAMES.DOOR_FL_OPEN,
+      ANIMATION_NAMES.DOOR_FL_CLOSE,
+    );
+    playToggle(
+      interaction.doors.frontRight,
+      previous.doors.frontRight,
+      ANIMATION_NAMES.DOOR_FR_OPEN,
+      ANIMATION_NAMES.DOOR_FR_CLOSE,
+    );
+    playToggle(
+      interaction.doors.rearLeft,
+      previous.doors.rearLeft,
+      ANIMATION_NAMES.DOOR_RL_OPEN,
+      ANIMATION_NAMES.DOOR_RL_CLOSE,
+    );
+    playToggle(
+      interaction.doors.rearRight,
+      previous.doors.rearRight,
+      ANIMATION_NAMES.DOOR_RR_OPEN,
+      ANIMATION_NAMES.DOOR_RR_CLOSE,
+    );
+    playToggle(
+      interaction.hoodOpen,
+      previous.hoodOpen,
+      ANIMATION_NAMES.HOOD_OPEN,
+      ANIMATION_NAMES.HOOD_CLOSE,
+    );
+    playToggle(
+      interaction.bootOpen,
+      previous.bootOpen,
+      ANIMATION_NAMES.BOOT_OPEN,
+      ANIMATION_NAMES.BOOT_CLOSE,
+    );
+    playToggle(
+      interaction.frunkOpen,
+      previous.frunkOpen,
+      ANIMATION_NAMES.FRUNK_OPEN,
+      ANIMATION_NAMES.FRUNK_CLOSE,
+    );
+    playToggle(
+      interaction.sunroofOpen,
+      previous.sunroofOpen,
+      ANIMATION_NAMES.SUNROOF_OPEN,
+      ANIMATION_NAMES.SUNROOF_CLOSE,
+    );
+  }, [interaction, play]);
+
   useEffect(() => {
     return () => {
       clonedScene.traverse((node) => {
         if (!node.isMesh) return;
-        const mats = Array.isArray(node.material) ? node.material : [node.material];
-        mats.forEach((m) => m?.dispose());
+        const materials = Array.isArray(node.material) ? node.material : [node.material];
+        materials.forEach((material) => material?.dispose());
         node.geometry?.dispose();
       });
     };
@@ -89,24 +138,19 @@ function LoadedVehicle({ url, paintColorHex, paintMaterialNames }) {
   return <primitive ref={groupRef} object={clonedScene} />;
 }
 
-/**
- * VehicleModel — public component used by the configurator scene.
- *
- * @param {object} props
- * @param {string|null} props.url          - Verified HTTPS GLB/GLTF URL, or null
- * @param {string}      props.paintColorHex - e.g. "#B91C1C"
- * @param {string[]}    props.paintMaterialNames - From asset metadata
- */
-export default function VehicleModel({ url, paintColorHex, paintMaterialNames = [] }) {
-  // Guard: never attempt to load a null/empty URL or non-3D extension
+export default function VehicleModel({
+  url,
+  paintColorHex,
+  paintMaterialNames = [],
+  interaction,
+}) {
   if (!url) return null;
 
   const lower = url.toLowerCase();
   if (!lower.endsWith('.glb') && !lower.endsWith('.gltf')) {
     console.error(
-      '[VehicleModel] Rejected non-GLB/GLTF URL. Auto AI India does not ' +
-        'use images or videos as 3D vehicle assets.',
-      url
+      '[VehicleModel] Rejected non-GLB/GLTF URL. Auto AI India does not use images or videos as 3D vehicle assets.',
+      url,
     );
     return null;
   }
@@ -116,6 +160,7 @@ export default function VehicleModel({ url, paintColorHex, paintMaterialNames = 
       url={url}
       paintColorHex={paintColorHex}
       paintMaterialNames={paintMaterialNames}
+      interaction={interaction}
     />
   );
 }
