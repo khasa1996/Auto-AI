@@ -77,7 +77,11 @@ def _allowed_ids(catalog: Dict[str, List[Dict[str, Any]]]) -> Dict[str, set[str]
     return allowed
 
 
-def _safe_selection(candidate: Dict[str, Any], catalog: Dict[str, List[Dict[str, Any]]]) -> PurchasableConfiguration:
+def _safe_selection(
+    candidate: Dict[str, Any],
+    catalog: Dict[str, List[Dict[str, Any]]],
+    variant_id: str,
+) -> PurchasableConfiguration:
     allowed = _allowed_ids(catalog)
 
     def pick(field: str, catalog_key: str) -> Optional[str]:
@@ -89,7 +93,7 @@ def _safe_selection(candidate: Dict[str, Any], catalog: Dict[str, List[Dict[str,
         accessory_ids = []
     safe_accessories = [str(value) for value in accessory_ids if str(value) in allowed["accessories"]][:30]
     return PurchasableConfiguration(
-        variant_id=str(candidate.get("variant_id")),
+        variant_id=variant_id,
         paint_id=pick("paint_id", "colors"),
         wheel_id=pick("wheel_id", "wheels"),
         interior_id=pick("interior_id", "interiors"),
@@ -127,11 +131,10 @@ async def resolve_ai_selection(intent: AIConfiguratorIntent, db: Any) -> tuple[P
         chat = LlmChat(None, f"configurator:{intent.variant_id}", "You are a strict structured option selector.").with_model(provider, model)
         response = await chat.send_message(UserMessage(build_ai_prompt(intent, catalog)))
         candidate = _extract_json(response)
-        candidate["variant_id"] = intent.variant_id
     except (LLMProviderError, ValueError, json.JSONDecodeError):
         candidate = {"variant_id": intent.variant_id}
 
-    configuration = _safe_selection(candidate, catalog)
+    configuration = _safe_selection(candidate, catalog, intent.variant_id)
 
     if not configuration.paint_id:
         configuration.paint_id = _pick_by_description(intent.preferred_color_description, catalog["colors"])
