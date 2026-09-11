@@ -99,6 +99,20 @@ def _conditions_met(
     return all(_evaluate_condition(c, config) for c in conditions)
 
 
+def _requirement_gate_met(
+    rule: Dict[str, Any],
+    config: PurchasableConfiguration,
+) -> bool:
+    """Return True when non-requirement conditions allow a REQUIRE rule to apply."""
+    conditions = rule.get("conditions", [])
+    gating_conditions = [
+        condition
+        for condition in conditions
+        if condition.get("condition_type") != RuleConditionType.OPTION_SELECTED
+    ]
+    return all(_evaluate_condition(condition, config) for condition in gating_conditions)
+
+
 async def validate_configuration(
     request: ConfigurationValidationRequest,
     db: "AsyncIOMotorDatabase",
@@ -228,6 +242,31 @@ async def validate_configuration(
         ):
             continue
 
+        if effect == RuleEffect.REQUIRE:
+            if target_id not in selected_ids or not _requirement_gate_met(rule, config):
+                continue
+
+            missing_requirements = [
+                condition.get("value")
+                for condition in rule.get("conditions", [])
+                if condition.get("condition_type") == RuleConditionType.OPTION_SELECTED
+                and condition.get("value") not in selected_ids
+            ]
+            if missing_requirements:
+                required_id = missing_requirements[0]
+                msg = (
+                    explanation
+                    or f"Option '{target_id}' requires '{required_id}' to also be selected"
+                )
+                errors.append(msg)
+                rules_applied.append({
+                    "rule_id": rule.get("rule_id"),
+                    "effect": effect,
+                    "target": target_id,
+                    "result": "missing_requirement",
+                })
+            continue
+
         if not _conditions_met(rule, config):
             continue
 
@@ -252,16 +291,8 @@ async def validate_configuration(
                         errors.append(msg)
                         outcome["result"] = "mutually_exclusive"
 
-        elif effect == RuleEffect.REQUIRE:
-            # If target is selected, a required option must also be selected
-            required_id = rule.get("conditions", [{}])[0].get("value", "")
-            if target_id in selected_ids and required_id and required_id not in selected_ids:
-                msg = (
-                    explanation
-                    or f"Option '{target_id}' requires '{required_id}' to also be selected"
-                )
-                errors.append(msg)
-                outcome["result"] = "missing_requirement"
+        elif effect == RuleEffect.ALLOW:
+            outcome["result"] = "ok"
 
         else:
             outcome["result"] = "ok"
