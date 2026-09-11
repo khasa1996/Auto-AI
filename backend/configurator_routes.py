@@ -206,6 +206,14 @@ def make_configurator_router(
 
     @router.post("/configurator/price", response_model=ConfigurationPriceResponse)
     async def calculate_price(request: ConfigurationPriceRequest):
+        validation = await validate_configuration(
+            ConfigurationValidationRequest(configuration=request.configuration), db
+        )
+        if not validation.valid:
+            raise HTTPException(
+                status_code=422,
+                detail={"message": "Invalid configuration", "errors": validation.errors},
+            )
         try:
             return await calculate_configuration_price(request, db)
         except ValueError as exc:
