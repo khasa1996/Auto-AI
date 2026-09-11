@@ -19,12 +19,13 @@ def test_extract_json_accepts_markdown_fenced_json():
 def test_safe_selection_rejects_ai_invented_ids():
     selected = _safe_selection(
         {
-            "variant_id": "v1",
+            "variant_id": "attacker-variant",
             "paint_id": "red",
             "wheel_id": "invented-wheel",
             "accessory_ids": ["a1", "invented-accessory"],
         },
         catalog(),
+        "v1",
     )
     assert selected.variant_id == "v1"
     assert selected.paint_id == "red"
