@@ -1,13 +1,7 @@
 /**
  * VehicleModel — GLB/GLTF loader with semantic material and animation systems.
  *
- * Rules enforced:
- *  - Never loads or substitutes a non-GLB/GLTF asset as a 3D model.
- *  - Paint changes use asset-provided material name list, not fragile heuristics.
- *  - Animations use the semantic clip contract from AnimationController.
- *  - Missing animation clips are ignored; no fake movement is substituted.
- *  - Clones the scene and materials to isolate configurable instances.
- *  - Does not dispose shared source geometry owned by useGLTF's asset cache.
+ * Visual changes use only mappings declared by the verified asset.
  */
 
 import { useEffect, useMemo, useRef } from 'react';
@@ -17,17 +11,14 @@ import { ANIMATION_NAMES, useVehicleAnimations } from './AnimationController';
 
 function applyPaintColor(scene, colorHex, paintMaterialNames) {
   if (!scene || !colorHex || !paintMaterialNames?.length) return;
-
   const targetNames = new Set(paintMaterialNames.map((name) => name.toLowerCase()));
   const color = new THREE.Color(colorHex);
-
   scene.traverse((node) => {
     if (!node.isMesh) return;
     const materials = Array.isArray(node.material) ? node.material : [node.material];
     materials.forEach((material) => {
       if (!material) return;
-      const materialName = (material.name || '').toLowerCase();
-      if (targetNames.has(materialName)) {
+      if (targetNames.has((material.name || '').toLowerCase())) {
         material.color.copy(color);
         material.needsUpdate = true;
       }
@@ -35,16 +26,37 @@ function applyPaintColor(scene, colorHex, paintMaterialNames) {
   });
 }
 
-function LoadedVehicle({
-  url,
-  paintColorHex,
-  paintMaterialNames,
-  interaction,
-}) {
+function applyMeshMappings(scene, selectedIds, mappings) {
+  if (!scene || !mappings || typeof mappings !== 'object') return;
+  const selected = new Set((selectedIds || []).filter(Boolean));
+  const mappedNames = new Set(Object.values(mappings).flat().filter(Boolean));
+  if (!mappedNames.size) return;
+
+  scene.traverse((node) => {
+    if (!mappedNames.has(node.name)) return;
+    node.visible = false;
+  });
+
+  selected.forEach((optionId) => {
+    const names = Array.isArray(mappings[optionId]) ? mappings[optionId] : [mappings[optionId]];
+    names.filter(Boolean).forEach((name) => {
+      scene.traverse((node) => {
+        if (node.name === name) node.visible = true;
+      });
+    });
+  });
+}
+
+function normalizeWheelMappings(wheelMeshNames) {
+  return Object.fromEntries(
+    Object.entries(wheelMeshNames || {}).map(([optionId, meshName]) => [optionId, [meshName]]),
+  );
+}
+
+function LoadedVehicle({ url, paintColorHex, paintMaterialNames, wheelMeshNames, optionMeshNames, purchasable, interaction }) {
   const { scene, animations } = useGLTF(url);
   const groupRef = useRef();
   const previousInteractionRef = useRef(null);
-
   const clonedScene = useMemo(() => {
     const clone = scene.clone(true);
     clone.traverse((node) => {
@@ -58,108 +70,47 @@ function LoadedVehicle({
 
   const { play } = useVehicleAnimations(animations, groupRef);
 
+  useEffect(() => applyPaintColor(clonedScene, paintColorHex, paintMaterialNames), [clonedScene, paintColorHex, paintMaterialNames]);
+
   useEffect(() => {
-    if (paintColorHex && paintMaterialNames?.length) {
-      applyPaintColor(clonedScene, paintColorHex, paintMaterialNames);
-    }
-  }, [clonedScene, paintColorHex, paintMaterialNames]);
+    applyMeshMappings(clonedScene, [purchasable.wheelId], normalizeWheelMappings(wheelMeshNames));
+    applyMeshMappings(clonedScene, [purchasable.interiorId, purchasable.roofId, ...purchasable.accessoryIds], optionMeshNames);
+  }, [clonedScene, purchasable, wheelMeshNames, optionMeshNames]);
 
   useEffect(() => {
     const previous = previousInteractionRef.current;
     previousInteractionRef.current = interaction;
     if (!previous) return;
-
     const playToggle = (current, before, openName, closeName) => {
-      if (current === before) return;
-      play(current ? openName : closeName);
+      if (current !== before) play(current ? openName : closeName);
     };
-
-    playToggle(
-      interaction.doors.frontLeft,
-      previous.doors.frontLeft,
-      ANIMATION_NAMES.DOOR_FL_OPEN,
-      ANIMATION_NAMES.DOOR_FL_CLOSE,
-    );
-    playToggle(
-      interaction.doors.frontRight,
-      previous.doors.frontRight,
-      ANIMATION_NAMES.DOOR_FR_OPEN,
-      ANIMATION_NAMES.DOOR_FR_CLOSE,
-    );
-    playToggle(
-      interaction.doors.rearLeft,
-      previous.doors.rearLeft,
-      ANIMATION_NAMES.DOOR_RL_OPEN,
-      ANIMATION_NAMES.DOOR_RL_CLOSE,
-    );
-    playToggle(
-      interaction.doors.rearRight,
-      previous.doors.rearRight,
-      ANIMATION_NAMES.DOOR_RR_OPEN,
-      ANIMATION_NAMES.DOOR_RR_CLOSE,
-    );
-    playToggle(
-      interaction.hoodOpen,
-      previous.hoodOpen,
-      ANIMATION_NAMES.HOOD_OPEN,
-      ANIMATION_NAMES.HOOD_CLOSE,
-    );
-    playToggle(
-      interaction.bootOpen,
-      previous.bootOpen,
-      ANIMATION_NAMES.BOOT_OPEN,
-      ANIMATION_NAMES.BOOT_CLOSE,
-    );
-    playToggle(
-      interaction.frunkOpen,
-      previous.frunkOpen,
-      ANIMATION_NAMES.FRUNK_OPEN,
-      ANIMATION_NAMES.FRUNK_CLOSE,
-    );
-    playToggle(
-      interaction.sunroofOpen,
-      previous.sunroofOpen,
-      ANIMATION_NAMES.SUNROOF_OPEN,
-      ANIMATION_NAMES.SUNROOF_CLOSE,
-    );
+    playToggle(interaction.doors.frontLeft, previous.doors.frontLeft, ANIMATION_NAMES.DOOR_FL_OPEN, ANIMATION_NAMES.DOOR_FL_CLOSE);
+    playToggle(interaction.doors.frontRight, previous.doors.frontRight, ANIMATION_NAMES.DOOR_FR_OPEN, ANIMATION_NAMES.DOOR_FR_CLOSE);
+    playToggle(interaction.doors.rearLeft, previous.doors.rearLeft, ANIMATION_NAMES.DOOR_RL_OPEN, ANIMATION_NAMES.DOOR_RL_CLOSE);
+    playToggle(interaction.doors.rearRight, previous.doors.rearRight, ANIMATION_NAMES.DOOR_RR_OPEN, ANIMATION_NAMES.DOOR_RR_CLOSE);
+    playToggle(interaction.hoodOpen, previous.hoodOpen, ANIMATION_NAMES.HOOD_OPEN, ANIMATION_NAMES.HOOD_CLOSE);
+    playToggle(interaction.bootOpen, previous.bootOpen, ANIMATION_NAMES.BOOT_OPEN, ANIMATION_NAMES.BOOT_CLOSE);
+    playToggle(interaction.frunkOpen, previous.frunkOpen, ANIMATION_NAMES.FRUNK_OPEN, ANIMATION_NAMES.FRUNK_CLOSE);
+    playToggle(interaction.sunroofOpen, previous.sunroofOpen, ANIMATION_NAMES.SUNROOF_OPEN, ANIMATION_NAMES.SUNROOF_CLOSE);
   }, [interaction, play]);
 
-  useEffect(() => {
-    return () => {
-      clonedScene.traverse((node) => {
-        if (!node.isMesh) return;
-        const materials = Array.isArray(node.material) ? node.material : [node.material];
-        materials.forEach((material) => material?.dispose());
-      });
-    };
+  useEffect(() => () => {
+    clonedScene.traverse((node) => {
+      if (!node.isMesh) return;
+      const materials = Array.isArray(node.material) ? node.material : [node.material];
+      materials.forEach((material) => material?.dispose());
+    });
   }, [clonedScene]);
 
   return <primitive ref={groupRef} object={clonedScene} />;
 }
 
-export default function VehicleModel({
-  url,
-  paintColorHex,
-  paintMaterialNames = [],
-  interaction,
-}) {
+export default function VehicleModel({ url, paintColorHex, paintMaterialNames = [], wheelMeshNames = {}, optionMeshNames = {}, purchasable, interaction }) {
   if (!url) return null;
-
   const lower = url.toLowerCase();
   if (!lower.endsWith('.glb') && !lower.endsWith('.gltf')) {
-    console.error(
-      '[VehicleModel] Rejected non-GLB/GLTF URL. Auto AI India does not use images or videos as 3D vehicle assets.',
-      url,
-    );
+    console.error('[VehicleModel] Rejected non-GLB/GLTF URL.', url);
     return null;
   }
-
-  return (
-    <LoadedVehicle
-      url={url}
-      paintColorHex={paintColorHex}
-      paintMaterialNames={paintMaterialNames}
-      interaction={interaction}
-    />
-  );
+  return <LoadedVehicle url={url} paintColorHex={paintColorHex} paintMaterialNames={paintMaterialNames} wheelMeshNames={wheelMeshNames} optionMeshNames={optionMeshNames} purchasable={purchasable} interaction={interaction} />;
 }
