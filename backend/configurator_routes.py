@@ -36,6 +36,34 @@ def _utcnow_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def build_saved_configuration_document(
+    request: SavedConfigurationCreate,
+    owner_phone: str,
+    server_price_snapshot: Dict[str, object],
+    server_asset: Optional[Dict[str, object]],
+    config_id: str,
+    share_token: str,
+    now: str,
+) -> Dict[str, object]:
+    """Build a persisted snapshot from server-authoritative values."""
+    configuration = request.configuration.model_dump()
+    stale_reason = None if server_asset else "Published verified configurator asset is unavailable"
+    return {
+        "config_id": config_id,
+        "owner_phone": owner_phone,
+        "share_token": share_token,
+        "configuration": configuration,
+        "city": request.city,
+        "price_snapshot": server_price_snapshot,
+        "asset_id": server_asset.get("asset_id") if server_asset else None,
+        "asset_version": server_asset.get("version") if server_asset else None,
+        "stale": bool(stale_reason),
+        "stale_reason": stale_reason,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
 def make_configurator_router(
     db: AsyncIOMotorDatabase,
     optional_user_phone: Optional[Callable[..., Awaitable[Optional[str]]]] = None,
@@ -220,27 +248,52 @@ def make_configurator_router(
         request: SavedConfigurationCreate,
         auth_phone: Optional[str] = Depends(auth_dependency),
     ):
-        """Persist a configuration and require authenticated ownership."""
+        """Persist only a server-validated, server-priced configuration."""
         if not auth_phone:
             raise HTTPException(status_code=401, detail="Authentication required")
+
+        validation = await validate_configuration(
+            ConfigurationValidationRequest(configuration=request.configuration.purchasable), db
+        )
+        if not validation.valid:
+            raise HTTPException(
+                status_code=422,
+                detail={"message": "Invalid configuration", "errors": validation.errors},
+            )
+
+        price_request = ConfigurationPriceRequest(
+            configuration=request.configuration.purchasable,
+            city=request.city,
+        )
+        try:
+            server_price = await calculate_configuration_price(price_request, db)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+
+        server_asset = None
+        if request.asset_id:
+            server_asset = await db.configurator_assets.find_one(
+                {
+                    "asset_id": request.asset_id,
+                    "variant_id": request.configuration.purchasable.variant_id,
+                    "published": True,
+                    "validation_passed": True,
+                },
+                {"_id": 0, "asset_id": 1, "version": 1},
+            )
 
         config_id = str(uuid.uuid4())
         share_token = uuid.uuid4().hex
         now = _utcnow_iso()
-        doc = {
-            "config_id": config_id,
-            "owner_phone": auth_phone,
-            "share_token": share_token,
-            "configuration": request.configuration.model_dump(),
-            "city": request.city,
-            "price_snapshot": request.price_snapshot,
-            "asset_id": request.asset_id,
-            "asset_version": request.asset_version,
-            "stale": False,
-            "stale_reason": None,
-            "created_at": now,
-            "updated_at": now,
-        }
+        doc = build_saved_configuration_document(
+            request=request,
+            owner_phone=auth_phone,
+            server_price_snapshot=server_price.model_dump(mode="json"),
+            server_asset=server_asset,
+            config_id=config_id,
+            share_token=share_token,
+            now=now,
+        )
         await db.configurations.insert_one(doc)
         doc.pop("_id", None)
         return doc
