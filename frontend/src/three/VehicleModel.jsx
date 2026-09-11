@@ -6,8 +6,8 @@
  *  - Paint changes use asset-provided material name list, not fragile heuristics.
  *  - Animations use the semantic clip contract from AnimationController.
  *  - Missing animation clips are ignored; no fake movement is substituted.
- *  - Clones scene and materials to isolate instances.
- *  - Disposes cloned geometry/materials on unmount to prevent GPU leaks.
+ *  - Clones the scene and materials to isolate configurable instances.
+ *  - Does not dispose shared source geometry owned by useGLTF's asset cache.
  */
 
 import { useEffect, useMemo, useRef } from 'react';
@@ -130,7 +130,6 @@ function LoadedVehicle({
         if (!node.isMesh) return;
         const materials = Array.isArray(node.material) ? node.material : [node.material];
         materials.forEach((material) => material?.dispose());
-        node.geometry?.dispose();
       });
     };
   }, [clonedScene]);
