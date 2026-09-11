@@ -168,6 +168,40 @@ async def validate_configuration(
         elif not interior_doc.get("available", True):
             errors.append(f"Interior option '{config.interior_id}' is currently unavailable")
 
+    if config.roof_id:
+        roof_doc = await db.configurator_options.find_one(
+            {
+                "option_id": config.roof_id,
+                "variant_id": config.variant_id,
+                "option_type": "roof",
+            },
+            {"_id": 0},
+        )
+        if not roof_doc:
+            errors.append(
+                f"Roof option '{config.roof_id}' is not available for "
+                f"variant '{config.variant_id}'"
+            )
+        elif not roof_doc.get("available", True):
+            errors.append(f"Roof option '{config.roof_id}' is currently unavailable")
+
+    for accessory_id in config.accessory_ids:
+        accessory_doc = await db.configurator_options.find_one(
+            {
+                "option_id": accessory_id,
+                "variant_id": config.variant_id,
+                "option_type": "accessory",
+            },
+            {"_id": 0},
+        )
+        if not accessory_doc:
+            errors.append(
+                f"Accessory option '{accessory_id}' is not available for "
+                f"variant '{config.variant_id}'"
+            )
+        elif not accessory_doc.get("available", True):
+            errors.append(f"Accessory option '{accessory_id}' is currently unavailable")
+
     # ── 3. Load and evaluate configurator rules ─────────────────────────────
     # Load rules that apply to this variant or its model
     rule_query: Dict[str, Any] = {
