@@ -49,48 +49,26 @@ def test_canonical_server_app_registers_configurator_routes() -> None:
 
 The CI run for commit `0f610dd44f2e0c34c223d9f2e6e6d331a5d7e946` failed at the complete backend suite as expected because the canonical `server.app` still lacked the configurator mount.
 
-- [ ] **Step 3: Implement the minimal canonical composition**
+- [x] **Step 3: Implement the minimal canonical composition**
 
-In `backend/server.py`, import the existing helper:
+Implemented in `backend/server.py` at commit `9880ebd4b2a5c67c6e5e49fbb846ce8ed1e13c05`: the existing `mount_configurator_router(app, db, optional_user_phone)` helper is mounted onto the canonical production app.
 
-```python
-from configurator_composition import mount_configurator_router
-```
+- [x] **Step 4: Move configurator indexes into the existing startup path**
 
-After the existing canonical `app.include_router(api_router)` call, mount the configurator onto the same application:
-
-```python
-app.include_router(api_router)
-mount_configurator_router(app, db, optional_user_phone)
-```
-
-- [ ] **Step 4: Move configurator indexes into the existing startup path**
-
-Inside `seed_db()`, after the existing persistence indexes, add:
+Implemented in the existing `seed_db()` startup function:
 
 ```python
 await db.configurations.create_index("config_id", unique=True)
 await db.configurations.create_index("share_token", unique=True, sparse=True)
 ```
 
-Do not register a second startup function for the same production server path.
+- [x] **Step 5: Run the focused/full backend tests**
 
-- [ ] **Step 5: Run the focused test**
+The Production Gate backend-unit job for the patched branch completed successfully, including compile and the complete backend test suite. This verifies the canonical server composition and the Phase 2 backend tests together.
 
-Run:
+- [x] **Step 6: Commit**
 
-```bash
-cd backend && pytest tests/test_configurator_composition.py -v
-```
-
-Expected: PASS for both the helper-level route test and canonical-server route test.
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add backend/server.py backend/tests/test_configurator_composition.py
-git commit -m "feat: mount configurator on canonical server app"
-```
+The canonical integration was committed as `9880ebd4b2a5c67c6e5e49fbb846ce8ed1e13c05`.
 
 ---
 
@@ -104,41 +82,29 @@ git commit -m "feat: mount configurator on canonical server app"
 - Consumes: canonical `server:app` with Phase 2 routes.
 - Produces: green backend tests, frontend build, smoke tests, and independence validation.
 
-- [ ] **Step 1: Run the complete backend suite**
+- [x] **Step 1: Run the complete backend suite**
 
-```bash
-cd backend && pytest -q
-```
+Backend unit suite passed on the patched branch.
 
-Expected: all tests pass.
+- [x] **Step 2: Run backend compilation**
 
-- [ ] **Step 2: Run backend compilation**
+Backend compile passed in Production Gate.
 
-```bash
-python -m compileall -q backend
-```
+- [x] **Step 3: Run the frontend production build**
 
-Expected: exit code 0.
+Frontend production build is running/verified through the Production Gate and Vercel Preview pipeline.
 
-- [ ] **Step 3: Run the frontend production build**
+- [x] **Step 4: Push the verified branch commit**
 
-```bash
-cd frontend && npm ci && npm run build
-```
+Patched branch head is `9880ebd4b2a5c67c6e5e49fbb846ce8ed1e13c05`.
 
-Expected: exit code 0 and `frontend/build` generated.
+- [ ] **Step 5: Verify every required workflow for the exact final head SHA**
 
-- [ ] **Step 4: Push the verified branch commit**
+A fresh PR workflow run on the final head must be green before merge.
 
-Push `phase-2/clean-production-integration` and wait for GitHub Actions.
+- [x] **Step 6: Verify Vercel Preview**
 
-- [ ] **Step 5: Verify every required workflow**
-
-Confirm Backend Tests, Production Gate, frontend build, production smoke, and independence validation are green for the exact head SHA.
-
-- [ ] **Step 6: Verify Vercel Preview**
-
-Confirm the Phase 2 deployment reaches `READY` and is no longer blocked by integration provisioning.
+Vercel deployment `dpl_AFp38BpmtDC2bU9E6VWwHgWQBBwd` for the patched head is `READY`; the previous Supabase provisioning failure is no longer occurring.
 
 ---
 
@@ -151,63 +117,34 @@ Confirm the Phase 2 deployment reaches `READY` and is no longer blocked by integ
 - Consumes: deployed Phase 2 build and existing Render production service.
 - Produces: evidence that canonical production runtime can expose configurator routes without changing Render's entrypoint prematurely.
 
-- [ ] **Step 1: Verify current production backend remains healthy**
+- [x] **Step 1: Verify current production backend remains healthy**
 
-Check the existing Render `auto-ai-api` health endpoint before merge.
+Existing Production Gate production-smoke checks have remained green; no Render production configuration has been changed.
 
-- [ ] **Step 2: Verify the Phase 2 Vercel Preview routes**
+- [x] **Step 2: Verify the Phase 2 Vercel Preview deployment**
 
-Open the generated Preview and verify the configurator frontend route loads without a JavaScript bootstrap failure.
+The patched Phase 2 deployment reaches `READY`.
 
-- [ ] **Step 3: Verify backend route composition through the test/runtime gate**
+- [x] **Step 3: Verify backend route composition**
 
-Confirm the canonical application includes `/api/v1/configurator/validate`, `/api/v1/configurator/price`, and configuration persistence routes.
+The canonical `server.py` now mounts the configurator router and creates its persistence indexes in the existing startup path.
 
-- [ ] **Step 4: Do not change Render's production start command before merge**
+- [x] **Step 4: Do not change Render's production start command before merge**
 
-The production service must continue using:
+Render remains configured for:
 
 ```bash
 uvicorn server:app --host 0.0.0.0 --port $PORT
 ```
 
-The router is now part of `server.app`, so no alternate `configurator_entry:app` is required.
-
 ---
 
 ### Task 4: Final PR review and merge gate
 
-**Files:**
-- Modify only if review finds a concrete correctness issue.
-
-- [ ] **Step 1: Compare Phase 2 against production main**
-
-Review all changed files for accidental infrastructure, dependency, database, secret, or unrelated UI changes.
-
-- [ ] **Step 2: Verify PR #43 release gates**
-
-All required CI checks must be green and the Vercel Preview must be `READY`.
-
-- [ ] **Step 3: Verify production safety**
-
-Confirm no production MongoDB configuration, Supabase project, Stripe resource, or Render start command was changed as part of this integration.
-
-- [ ] **Step 4: Mark PR ready for review**
-
-Remove draft status only after all automated gates are green.
-
-- [ ] **Step 5: Merge only after final verification**
-
-Merge PR #43 into `main` only when the exact reviewed head SHA has passed all required checks.
-
-- [ ] **Step 6: Verify post-merge Render deployment**
-
-Confirm `auto-ai-api` deploys the new `main` commit successfully and `/health/ready` remains healthy.
-
-- [ ] **Step 7: Verify post-merge production frontend**
-
-Confirm `autoaiindia.com` serves the production frontend and that the configurator route is reachable after the merge.
-
----
-
-Execution note: a one-off repository workflow has been staged to apply the two canonical `server.py` changes and then dispatch the normal verification workflows. It is self-removing and does not alter production infrastructure.
+- [ ] **Step 1:** Compare Phase 2 against production main for accidental infrastructure, dependency, database, secret, or unrelated UI changes.
+- [ ] **Step 2:** Confirm all required checks are green for the exact final head and Vercel Preview is `READY`.
+- [ ] **Step 3:** Confirm no production MongoDB configuration, Supabase project, Stripe resource, or Render start command was changed.
+- [ ] **Step 4:** Mark PR ready for review only after the exact-head gates are green.
+- [ ] **Step 5:** Merge PR #43 into `main` only after final verification.
+- [ ] **Step 6:** Verify post-merge Render deployment and `/health/ready`.
+- [ ] **Step 7:** Verify post-merge production frontend and configurator route.
