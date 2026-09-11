@@ -2,10 +2,13 @@
 
 from typing import Any, Dict, Optional
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+import configurator_routes
 from configurator_routes import make_configurator_router
+from configurator_schemas import ConfigurationPriceResponse, ValidationResult
 
 
 class FakeResult:
@@ -55,6 +58,27 @@ class FakeDatabase:
         self.configurations = FakeConfigurations()
 
 
+@pytest.fixture(autouse=True)
+def isolate_server_authoritative_dependencies(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep security tests independent from the production pricing/catalog database."""
+
+    async def fake_validate_configuration(*_: Any, **__: Any) -> ValidationResult:
+        return ValidationResult(valid=True)
+
+    async def fake_calculate_configuration_price(*_: Any, **__: Any) -> ConfigurationPriceResponse:
+        return ConfigurationPriceResponse(
+            variant_id="test-variant",
+            city="Delhi",
+            base_ex_showroom=900_000,
+            estimated_on_road=1_000_000,
+            effective_date="2026-09-11",
+            source="security-test",
+        )
+
+    monkeypatch.setattr(configurator_routes, "validate_configuration", fake_validate_configuration)
+    monkeypatch.setattr(configurator_routes, "calculate_configuration_price", fake_calculate_configuration_price)
+
+
 def _payload() -> Dict[str, Any]:
     return {
         "configuration": {
@@ -62,7 +86,7 @@ def _payload() -> Dict[str, Any]:
             "interaction": {},
         },
         "city": "Delhi",
-        "price_snapshot": 1_000_000,
+        "price_snapshot": 1,
     }
 
 
@@ -75,7 +99,7 @@ def _client(db: FakeDatabase, phone: Optional[str]) -> TestClient:
     return TestClient(app)
 
 
-def test_authenticated_save_persists_owner() -> None:
+def test_authenticated_save_persists_owner_and_server_price() -> None:
     db = FakeDatabase()
     client = _client(db, "+919876543210")
 
@@ -86,6 +110,8 @@ def test_authenticated_save_persists_owner() -> None:
     assert body["owner_phone"] == "+919876543210"
     assert body["share_token"]
     assert body["config_id"]
+    assert body["price_snapshot"]["estimated_on_road"] == 1_000_000
+    assert body["price_snapshot"]["base_ex_showroom"] == 900_000
 
 
 def test_anonymous_save_is_rejected() -> None:
