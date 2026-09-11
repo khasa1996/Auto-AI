@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel, Field
 
@@ -29,7 +29,7 @@ class AssetAssignmentRequest(BaseModel):
     asset_id: str = Field(..., max_length=100)
 
 
-async def _require_admin(authorization: Optional[str] = None) -> str:
+async def _require_admin(authorization: Optional[str] = Header(None)) -> str:
     from server import require_admin
 
     return await require_admin(authorization)
