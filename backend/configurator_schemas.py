@@ -242,6 +242,7 @@ class SavedConfiguration(SavedConfigurationCreate):
     config_id: str
     owner_phone: Optional[str] = None
     share_token: Optional[str] = Field(None, max_length=64)
+    price_breakdown: Optional[Dict[str, Any]] = None
     created_at: str
     updated_at: str
     stale: bool = False
