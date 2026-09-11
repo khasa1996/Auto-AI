@@ -66,10 +66,7 @@ class ConfiguratorAssetCreate(BaseModel):
     supported_interactions: List[str] = Field(default_factory=list)
     paint_material_names: List[str] = Field(default_factory=list)
     wheel_mesh_names: Dict[str, str] = Field(default_factory=dict)
-    option_mesh_names: Dict[str, List[str]] = Field(
-        default_factory=dict,
-        description="option_id -> one or more exact mesh names in the verified asset",
-    )
+    option_mesh_names: Dict[str, List[str]] = Field(default_factory=dict)
     published: bool = False
     validation_passed: bool = False
     admin_reviewed: bool = False
@@ -235,7 +232,7 @@ class SavedConfigurationCreate(BaseModel):
     """Payload for saving a user configuration."""
     configuration: ConfigurationState
     city: Optional[str] = Field(None, max_length=80)
-    price_snapshot: Optional[int] = Field(None, ge=0, description="Calculated on-road price at time of save")
+    price_snapshot: Optional[int] = Field(None, ge=0, description="Client snapshot retained for request compatibility; server recalculates before persistence")
     asset_id: Optional[str] = Field(None, max_length=100)
     asset_version: Optional[str] = Field(None, max_length=30)
 
@@ -306,6 +303,7 @@ class ConfigurationValidationRequest(BaseModel):
 
 class AIConfiguratorIntent(BaseModel):
     """Structured intent extracted from natural language by the AI."""
+    variant_id: str = Field(..., max_length=100)
     raw_request: str = Field(..., max_length=2000)
     preferred_segment: Optional[str] = Field(None, max_length=60)
     max_budget: Optional[int] = Field(None, ge=0)
