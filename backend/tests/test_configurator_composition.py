@@ -21,4 +21,4 @@ def test_mount_configurator_router_registers_versioned_routes() -> None:
     assert "/api/v1/variants" in paths
     assert "/api/v1/configurator/validate" in paths
     assert "/api/v1/configurator/price" in paths
-    assert "/api/v1/configurations" in paths
+    assert "/api/v1/configurator/configurations" in paths
