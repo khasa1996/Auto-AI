@@ -27,20 +27,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
-# ---------------------------------------------------------------------------
-# Asset Provenance
-# ---------------------------------------------------------------------------
-
 class AssetProvenance(str, Enum):
-    """
-    Provenance classification for 3D assets.
-
-    Only OEM_AUTHORIZED, AUTO_AI_LICENSED, and LICENSED_THIRD_PARTY
-    assets may be published to the production configurator.
-
-    AI_GENERATED_CONCEPT and UNKNOWN assets must NOT be presented as
-    production vehicle models.
-    """
+    """Provenance classification for 3D assets."""
     OEM_AUTHORIZED = "OEM_AUTHORIZED"
     AUTO_AI_LICENSED = "AUTO_AI_LICENSED"
     LICENSED_THIRD_PARTY = "LICENSED_THIRD_PARTY"
@@ -55,65 +43,41 @@ _PUBLISHABLE_PROVENANCE = {
 }
 
 _VALID_ASSET_EXTENSIONS = (".glb", ".gltf")
-_MAX_ASSET_BYTES = 200 * 1024 * 1024  # 200 MB absolute upper limit
+_MAX_ASSET_BYTES = 200 * 1024 * 1024
 
 
 class AssetLODLevel(str, Enum):
     """Level of detail tier."""
-    LOD0 = "LOD0"   # High — Desktop
-    LOD1 = "LOD1"   # Medium — Tablet
-    LOD2 = "LOD2"   # Low — Mobile
-    LOD3 = "LOD3"   # Minimal — Low-memory fallback
+    LOD0 = "LOD0"
+    LOD1 = "LOD1"
+    LOD2 = "LOD2"
+    LOD3 = "LOD3"
 
-
-# ---------------------------------------------------------------------------
-# Configurator Asset
-# ---------------------------------------------------------------------------
 
 class ConfiguratorAssetCreate(BaseModel):
-    """
-    Metadata record for a production 3D vehicle asset.
-
-    The actual GLB/GLTF file is stored in object storage (S3-compatible CDN).
-    MongoDB stores only metadata + the URL.
-    """
+    """Metadata record for a production 3D vehicle asset."""
     asset_id: str = Field(..., min_length=2, max_length=100)
     variant_id: str = Field(..., max_length=100)
     model_id: str = Field(..., max_length=80)
     brand_id: str = Field(..., max_length=60)
-    # File details
-    format: str = Field(
-        ..., pattern=r"^(glb|gltf)$",
-        description="Must be 'glb' or 'gltf'"
-    )
+    format: str = Field(..., pattern=r"^(glb|gltf)$")
     url: str = Field(..., max_length=2000)
     cdn_url: Optional[str] = Field(None, max_length=2000)
     file_size_bytes: Optional[int] = Field(None, ge=0, le=_MAX_ASSET_BYTES)
     checksum_sha256: Optional[str] = Field(None, max_length=64)
     version: str = Field(..., min_length=1, max_length=30)
     lod_level: AssetLODLevel = AssetLODLevel.LOD0
-    # Provenance and licensing — MANDATORY for publication
     provenance: AssetProvenance = AssetProvenance.UNKNOWN
     license_name: Optional[str] = Field(None, max_length=200)
     license_url: Optional[str] = Field(None, max_length=500)
     publisher: Optional[str] = Field(None, max_length=200)
-    # Semantic metadata (what the asset contains)
-    supported_interactions: List[str] = Field(
-        default_factory=list,
-        description=(
-            "e.g. ['Door_FL_Open','Hood_Open','Boot_Open','Sunroof_Open',"
-            "'Headlights','DRL','Taillights']"
-        )
-    )
-    paint_material_names: List[str] = Field(
-        default_factory=list,
-        description="Semantic material names that accept paint color overrides"
-    )
-    wheel_mesh_names: Dict[str, str] = Field(
+    supported_interactions: List[str] = Field(default_factory=list)
+    paint_material_names: List[str] = Field(default_factory=list)
+    wheel_mesh_names: Dict[str, str] = Field(default_factory=dict)
+    option_mesh_names: Dict[str, List[str]] = Field(
         default_factory=dict,
-        description="wheel_id -> mesh name mapping within the asset"
+        description="option_id -> one or more exact mesh names in the verified asset",
     )
-    # Workflow state
     published: bool = False
     validation_passed: bool = False
     admin_reviewed: bool = False
@@ -134,9 +98,7 @@ class ConfiguratorAssetCreate(BaseModel):
         from urllib.parse import urlparse
         path = urlparse(v).path.lower()
         if not any(path.endswith(ext) for ext in _VALID_ASSET_EXTENSIONS):
-            raise ValueError(
-                f"Asset URL must end with one of {_VALID_ASSET_EXTENSIONS}"
-            )
+            raise ValueError(f"Asset URL must end with one of {_VALID_ASSET_EXTENSIONS}")
         return v
 
     @field_validator("checksum_sha256")
@@ -165,10 +127,6 @@ class ConfiguratorAsset(ConfiguratorAssetCreate):
     updated_at: str
 
 
-# ---------------------------------------------------------------------------
-# Configurator Options
-# ---------------------------------------------------------------------------
-
 class ConfiguratorOptionType(str, Enum):
     PAINT = "paint"
     WHEEL = "wheel"
@@ -179,10 +137,7 @@ class ConfiguratorOptionType(str, Enum):
 
 
 class ConfiguratorOption(BaseModel):
-    """
-    A single purchasable configuration choice.
-    References variant_colors / variant_wheels / variant_interiors records.
-    """
+    """A single purchasable configuration choice."""
     option_id: str = Field(..., max_length=100)
     option_type: ConfiguratorOptionType
     variant_id: str = Field(..., max_length=100)
@@ -190,25 +145,16 @@ class ConfiguratorOption(BaseModel):
     display_name: str = Field(..., max_length=150)
     price_delta: int = Field(0, ge=0)
     available: bool = True
-    # Reference to the detailed record in the appropriate collection
-    reference_id: str = Field(
-        ..., max_length=100,
-        description="ID in variant_colors / variant_wheels / variant_interiors"
-    )
-    # Preview metadata
+    reference_id: str = Field(..., max_length=100)
     preview_color_hex: Optional[str] = Field(None, max_length=10)
     preview_image_url: Optional[str] = Field(None, max_length=500)
 
-
-# ---------------------------------------------------------------------------
-# Configurator Rules
-# ---------------------------------------------------------------------------
 
 class RuleEffect(str, Enum):
     ALLOW = "allow"
     DENY = "deny"
     REQUIRE = "require"
-    EXCLUDE = "exclude"       # This option excludes another option
+    EXCLUDE = "exclude"
 
 
 class RuleConditionType(str, Enum):
@@ -226,36 +172,18 @@ class RuleCondition(BaseModel):
 
 
 class ConfiguratorRule(BaseModel):
-    """
-    A compatibility rule that the rules engine evaluates.
-
-    The AI must NEVER bypass rules. All AI-selected options must be
-    validated through the rules engine before being applied.
-    """
+    """A compatibility rule evaluated by the backend rules engine."""
     rule_id: str = Field(..., max_length=100)
-    variant_id: Optional[str] = Field(
-        None, max_length=100,
-        description="If set, rule applies only to this variant"
-    )
-    model_id: Optional[str] = Field(
-        None, max_length=80,
-        description="If set, rule applies to all variants of this model"
-    )
-    # What the rule targets
+    variant_id: Optional[str] = Field(None, max_length=100)
+    model_id: Optional[str] = Field(None, max_length=80)
     target_option_type: ConfiguratorOptionType
     target_option_id: str = Field(..., max_length=100)
-    # Rule logic
     effect: RuleEffect
     conditions: List[RuleCondition] = Field(default_factory=list)
-    # Human-readable explanation (shown to user when rule blocks a choice)
     explanation: Optional[str] = Field(None, max_length=500)
     active: bool = True
-    priority: int = Field(0, ge=0, description="Higher = evaluated first")
+    priority: int = Field(0, ge=0)
 
-
-# ---------------------------------------------------------------------------
-# Configuration State
-# ---------------------------------------------------------------------------
 
 class DoorState(BaseModel):
     """Showroom interaction — does NOT affect price."""
@@ -278,33 +206,18 @@ class LightingState(BaseModel):
 
 
 class InteractionState(BaseModel):
-    """
-    All showroom interactions bundled.
-
-    These states control the 3D scene but do NOT alter
-    the purchasable configuration or pricing.
-    """
+    """All showroom interactions bundled."""
     doors: DoorState = Field(default_factory=DoorState)
     hood_open: bool = False
     boot_open: bool = False
     frunk_open: bool = False
     sunroof_open: bool = False
     lighting: LightingState = Field(default_factory=LightingState)
-    camera_preset: Optional[str] = Field(
-        None, max_length=40,
-        description=(
-            "e.g. 'exterior', 'front', 'rear', 'interior', "
-            "'cockpit', 'boot', 'wheel'"
-        )
-    )
+    camera_preset: Optional[str] = Field(None, max_length=40)
 
 
 class PurchasableConfiguration(BaseModel):
-    """
-    The parts of configuration that affect price.
-
-    Only these fields flow into the pricing engine.
-    """
+    """The parts of configuration that affect price."""
     variant_id: str = Field(..., max_length=100)
     paint_id: Optional[str] = Field(None, max_length=80)
     wheel_id: Optional[str] = Field(None, max_length=80)
@@ -321,28 +234,16 @@ class PurchasableConfiguration(BaseModel):
 
 
 class ConfigurationState(BaseModel):
-    """
-    The complete authoritative configuration state.
-
-    purchasable: affects price — validated by backend
-    interaction: showroom state — does not affect price
-    """
+    """The complete authoritative configuration state."""
     purchasable: PurchasableConfiguration
     interaction: InteractionState = Field(default_factory=InteractionState)
 
-
-# ---------------------------------------------------------------------------
-# Saved Configuration
-# ---------------------------------------------------------------------------
 
 class SavedConfigurationCreate(BaseModel):
     """Payload for saving a user configuration."""
     configuration: ConfigurationState
     city: Optional[str] = Field(None, max_length=80)
-    price_snapshot: Optional[int] = Field(
-        None, ge=0,
-        description="Calculated on-road price at time of save"
-    )
+    price_snapshot: Optional[int] = Field(None, ge=0)
     asset_id: Optional[str] = Field(None, max_length=100)
     asset_version: Optional[str] = Field(None, max_length=30)
 
@@ -351,20 +252,12 @@ class SavedConfiguration(SavedConfigurationCreate):
     """A persisted saved configuration."""
     config_id: str
     owner_phone: Optional[str] = None
-    share_token: Optional[str] = Field(
-        None, max_length=64,
-        description="URL-safe token for sharing without authentication"
-    )
+    share_token: Optional[str] = Field(None, max_length=64)
     created_at: str
     updated_at: str
-    # Flag if any option is no longer available
     stale: bool = False
     stale_reason: Optional[str] = Field(None, max_length=500)
 
-
-# ---------------------------------------------------------------------------
-# Pricing Engine
-# ---------------------------------------------------------------------------
 
 class PriceComponent(BaseModel):
     """A single named component of the on-road price."""
@@ -378,20 +271,13 @@ class ConfigurationPriceRequest(BaseModel):
     configuration: PurchasableConfiguration
     city: Optional[str] = Field(None, max_length=80)
     state: Optional[str] = Field(None, max_length=80)
-    # Optional offer codes
     offer_codes: List[str] = Field(default_factory=list, max_length=10)
 
 
 class ConfigurationPriceResponse(BaseModel):
-    """
-    Backend-authoritative price breakdown.
-
-    The frontend must NEVER be the source of truth for pricing.
-    This response is the only valid price source.
-    """
+    """Backend-authoritative price breakdown."""
     variant_id: str
     city: Optional[str] = None
-    # Breakdown
     base_ex_showroom: int
     option_deltas: List[PriceComponent] = Field(default_factory=list)
     total_options: int = 0
@@ -403,7 +289,6 @@ class ConfigurationPriceResponse(BaseModel):
     offers_applied: List[PriceComponent] = Field(default_factory=list)
     total_discount: int = 0
     estimated_on_road: int
-    # Metadata
     price_is_estimate: bool = True
     effective_date: str
     source: Optional[str] = None
@@ -416,55 +301,35 @@ class ConfigurationPriceResponse(BaseModel):
         return self
 
 
-# ---------------------------------------------------------------------------
-# Validation
-# ---------------------------------------------------------------------------
-
 class ValidationResult(BaseModel):
     valid: bool
     errors: List[str] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
-    # Which rules were evaluated and their outcomes
     rules_applied: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class ConfigurationValidationRequest(BaseModel):
+    """Request to validate a purchasable configuration."""
     configuration: PurchasableConfiguration
 
 
-# ---------------------------------------------------------------------------
-# AI Configurator Contract
-# ---------------------------------------------------------------------------
-
 class AIConfiguratorIntent(BaseModel):
-    """
-    Structured intent extracted from natural language by the AI.
-
-    The AI populates this from the user's request.
-    The backend then validates it against real options.
-    The AI must NOT set prices or invent option IDs.
-    """
+    """Structured intent extracted from natural language by the AI."""
     raw_request: str = Field(..., max_length=2000)
-    # Extracted preferences (may be null if not mentioned)
     preferred_segment: Optional[str] = Field(None, max_length=60)
     max_budget: Optional[int] = Field(None, ge=0)
     preferred_fuel: Optional[str] = Field(None, max_length=40)
     preferred_color_description: Optional[str] = Field(None, max_length=200)
     preferred_interior_description: Optional[str] = Field(None, max_length=200)
-    open_hood: Optional[bool] = None
-    open_doors: Optional[bool] = None
-    lights_on: Optional[bool] = None
-    camera_preset: Optional[str] = Field(None, max_length=40)
+    preferred_wheel_description: Optional[str] = Field(None, max_length=200)
+    preferred_roof_description: Optional[str] = Field(None, max_length=200)
+    preferred_accessories: List[str] = Field(default_factory=list, max_length=30)
 
 
 class AIConfiguratorResponse(BaseModel):
-    """
-    The resolved configuration returned after AI intent is validated
-    against real backend options.
-    """
-    configuration: Optional[ConfigurationState] = None
-    price: Optional[ConfigurationPriceResponse] = None
-    explanation: str = Field(..., max_length=2000)
-    # If any requested option was unavailable, explain why
-    unavailable_options: List[Dict[str, str]] = Field(default_factory=list)
+    """Backend response for conversational configuration."""
+    configuration: Optional[PurchasableConfiguration]
+    price: Optional[ConfigurationPriceResponse]
+    explanation: str
+    unavailable_options: List[str] = Field(default_factory=list)
     valid: bool
