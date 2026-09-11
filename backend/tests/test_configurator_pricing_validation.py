@@ -1,7 +1,5 @@
 """Regression tests for backend-authoritative configurator pricing validation."""
 
-from typing import Optional
-
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
