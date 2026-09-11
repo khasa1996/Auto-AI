@@ -110,8 +110,10 @@ def test_authenticated_save_persists_owner_and_server_price() -> None:
     assert body["owner_phone"] == "+919876543210"
     assert body["share_token"]
     assert body["config_id"]
-    assert body["price_snapshot"]["estimated_on_road"] == 1_000_000
-    assert body["price_snapshot"]["base_ex_showroom"] == 900_000
+    assert body["price_snapshot"] == 1_000_000
+    assert body["price_breakdown"]["estimated_on_road"] == 1_000_000
+    assert body["price_breakdown"]["base_ex_showroom"] == 900_000
+    assert body["price_snapshot"] != _payload()["price_snapshot"]
 
 
 def test_anonymous_save_is_rejected() -> None:
@@ -171,6 +173,8 @@ def test_share_token_is_public_but_sanitized() -> None:
     assert body["config_id"] == saved["config_id"]
     assert "owner_phone" not in body
     assert "share_token" not in body
+    assert body["price_snapshot"] == 1_000_000
+    assert body["price_breakdown"]["estimated_on_road"] == 1_000_000
 
 
 def test_unknown_configuration_returns_not_found() -> None:
