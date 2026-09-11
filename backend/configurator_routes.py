@@ -18,6 +18,7 @@ from configurator_schemas import (
     SavedConfigurationCreate,
     ValidationResult,
 )
+from configurator_ai import build_interaction_state, resolve_ai_selection
 from vehicle_schemas import BrandSummary, ConfiguratorStatus, ModelSummary, VariantDetail, VariantSummary
 from pricing_engine import calculate_configuration_price, validate_asset_url
 from rules_engine import get_available_options_for_variant, validate_configuration
@@ -319,16 +320,66 @@ def make_configurator_router(
 
     @router.post("/configurator/ai", response_model=AIConfiguratorResponse)
     async def ai_configurator(intent: AIConfiguratorIntent):
+        """Resolve natural-language intent through the catalog, rules engine and price engine."""
+        try:
+            configuration, explanation, unavailable = await resolve_ai_selection(intent, db)
+        except ValueError as exc:
+            return AIConfiguratorResponse(
+                configuration=None,
+                price=None,
+                explanation=str(exc),
+                unavailable_options=[],
+                valid=False,
+            )
+
+        validation = await validate_configuration(
+            ConfigurationValidationRequest(configuration=configuration), db
+        )
+        if not validation.valid:
+            return AIConfiguratorResponse(
+                configuration=None,
+                price=None,
+                explanation="AI selection was rejected by the configurator rules engine: " + "; ".join(validation.errors),
+                unavailable_options=unavailable,
+                valid=False,
+            )
+
+        try:
+            price = await calculate_configuration_price(
+                ConfigurationPriceRequest(configuration=configuration), db
+            )
+        except ValueError as exc:
+            return AIConfiguratorResponse(
+                configuration=None,
+                price=None,
+                explanation=str(exc),
+                unavailable_options=unavailable,
+                valid=False,
+            )
+
+        if intent.max_budget is not None and price.estimated_on_road > intent.max_budget:
+            explanation = (
+                f"The best resolved configuration is estimated at ₹{price.estimated_on_road:,}, "
+                f"which exceeds the requested ₹{intent.max_budget:,} budget."
+            )
+            return AIConfiguratorResponse(
+                configuration=None,
+                price=price,
+                explanation=explanation,
+                unavailable_options=unavailable,
+                valid=False,
+            )
+
+        configuration_state = {
+            "purchasable": configuration.model_dump(),
+            "interaction": build_interaction_state(intent).model_dump(),
+        }
         return AIConfiguratorResponse(
-            configuration=None,
-            price=None,
-            explanation=(
-                "AI configuration is a Phase 3 feature. The contract is defined and validated. "
-                "When implemented, the AI will select only from backend-provided options "
-                "and validate through the rules engine."
-            ),
-            unavailable_options=[],
-            valid=False,
+            configuration=configuration_state,
+            price=price,
+            explanation=explanation,
+            unavailable_options=unavailable,
+            valid=True,
         )
 
     @router.post("/configurator/assets/validate-url")
