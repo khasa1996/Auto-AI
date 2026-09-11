@@ -31,7 +31,7 @@
 - Consumes: the canonical `server.app` and existing configurator composition helper.
 - Produces: a regression assertion proving `server.app` exposes the configurator routes.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add a test that imports `app` from `server`, collects `app.routes`, and asserts `/api/v1/configurator/validate` and `/api/v1/configurator/configurations` are present.
 
@@ -45,15 +45,9 @@ def test_canonical_server_app_registers_configurator_routes() -> None:
     assert "/api/v1/configurator/configurations" in paths
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
-Run:
-
-```bash
-cd backend && pytest tests/test_configurator_composition.py::test_canonical_server_app_registers_configurator_routes -v
-```
-
-Expected: FAIL because the current canonical `server.app` does not yet mount the configurator composition.
+The CI run for commit `0f610dd44f2e0c34c223d9f2e6e6d331a5d7e946` failed at the complete backend suite as expected because the canonical `server.app` still lacked the configurator mount.
 
 - [ ] **Step 3: Implement the minimal canonical composition**
 
@@ -213,3 +207,7 @@ Confirm `auto-ai-api` deploys the new `main` commit successfully and `/health/re
 - [ ] **Step 7: Verify post-merge production frontend**
 
 Confirm `autoaiindia.com` serves the production frontend and that the configurator route is reachable after the merge.
+
+---
+
+Execution note: a one-off repository workflow has been staged to apply the two canonical `server.py` changes and then dispatch the normal verification workflows. It is self-removing and does not alter production infrastructure.
