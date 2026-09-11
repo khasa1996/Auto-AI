@@ -14,81 +14,87 @@
  * Rules:
  *  - Missing animations are silently ignored — no fake movement substituted.
  *  - Rapid repeated clicks are handled via a playing-set lock.
- *  - All animations are cleaned up on unmount / scene change.
+ *  - Finished listeners are removed when their action completes.
+ *  - All active animations and listeners are cleaned up on unmount / scene change.
  *
  * Status: FOUNDATION — controller is wired. Actual playback requires a
  *   GLB asset that contains the named animation clips.
  */
 
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAnimations } from '@react-three/drei';
 
 /** Semantic names for every supported vehicle interaction animation. */
 export const ANIMATION_NAMES = {
-  DOOR_FL_OPEN:   'Door_FL_Open',
-  DOOR_FL_CLOSE:  'Door_FL_Close',
-  DOOR_FR_OPEN:   'Door_FR_Open',
-  DOOR_FR_CLOSE:  'Door_FR_Close',
-  DOOR_RL_OPEN:   'Door_RL_Open',
-  DOOR_RL_CLOSE:  'Door_RL_Close',
-  DOOR_RR_OPEN:   'Door_RR_Open',
-  DOOR_RR_CLOSE:  'Door_RR_Close',
-  HOOD_OPEN:      'Hood_Open',
-  HOOD_CLOSE:     'Hood_Close',
-  BOOT_OPEN:      'Boot_Open',
-  BOOT_CLOSE:     'Boot_Close',
-  SUNROOF_OPEN:   'Sunroof_Open',
-  SUNROOF_CLOSE:  'Sunroof_Close',
-  FRUNK_OPEN:     'Frunk_Open',
-  FRUNK_CLOSE:    'Frunk_Close',
+  DOOR_FL_OPEN: 'Door_FL_Open',
+  DOOR_FL_CLOSE: 'Door_FL_Close',
+  DOOR_FR_OPEN: 'Door_FR_Open',
+  DOOR_FR_CLOSE: 'Door_FR_Close',
+  DOOR_RL_OPEN: 'Door_RL_Open',
+  DOOR_RL_CLOSE: 'Door_RL_Close',
+  DOOR_RR_OPEN: 'Door_RR_Open',
+  DOOR_RR_CLOSE: 'Door_RR_Close',
+  HOOD_OPEN: 'Hood_Open',
+  HOOD_CLOSE: 'Hood_Close',
+  BOOT_OPEN: 'Boot_Open',
+  BOOT_CLOSE: 'Boot_Close',
+  SUNROOF_OPEN: 'Sunroof_Open',
+  SUNROOF_CLOSE: 'Sunroof_Close',
+  FRUNK_OPEN: 'Frunk_Open',
+  FRUNK_CLOSE: 'Frunk_Close',
 };
 
 /**
- * useVehicleAnimations — hook that wraps useAnimations with safety guards.
+ * useVehicleAnimations — hook that wraps useAnimations with lifecycle guards.
  *
  * @param {THREE.AnimationClip[]} clips - From useGLTF
- * @param {React.RefObject}       ref   - Scene group ref
+ * @param {React.RefObject} ref - Scene group ref
  * @returns {{ play: (name: string) => void, availableAnimations: Set<string> }}
  */
 export function useVehicleAnimations(clips, ref) {
   const { actions, mixer } = useAnimations(clips, ref);
   const playingRef = useRef(new Set());
+  const listenersRef = useRef(new Map());
 
-  const availableAnimations = new Set(Object.keys(actions));
+  const availableAnimations = useMemo(() => new Set(Object.keys(actions)), [actions]);
 
-  function play(animationName) {
+  const play = useCallback((animationName) => {
     const action = actions[animationName];
 
-    if (!action) {
+    if (!action || !mixer) {
       // Animation not present in this asset — silently ignore.
       // Never substitute fake movement.
       return;
     }
 
     if (playingRef.current.has(animationName)) {
-      // Already playing — ignore rapid repeated clicks
+      // Already playing — ignore rapid repeated clicks.
       return;
     }
 
+    const onFinished = (event) => {
+      if (event.action !== action) return;
+      playingRef.current.delete(animationName);
+      mixer.removeEventListener('finished', onFinished);
+      listenersRef.current.delete(animationName);
+    };
+
     playingRef.current.add(animationName);
+    listenersRef.current.set(animationName, onFinished);
+    mixer.addEventListener('finished', onFinished);
+
     action.reset();
     action.setLoop(THREE_LoopOnce, 1);
     action.clampWhenFinished = true;
     action.play();
+  }, [actions, mixer]);
 
-    // Remove from playing set when animation finishes
-    const onFinished = (e) => {
-      if (e.action === action) {
-        playingRef.current.delete(animationName);
-        mixer.removeEventListener('finished', onFinished);
-      }
-    };
-    mixer.addEventListener('finished', onFinished);
-  }
-
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
+      listenersRef.current.forEach((listener) => {
+        mixer?.removeEventListener('finished', listener);
+      });
+      listenersRef.current.clear();
       playingRef.current.clear();
       mixer?.stopAllAction();
     };
