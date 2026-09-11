@@ -22,3 +22,13 @@ def test_mount_configurator_router_registers_versioned_routes() -> None:
     assert "/api/v1/configurator/validate" in paths
     assert "/api/v1/configurator/price" in paths
     assert "/api/v1/configurator/configurations" in paths
+
+
+def test_canonical_server_app_registers_configurator_routes() -> None:
+    from server import app
+
+    paths = {route.path for route in app.routes}
+
+    assert "/api/v1/configurator/validate" in paths
+    assert "/api/v1/configurator/price" in paths
+    assert "/api/v1/configurator/configurations" in paths
