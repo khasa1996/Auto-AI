@@ -49,13 +49,15 @@ def build_saved_configuration_document(
     """Build a persisted snapshot from server-authoritative values."""
     configuration = request.configuration.model_dump()
     stale_reason = None if server_asset else "Published verified configurator asset is unavailable"
+    estimated_on_road = int(server_price_snapshot.get("estimated_on_road", 0))
     return {
         "config_id": config_id,
         "owner_phone": owner_phone,
         "share_token": share_token,
         "configuration": configuration,
         "city": request.city,
-        "price_snapshot": server_price_snapshot,
+        "price_snapshot": estimated_on_road,
+        "price_breakdown": server_price_snapshot,
         "asset_id": server_asset.get("asset_id") if server_asset else None,
         "asset_version": server_asset.get("version") if server_asset else None,
         "stale": bool(stale_reason),
@@ -396,6 +398,7 @@ def _public_configuration_response(doc: Dict[str, object]) -> Dict[str, object]:
         "configuration",
         "city",
         "price_snapshot",
+        "price_breakdown",
         "asset_id",
         "asset_version",
         "stale",
