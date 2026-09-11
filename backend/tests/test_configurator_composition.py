@@ -22,6 +22,9 @@ def test_mount_configurator_router_registers_versioned_routes() -> None:
     assert "/api/v1/configurator/validate" in paths
     assert "/api/v1/configurator/price" in paths
     assert "/api/v1/configurator/configurations" in paths
+    assert "/api/v1/configurator/history" in paths
+    assert "/api/v1/configurator/compare" in paths
+    assert "/api/v1/configurator/conversion-lead" in paths
 
 
 def test_canonical_server_app_registers_configurator_routes() -> None:
@@ -32,3 +35,4 @@ def test_canonical_server_app_registers_configurator_routes() -> None:
     assert "/api/v1/configurator/validate" in paths
     assert "/api/v1/configurator/price" in paths
     assert "/api/v1/configurator/configurations" in paths
+    assert "/api/v1/configurator/history" in paths
