@@ -88,6 +88,17 @@ def test_authenticated_save_persists_owner() -> None:
     assert body["config_id"]
 
 
+def test_anonymous_save_is_rejected() -> None:
+    db = FakeDatabase()
+    client = _client(db, None)
+
+    response = client.post("/api/v1/configurator/configurations", json=_payload())
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Authentication required"
+    assert db.configurations.documents == {}
+
+
 def test_owner_can_read_private_configuration() -> None:
     db = FakeDatabase()
     owner = _client(db, "+919876543210")
