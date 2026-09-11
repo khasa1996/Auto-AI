@@ -10,19 +10,12 @@ Key design rules enforced here:
   3. 3D assets require provenance metadata before publication.
   4. Missing assets produce a clear COMING_SOON/UNAVAILABLE state.
      They are never silently replaced with a placeholder.
-
-Status:
-  Schema and validation:  IMPLEMENTED
-  Rules engine:           FOUNDATION (RuleEngine class stub, full eval Phase 3+)
-  Pricing engine:         IMPLEMENTED (base + delta + city components)
-  Asset validation:       IMPLEMENTED
-  Save/share:             FOUNDATION (contract defined, persistence Phase 3)
 """
 
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -41,7 +34,6 @@ _PUBLISHABLE_PROVENANCE = {
     AssetProvenance.AUTO_AI_LICENSED,
     AssetProvenance.LICENSED_THIRD_PARTY,
 }
-
 _VALID_ASSET_EXTENSIONS = (".glb", ".gltf")
 _MAX_ASSET_BYTES = 200 * 1024 * 1024
 
@@ -243,7 +235,7 @@ class SavedConfigurationCreate(BaseModel):
     """Payload for saving a user configuration."""
     configuration: ConfigurationState
     city: Optional[str] = Field(None, max_length=80)
-    price_snapshot: Optional[int] = Field(None, ge=0)
+    price_snapshot: Optional[int] = Field(None, ge=0, description="Calculated on-road price at time of save")
     asset_id: Optional[str] = Field(None, max_length=100)
     asset_version: Optional[str] = Field(None, max_length=30)
 
@@ -309,7 +301,6 @@ class ValidationResult(BaseModel):
 
 
 class ConfigurationValidationRequest(BaseModel):
-    """Request to validate a purchasable configuration."""
     configuration: PurchasableConfiguration
 
 
@@ -321,15 +312,16 @@ class AIConfiguratorIntent(BaseModel):
     preferred_fuel: Optional[str] = Field(None, max_length=40)
     preferred_color_description: Optional[str] = Field(None, max_length=200)
     preferred_interior_description: Optional[str] = Field(None, max_length=200)
-    preferred_wheel_description: Optional[str] = Field(None, max_length=200)
-    preferred_roof_description: Optional[str] = Field(None, max_length=200)
-    preferred_accessories: List[str] = Field(default_factory=list, max_length=30)
+    open_hood: Optional[bool] = None
+    open_doors: Optional[bool] = None
+    lights_on: Optional[bool] = None
+    camera_preset: Optional[str] = Field(None, max_length=40)
 
 
 class AIConfiguratorResponse(BaseModel):
-    """Backend response for conversational configuration."""
-    configuration: Optional[PurchasableConfiguration]
-    price: Optional[ConfigurationPriceResponse]
-    explanation: str
-    unavailable_options: List[str] = Field(default_factory=list)
+    """The resolved configuration returned after AI intent is validated."""
+    configuration: Optional[ConfigurationState] = None
+    price: Optional[ConfigurationPriceResponse] = None
+    explanation: str = Field(..., max_length=2000)
+    unavailable_options: List[Dict[str, str]] = Field(default_factory=list)
     valid: bool
