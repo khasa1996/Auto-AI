@@ -12,6 +12,7 @@ import News from "./pages/News";
 import BookCar from "./pages/BookCar";
 import Showroom from "./pages/Showroom";
 import CarConfigurator from "./pages/CarConfigurator";
+import ConfiguratorHistory from "./pages/ConfiguratorHistory";
 import Premium from "./pages/Premium";
 import Dealer from "./pages/Dealer";
 import DealerApply from "./pages/DealerApply";
@@ -29,33 +30,34 @@ function App() {
     <AppErrorBoundary>
       <div className="App bg-[#050505] text-white">
         <I18nProvider>
-        <BrowserRouter>
-          <Navbar />
-          <main>
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/compare" element={<Compare />} />
-              <Route path="/recommend" element={<Recommend />} />
-              <Route path="/cars" element={<Cars />} />
-              <Route path="/emi" element={<EMI />} />
-              <Route path="/news" element={<News />} />
-              <Route path="/book/:carId" element={<BookCar />} />
-              <Route path="/showroom/:carId" element={<Showroom />} />
-              <Route path="/configurator/:variantId" element={<CarConfigurator />} />
-              <Route path="/premium" element={<Premium />} />
-              <Route path="/dealer" element={<Dealer />} />
-              <Route path="/dealers/apply" element={<DealerApply />} />
-              <Route path="/admin" element={<Admin />} />
-              <Route path="/about" element={<About />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/my-bookings" element={<MyBookings />} />
-            </Routes>
-          </main>
-          <Footer />
-          <ChatDrawer />
-          <InstallPWA />
-          <Toaster />
-        </BrowserRouter>
+          <BrowserRouter>
+            <Navbar />
+            <main>
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/compare" element={<Compare />} />
+                <Route path="/recommend" element={<Recommend />} />
+                <Route path="/cars" element={<Cars />} />
+                <Route path="/emi" element={<EMI />} />
+                <Route path="/news" element={<News />} />
+                <Route path="/book/:carId" element={<BookCar />} />
+                <Route path="/showroom/:carId" element={<Showroom />} />
+                <Route path="/configurator/:variantId" element={<CarConfigurator />} />
+                <Route path="/configurator/history" element={<ConfiguratorHistory />} />
+                <Route path="/premium" element={<Premium />} />
+                <Route path="/dealer" element={<Dealer />} />
+                <Route path="/dealers/apply" element={<DealerApply />} />
+                <Route path="/admin" element={<Admin />} />
+                <Route path="/about" element={<About />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/my-bookings" element={<MyBookings />} />
+              </Routes>
+            </main>
+            <Footer />
+            <ChatDrawer />
+            <InstallPWA />
+            <Toaster />
+          </BrowserRouter>
         </I18nProvider>
       </div>
     </AppErrorBoundary>
