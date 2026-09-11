@@ -26,12 +26,7 @@ from rules_engine import get_available_options_for_variant, validate_configurati
 async def _resolve_optional_user_phone(
     authorization: Optional[str] = Header(None),
 ) -> Optional[str]:
-    """Resolve the application's canonical optional auth dependency lazily.
-
-    server.py imports this router, so importing the canonical dependency at
-    module-import time would create a cycle. Runtime resolution keeps the
-    existing token/session validation in one place.
-    """
+    """Resolve the application's canonical optional auth dependency lazily."""
     from server import optional_user_phone
 
     return await optional_user_phone(authorization)
@@ -179,6 +174,7 @@ def make_configurator_router(
                 "supported_interactions": asset.get("supported_interactions", []),
                 "paint_material_names": asset.get("paint_material_names", []),
                 "wheel_mesh_names": asset.get("wheel_mesh_names", {}),
+                "option_mesh_names": asset.get("option_mesh_names", {}),
             },
         }
 
