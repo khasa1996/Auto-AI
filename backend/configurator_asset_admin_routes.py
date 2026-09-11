@@ -48,6 +48,14 @@ def make_asset_admin_router(db: AsyncIOMotorDatabase) -> APIRouter:
         _: str = Depends(_require_admin),
     ):
         result = validate_asset_manifest(request.asset, request.mesh_names)
+        now = datetime.now(timezone.utc).isoformat()
+        update = {
+            "validation_passed": result["valid"],
+            "updated_at": now,
+            "validation_errors": result["errors"],
+            "validation_warnings": result["warnings"],
+        }
+        await db.configurator_assets.update_one({"asset_id": request.asset.asset_id}, {"$set": update})
         return {"asset_id": request.asset.asset_id, **result}
 
     @router.post("/assets")
