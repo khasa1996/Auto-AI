@@ -30,6 +30,12 @@ class AssetPublicationRequest(BaseModel):
     publish: bool
 
 
+class AssetReviewRequest(BaseModel):
+    asset_id: str = Field(..., max_length=100)
+    approved: bool
+    review_notes: str = Field(default="", max_length=1000)
+
+
 class AssetAssignmentRequest(BaseModel):
     variant_id: str = Field(..., max_length=100)
     asset_id: str = Field(..., max_length=100)
@@ -150,6 +156,33 @@ def make_asset_admin_router(db: AsyncIOMotorDatabase) -> APIRouter:
             upsert=True,
         )
         return ConfiguratorAsset(**document)
+
+    @router.post("/assets/review")
+    async def review_asset(
+        request: AssetReviewRequest,
+        _: str = Depends(_require_admin),
+    ):
+        asset_doc = await db.configurator_assets.find_one({"asset_id": request.asset_id}, {"_id": 0})
+        if not asset_doc:
+            raise HTTPException(status_code=404, detail="Asset not found")
+        if request.approved and not asset_doc.get("validation_passed"):
+            raise HTTPException(status_code=422, detail="Technical validation must pass before admin approval")
+
+        now = datetime.now(timezone.utc).isoformat()
+        update = {
+            "admin_reviewed": request.approved,
+            "review_notes": request.review_notes,
+            "updated_at": now,
+        }
+        if not request.approved:
+            update["published"] = False
+        await db.configurator_assets.update_one({"asset_id": request.asset_id}, {"$set": update})
+        return {
+            "asset_id": request.asset_id,
+            "admin_reviewed": request.approved,
+            "review_notes": request.review_notes,
+            "published": False if not request.approved else bool(asset_doc.get("published")),
+        }
 
     @router.post("/assets/publish")
     async def publish_asset(
