@@ -299,6 +299,7 @@ class ValidationResult(BaseModel):
 
 
 class ConfigurationValidationRequest(BaseModel):
+    """Request to validate a purchasable configuration."""
     configuration: PurchasableConfiguration
 
 
@@ -313,6 +314,8 @@ class AIConfiguratorIntent(BaseModel):
     preferred_interior_description: Optional[str] = Field(None, max_length=200)
     open_hood: Optional[bool] = None
     open_doors: Optional[bool] = None
+    open_boot: Optional[bool] = None
+    open_sunroof: Optional[bool] = None
     lights_on: Optional[bool] = None
     camera_preset: Optional[str] = Field(None, max_length=40)
 
