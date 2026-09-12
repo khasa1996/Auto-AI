@@ -22,18 +22,45 @@ export const LIGHTING_MATERIAL_NAMES = {
   INTERIOR_LIGHT: 'MAT_INTERIOR_LIGHT',
 };
 
+const LIGHTING_CAPABILITIES = [
+  'headlights',
+  'drl',
+  'taillights',
+  'fog_lights',
+  'left_indicator',
+  'right_indicator',
+  'hazard',
+  'interior_lights',
+];
 const INDICATOR_BLINK_MS = 500;
+
+export function normalizeLightingState(lightingState = {}, supportedInteractions) {
+  const supported = new Set(Array.isArray(supportedInteractions) ? supportedInteractions : []);
+  const isSupported = (capability) => supported.has(capability);
+  return {
+    headlights: Boolean(lightingState.headlights && isSupported('headlights')),
+    drl: Boolean(lightingState.drl && isSupported('drl')),
+    taillights: Boolean(lightingState.taillights && isSupported('taillights')),
+    fog_lights: Boolean(lightingState.fog_lights && isSupported('fog_lights')),
+    left_indicator: Boolean(lightingState.left_indicator && isSupported('left_indicator')),
+    right_indicator: Boolean(lightingState.right_indicator && isSupported('right_indicator')),
+    hazard: Boolean(lightingState.hazard && isSupported('hazard')),
+    interior: Boolean(lightingState.interior && isSupported('interior_lights')),
+  };
+}
 
 /**
  * useLightingController — applies lighting state to the 3D scene.
  *
  * @param {THREE.Object3D|React.RefObject} sceneOrRef - Vehicle scene/group or ref
  * @param {object} lightingState - From configurator store interaction.lighting
+ * @param {string[]} supportedInteractions - Verified asset capabilities
  */
-export function useLightingController(sceneOrRef, lightingState) {
+export function useLightingController(sceneOrRef, lightingState, supportedInteractions = []) {
   const headlightRef = useRef(null);
   const taillightRef = useRef(null);
   const indicatorTimerRef = useRef(null);
+  const normalizedLighting = normalizeLightingState(lightingState, supportedInteractions);
 
   const getScene = () => sceneOrRef?.current ?? sceneOrRef ?? null;
 
@@ -42,11 +69,11 @@ export function useLightingController(sceneOrRef, lightingState) {
     if (!scene) return undefined;
 
     const targets = {
-      [LIGHTING_MATERIAL_NAMES.HEADLIGHT]: lightingState.headlights,
-      [LIGHTING_MATERIAL_NAMES.DRL]: lightingState.drl,
-      [LIGHTING_MATERIAL_NAMES.TAILLIGHT]: lightingState.taillights,
-      [LIGHTING_MATERIAL_NAMES.FOG_LIGHT]: lightingState.fog_lights,
-      [LIGHTING_MATERIAL_NAMES.INTERIOR_LIGHT]: lightingState.interior,
+      [LIGHTING_MATERIAL_NAMES.HEADLIGHT]: normalizedLighting.headlights,
+      [LIGHTING_MATERIAL_NAMES.DRL]: normalizedLighting.drl,
+      [LIGHTING_MATERIAL_NAMES.TAILLIGHT]: normalizedLighting.taillights,
+      [LIGHTING_MATERIAL_NAMES.FOG_LIGHT]: normalizedLighting.fog_lights,
+      [LIGHTING_MATERIAL_NAMES.INTERIOR_LIGHT]: normalizedLighting.interior,
     };
 
     scene.traverse((node) => {
@@ -64,14 +91,14 @@ export function useLightingController(sceneOrRef, lightingState) {
     });
 
     return undefined;
-  }, [sceneOrRef, lightingState.headlights, lightingState.drl,
-      lightingState.taillights, lightingState.fog_lights, lightingState.interior]);
+  }, [sceneOrRef, normalizedLighting.headlights, normalizedLighting.drl,
+      normalizedLighting.taillights, normalizedLighting.fog_lights, normalizedLighting.interior]);
 
   useEffect(() => {
     const scene = getScene();
     if (!scene) return undefined;
 
-    if (lightingState.headlights) {
+    if (normalizedLighting.headlights) {
       if (!headlightRef.current) {
         const light = new THREE.PointLight('#ffffee', 3, 8);
         light.position.set(0, 0.6, 2.5);
@@ -84,13 +111,13 @@ export function useLightingController(sceneOrRef, lightingState) {
     }
 
     return undefined;
-  }, [sceneOrRef, lightingState.headlights]);
+  }, [sceneOrRef, normalizedLighting.headlights]);
 
   useEffect(() => {
     const scene = getScene();
     if (!scene) return undefined;
 
-    if (lightingState.taillights) {
+    if (normalizedLighting.taillights) {
       if (!taillightRef.current) {
         const light = new THREE.PointLight('#ff2200', 1.5, 4);
         light.position.set(0, 0.5, -2.5);
@@ -103,14 +130,14 @@ export function useLightingController(sceneOrRef, lightingState) {
     }
 
     return undefined;
-  }, [sceneOrRef, lightingState.taillights]);
+  }, [sceneOrRef, normalizedLighting.taillights]);
 
   useEffect(() => {
     const scene = getScene();
     if (!scene) return undefined;
 
-    const leftOn = lightingState.left_indicator || lightingState.hazard;
-    const rightOn = lightingState.right_indicator || lightingState.hazard;
+    const leftOn = normalizedLighting.left_indicator || normalizedLighting.hazard;
+    const rightOn = normalizedLighting.right_indicator || normalizedLighting.hazard;
 
     clearInterval(indicatorTimerRef.current);
     indicatorTimerRef.current = null;
@@ -131,7 +158,7 @@ export function useLightingController(sceneOrRef, lightingState) {
       clearInterval(indicatorTimerRef.current);
       indicatorTimerRef.current = null;
     };
-  }, [sceneOrRef, lightingState.left_indicator, lightingState.right_indicator, lightingState.hazard]);
+  }, [sceneOrRef, normalizedLighting.left_indicator, normalizedLighting.right_indicator, normalizedLighting.hazard]);
 
   useEffect(() => {
     return () => {
