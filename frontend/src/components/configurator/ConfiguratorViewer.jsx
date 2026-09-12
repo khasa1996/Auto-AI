@@ -15,6 +15,7 @@ import { useConfiguratorStore } from '../../state/configuratorStore';
 import { configuratorApi } from '../../services/configuratorApi';
 import { normalizeHotspots } from './premiumShowroom';
 import { buildConfiguratorShareCard } from './shareCard';
+import ConfiguratorAIAssistant from './ConfiguratorAIAssistant';
 
 function ConfiguratorScene({ modelUrl, paintColorHex, paintMaterialNames, wheelMeshNames, optionMeshNames, purchasable, interaction, supportedInteractions, sceneRef }) {
   const controlsRef = useRef();
@@ -159,5 +160,8 @@ export default function ConfiguratorViewer({ style, options, variant }) {
       <div className="flex items-start justify-between gap-4"><div><div className="text-sm font-semibold text-white">{selectedHotspot.label}</div>{selectedHotspot.description && <div className="mt-1 text-xs leading-5 text-white/55">{selectedHotspot.description}</div>}</div><button type="button" onClick={() => setSelectedHotspot(null)} className="text-white/40 hover:text-white" aria-label="Close hotspot details">×</button></div>
     </div>}
     {captureState && <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-white/10 bg-black/75 px-4 py-2 text-[9px] uppercase tracking-widest text-white/70 backdrop-blur">{captureState === 'capturing' ? 'Creating share card…' : captureState === 'done' ? 'Ready' : 'Capture unavailable'}</div>}
+    <div className="absolute bottom-4 left-4 right-4 z-10 md:hidden">
+      <ConfiguratorAIAssistant />
+    </div>
   </div>;
 }
