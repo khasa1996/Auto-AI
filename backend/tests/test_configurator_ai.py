@@ -33,27 +33,43 @@ def test_safe_selection_rejects_ai_invented_ids():
     assert selected.accessory_ids == ["a1"]
 
 
-def test_interaction_intent_is_non_purchasable():
+def test_interaction_intent_maps_hood_boot_sunroof_doors_and_lights():
     state = build_interaction_state(
         AIConfiguratorIntent(
             variant_id="v1",
-            raw_request="open the hood and doors",
+            raw_request="open the hood, boot, sunroof and doors with lights",
             open_hood=True,
+            open_boot=True,
+            open_sunroof=True,
             open_doors=True,
             lights_on=True,
             camera_preset="interior",
         )
     )
     assert state.hood_open is True
+    assert state.boot_open is True
+    assert state.sunroof_open is True
     assert state.doors.front_left is True
     assert state.doors.front_right is True
     assert state.lighting.headlights is True
+    assert state.lighting.drl is True
     assert state.camera_preset == "interior"
 
 
-def test_ai_prompt_contains_only_catalog_option_ids():
-    intent = AIConfiguratorIntent(variant_id="v1", raw_request="red with alloy wheels")
+def test_interaction_defaults_closed_and_lights_off():
+    state = build_interaction_state(AIConfiguratorIntent(variant_id="v1", raw_request="show exterior"))
+    assert state.hood_open is False
+    assert state.boot_open is False
+    assert state.sunroof_open is False
+    assert state.doors.front_left is False
+    assert state.lighting.headlights is False
+
+
+def test_ai_prompt_contains_only_catalog_option_ids_and_interaction_contract():
+    intent = AIConfiguratorIntent(variant_id="v1", raw_request="red with alloy wheels and open the boot")
     prompt = build_ai_prompt(intent, catalog())
     assert "invented" not in prompt
     assert '"id":"red"' in prompt
     assert '"id":"w1"' in prompt
+    assert "open_boot" in prompt
+    assert "open_sunroof" in prompt
