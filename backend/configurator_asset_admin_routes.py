@@ -2,16 +2,22 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
+from configurator_asset_ingestion import build_verified_asset_metadata
+from configurator_asset_inspection import inspect_gltf_bytes
 from configurator_asset_validation import validate_asset_manifest
 from configurator_schemas import ConfiguratorAssetCreate, ConfiguratorAsset
 from vehicle_schemas import ConfiguratorStatus
+
+_MAX_UPLOAD_BYTES = 200 * 1024 * 1024
 
 
 class AssetManifestValidationRequest(BaseModel):
@@ -57,6 +63,64 @@ def make_asset_admin_router(db: AsyncIOMotorDatabase) -> APIRouter:
         }
         await db.configurator_assets.update_one({"asset_id": request.asset.asset_id}, {"$set": update})
         return {"asset_id": request.asset.asset_id, **result}
+
+    @router.post("/assets/inspect")
+    async def inspect_asset_upload(
+        asset_json: str = Form(...),
+        asset_file: UploadFile = File(...),
+        _: str = Depends(_require_admin),
+    ):
+        try:
+            asset = ConfiguratorAssetCreate.model_validate(json.loads(asset_json))
+        except (json.JSONDecodeError, ValidationError) as exc:
+            raise HTTPException(status_code=422, detail="asset_json must contain a valid ConfiguratorAssetCreate payload") from exc
+
+        if asset.format != "glb":
+            raise HTTPException(status_code=422, detail="Binary inspection currently supports GLB assets only")
+        if not (asset_file.filename or "").lower().endswith(".glb"):
+            raise HTTPException(status_code=422, detail="Uploaded asset must use a .glb filename")
+
+        payload = await asset_file.read(_MAX_UPLOAD_BYTES + 1)
+        if len(payload) > _MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="Asset exceeds the 200 MB upload limit")
+
+        try:
+            inspected = inspect_gltf_bytes(payload, filename=asset_file.filename)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+        manifest_result = validate_asset_manifest(asset, [*inspected["mesh_names"], *inspected["node_names"]])
+        structure_result = build_verified_asset_metadata(asset, inspected)
+        valid = manifest_result["valid"] and structure_result["valid"]
+        checksum = hashlib.sha256(payload).hexdigest()
+        now = datetime.now(timezone.utc).isoformat()
+
+        await db.configurator_assets.update_one(
+            {"asset_id": asset.asset_id},
+            {
+                "$set": {
+                    "file_size_bytes": len(payload),
+                    "checksum_sha256": checksum,
+                    "validation_passed": valid,
+                    "published": False,
+                    "updated_at": now,
+                    "validation_errors": [*manifest_result["errors"], *structure_result["errors"]],
+                    "validation_warnings": manifest_result["warnings"],
+                    "inspected_structure": inspected,
+                }
+            },
+            upsert=False,
+        )
+
+        return {
+            "asset_id": asset.asset_id,
+            "valid": valid,
+            "checksum_sha256": checksum,
+            "file_size_bytes": len(payload),
+            "inspection": inspected,
+            "manifest": manifest_result,
+            "structure": structure_result,
+        }
 
     @router.post("/assets")
     async def upsert_asset(
