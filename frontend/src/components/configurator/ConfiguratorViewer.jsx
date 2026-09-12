@@ -38,7 +38,12 @@ function ConfiguratorScene({ modelUrl, paintColorHex, paintMaterialNames, wheelM
   </>;
 }
 
-export default function ConfiguratorViewer({ style, options }) {
+function optionLabel(options, id) {
+  const option = options?.find((item) => (item.option_id || item.color_id || item.wheel_id || item.interior_id || item.roof_id) === id);
+  return option?.display_name || option?.name || option?.color_name || option?.wheel_name || option?.interior_name || id || 'Not selected';
+}
+
+export default function ConfiguratorViewer({ style, options, variant }) {
   const sceneRef = useRef();
   const canvasRef = useRef(null);
   const [cinematic, setCinematic] = useState(false);
@@ -48,6 +53,8 @@ export default function ConfiguratorViewer({ style, options }) {
   const asset = useConfiguratorStore((state) => state.asset);
   const purchasable = useConfiguratorStore((state) => state.purchasable);
   const interaction = useConfiguratorStore((state) => state.interaction);
+  const price = useConfiguratorStore((state) => state.price);
+  const city = useConfiguratorStore((state) => state.city);
   const isInitialized = useConfiguratorStore((state) => state.isInitialized);
   const setCameraPreset = useConfiguratorStore((state) => state.setCameraPreset);
 
@@ -95,14 +102,14 @@ export default function ConfiguratorViewer({ style, options }) {
     try {
       const blob = await buildConfiguratorShareCard({
         sourceCanvas: canvas,
-        vehicleName: purchasable.vehicleName || purchasable.variantId,
-        variantName: purchasable.variantName || purchasable.variantId,
-        color: selectedPaint?.name || purchasable.paintId,
-        wheels: purchasable.wheelId,
-        interior: purchasable.interiorId,
-        roof: purchasable.roofId,
-        price: purchasable.priceSnapshot?.formatted_total || purchasable.priceSnapshot?.total || purchasable.price,
-        city: purchasable.city,
+        vehicleName: variant?.model || variant?.name || purchasable.variantId,
+        variantName: variant?.variant || variant?.trim || purchasable.variantId,
+        color: optionLabel(options?.colors, purchasable.paintId),
+        wheels: optionLabel(options?.wheels, purchasable.wheelId),
+        interior: optionLabel(options?.interiors, purchasable.interiorId),
+        roof: optionLabel(options?.roofs, purchasable.roofId),
+        price: price.data?.estimated_on_road,
+        city: price.data?.city || city,
       });
       const file = new File([blob], 'auto-ai-configured-car.png', { type: 'image/png' });
       if (share && navigator.share && navigator.canShare?.({ files: [file] })) await navigator.share({ title: 'My Auto AI India configuration', files: [file] });
