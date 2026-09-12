@@ -27,7 +27,8 @@ def test_saved_document_uses_server_price_and_preserves_interaction_state():
         now="2026-09-11T00:00:00+00:00",
     )
 
-    assert document["price_snapshot"] == {
+    assert document["price_snapshot"] == 456789
+    assert document["price_breakdown"] == {
         "estimated_on_road": 456789,
         "effective_date": "2026-09-11T00:00:00+00:00",
     }
@@ -56,6 +57,8 @@ def test_saved_document_marks_missing_server_asset_as_stale():
         now="2026-09-11T00:00:00+00:00",
     )
 
+    assert document["price_snapshot"] == 100000
+    assert document["price_breakdown"]["estimated_on_road"] == 100000
     assert document["asset_id"] is None
     assert document["asset_version"] is None
     assert document["stale"] is True
