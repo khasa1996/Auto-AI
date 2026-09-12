@@ -14,7 +14,7 @@
 |---|---|---|---|
 | 1 | Real GLB/GLTF 3D vehicle | PARTIAL | Verified asset contract, binary GLB inspection, and R3F viewer exist; real licensed production assets are not yet seeded. |
 | 2 | 360° orbit / rotate / zoom / pan / reset | BUILT | Orbit/zoom foundation plus smooth reset-to-exterior behavior are wired. |
-| 3 | Exterior/interior/camera presets | PARTIAL | Preset state exists; asset-supported camera availability needs enforcement. |
+| 3 | Exterior/interior/camera presets | BUILT | Camera presets are now visually filtered by verified asset capabilities, with store-level gating as a second enforcement layer. |
 | 4 | Auto-rotate | BUILT | Store and controls are implemented. |
 | 5 | OEM paint/color selection | BUILT | Backend-driven color controls and semantic paint-material application are wired. |
 | 6 | Wheel selection | BUILT | Backend-driven wheel UI and declared wheel mesh switching are wired. |
@@ -78,7 +78,3 @@ All 21 previously identified gaps remain explicitly tracked in this master plan,
 2. The backend is authoritative for availability, rules, validation, pricing, persistence, and publication state.
 3. AI only proposes selections from backend-provided options; every selection is validated by the backend rules engine and priced by the backend pricing engine.
 4. A vehicle without a verified published asset remains `3D Coming Soon`/unavailable rather than using a fake 360 image rotation.
-5. 3D visual changes only occur when the verified asset declares the required semantic material, mesh, or animation mapping.
-6. Showroom interaction state never changes purchasable pricing state.
-7. Saved/shareable configurations are validated against current backend state when restored or acted upon.
-8. OEM/licensed asset provenance is mandatory before production publication.
