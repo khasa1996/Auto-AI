@@ -57,7 +57,7 @@ def test_build_verified_metadata_rejects_manifest_mismatch():
     assert result["valid"] is False
     assert "Wheel_FL" in result["missing_meshes"]
     assert "Sunroof" in result["missing_meshes"]
-    assert "OpenDoors" in result["missing_animations"]
+    assert "doors" in result["missing_animations"]
 
 
 def test_build_verified_metadata_requires_glb():
