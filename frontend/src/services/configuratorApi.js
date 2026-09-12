@@ -19,6 +19,7 @@ export const configuratorApi = {
   getRules: (variantId) => api.get(`${V1}/configurator/${variantId}/rules`),
   validateConfiguration: (configuration) => api.post(`${V1}/configurator/validate`, { configuration }),
   calculatePrice: (configuration, city = null) => api.post(`${V1}/configurator/price`, { configuration, city }),
+  resolveWithAI: (intent) => api.post(`${V1}/configurator/ai`, intent),
   saveConfiguration: (payload) => api.post(`${V1}/configurator/configurations`, payload),
   loadConfiguration: (configIdOrToken) => api.get(`${V1}/configurator/configurations/${configIdOrToken}`),
   getHistory: (limit = 20) => api.get(`${V1}/configurator/history`, { params: { limit } }),
