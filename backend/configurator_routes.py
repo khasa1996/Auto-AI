@@ -67,6 +67,32 @@ def build_saved_configuration_document(
     }
 
 
+async def resolve_saved_configuration_asset(
+    db: AsyncIOMotorDatabase,
+    variant_id: str,
+    requested_asset_id: Optional[str],
+) -> Optional[Dict[str, object]]:
+    """Resolve the published verified asset assigned to a variant for persistence."""
+    asset_id = requested_asset_id
+    if not asset_id:
+        variant = await db.variants.find_one(
+            {"variant_id": variant_id},
+            {"_id": 0, "configurator_asset_id": 1},
+        )
+        asset_id = variant.get("configurator_asset_id") if variant else None
+    if not asset_id:
+        return None
+    return await db.configurator_assets.find_one(
+        {
+            "asset_id": asset_id,
+            "variant_id": variant_id,
+            "published": True,
+            "validation_passed": True,
+        },
+        {"_id": 0, "asset_id": 1, "version": 1},
+    )
+
+
 def make_configurator_router(
     db: AsyncIOMotorDatabase,
     optional_user_phone: Optional[Callable[..., Awaitable[Optional[str]]]] = None,
@@ -273,17 +299,11 @@ def make_configurator_router(
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
 
-        server_asset = None
-        if request.asset_id:
-            server_asset = await db.configurator_assets.find_one(
-                {
-                    "asset_id": request.asset_id,
-                    "variant_id": request.configuration.purchasable.variant_id,
-                    "published": True,
-                    "validation_passed": True,
-                },
-                {"_id": 0, "asset_id": 1, "version": 1},
-            )
+        server_asset = await resolve_saved_configuration_asset(
+            db,
+            request.configuration.purchasable.variant_id,
+            request.asset_id,
+        )
 
         config_id = str(uuid.uuid4())
         share_token = uuid.uuid4().hex
