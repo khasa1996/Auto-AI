@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Bounds, ContactShadows, Environment } from '@react-three/drei';
-import { Maximize2, Minimize2, Share2, Camera, Info } from 'lucide-react';
+import { Maximize2, Minimize2, Share2, Camera, Info, RotateCw } from 'lucide-react';
 
 import VehicleModel from '../../three/VehicleModel';
 import { AssetSuspense, AssetUnavailable } from '../../three/AssetLoader';
@@ -95,6 +95,11 @@ export default function ConfiguratorViewer({ style, options, variant }) {
     }
   };
 
+  const resetCamera = () => {
+    useConfiguratorStore.getState().pauseAutoRotate();
+    setCameraPreset('exterior');
+  };
+
   const capture = async (share = false) => {
     const canvas = canvasRef.current?.querySelector('canvas');
     if (!canvas) return;
@@ -144,6 +149,7 @@ export default function ConfiguratorViewer({ style, options, variant }) {
     <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between p-4">
       <div className="pointer-events-auto rounded-full border border-white/10 bg-black/45 px-3 py-1.5 text-[9px] uppercase tracking-[0.2em] text-white/50 backdrop-blur">Verified asset only</div>
       <div className="pointer-events-auto flex gap-2">
+        <button type="button" title="Reset camera" onClick={resetCamera} className="rounded-full border border-white/10 bg-black/45 p-2.5 text-white/70 backdrop-blur hover:border-amber-400/50 hover:text-amber-300" aria-label="Reset camera view"><RotateCw size={14} /></button>
         <button type="button" title={cinematic ? 'Exit cinematic mode' : 'Cinematic mode'} onClick={toggleCinematic} className="rounded-full border border-white/10 bg-black/45 p-2.5 text-white/70 backdrop-blur hover:border-amber-400/50 hover:text-amber-300" aria-label="Toggle cinematic mode">{cinematic ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</button>
         <button type="button" title="Capture configuration" onClick={() => capture(false)} className="rounded-full border border-white/10 bg-black/45 p-2.5 text-white/70 backdrop-blur hover:border-amber-400/50 hover:text-amber-300" aria-label="Capture configuration screenshot"><Camera size={14} /></button>
         <button type="button" title="Share configuration" onClick={() => capture(true)} className="rounded-full border border-white/10 bg-black/45 p-2.5 text-white/70 backdrop-blur hover:border-amber-400/50 hover:text-amber-300" aria-label="Share configuration screenshot"><Share2 size={14} /></button>
