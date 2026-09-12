@@ -22,16 +22,6 @@ export const LIGHTING_MATERIAL_NAMES = {
   INTERIOR_LIGHT: 'MAT_INTERIOR_LIGHT',
 };
 
-const LIGHTING_CAPABILITIES = [
-  'headlights',
-  'drl',
-  'taillights',
-  'fog_lights',
-  'left_indicator',
-  'right_indicator',
-  'hazard',
-  'interior_lights',
-];
 const INDICATOR_BLINK_MS = 500;
 
 export function normalizeLightingState(lightingState = {}, supportedInteractions) {
