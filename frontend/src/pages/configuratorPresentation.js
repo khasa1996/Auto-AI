@@ -17,6 +17,21 @@ const INTERACTION_CAPABILITIES = {
   Interior_lights: 'interior_lights',
 };
 
+const CAMERA_PRESET_CAPABILITIES = {
+  exterior: ['camera_exterior'],
+  front: ['camera_exterior'],
+  rear: ['camera_exterior'],
+  left: ['camera_exterior'],
+  right: ['camera_exterior'],
+  top: ['camera_exterior'],
+  interior: ['camera_interior'],
+  cockpit: ['camera_interior'],
+  boot: ['camera_exterior', 'boot'],
+  wheel: ['camera_exterior'],
+};
+
+const CAMERA_PRESETS = Object.keys(CAMERA_PRESET_CAPABILITIES);
+
 export function buildPurchasablePayload(purchasable) {
   return {
     variant_id: purchasable.variantId,
@@ -53,4 +68,9 @@ export function isInteractionSupported(supportedInteractions, interaction) {
   if (!Array.isArray(supportedInteractions)) return false;
   const capability = INTERACTION_CAPABILITIES[interaction] || interaction;
   return supportedInteractions.includes(capability);
+}
+
+export function getCameraPresets(supportedInteractions) {
+  if (!Array.isArray(supportedInteractions)) return [];
+  return CAMERA_PRESETS.filter((preset) => CAMERA_PRESET_CAPABILITIES[preset].every((capability) => supportedInteractions.includes(capability)));
 }
