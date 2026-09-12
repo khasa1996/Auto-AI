@@ -9,6 +9,7 @@ from typing import Any, Awaitable, Callable, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
+from configurator_conversion import ConversionIntent, calculate_emi
 from configurator_premium import ConfiguredLeadPayload, compare_purchasable_configurations
 from configurator_schemas import ConfigurationPriceRequest, ConfigurationValidationRequest, PurchasableConfiguration
 from pricing_engine import calculate_configuration_price
@@ -45,6 +46,32 @@ def build_conversion_document(payload: ConfiguredLeadPayload, owner_phone: str, 
         "created_at": now,
         "updated_at": now,
     }
+
+
+def build_conversion_response(document: Dict[str, Any], intent: ConversionIntent, server_price: int) -> Dict[str, Any]:
+    """Return a conversion handoff without exposing ownership data."""
+    response = {
+        "lead_id": document["lead_id"],
+        "variant_id": document["variant_id"],
+        "estimated_on_road": server_price,
+        "finance": {"requested": intent.finance_required},
+        "insurance": {"requested": intent.insurance_required},
+        "dealer": {
+            "action": intent.dealer_action.value,
+            "preferred_dealer_id": intent.preferred_dealer_id,
+        },
+        "status": document["status"],
+    }
+    if intent.finance_required:
+        principal = max(0, server_price - (intent.down_payment or 0))
+        response["finance"].update({
+            "principal": principal,
+            "down_payment": intent.down_payment,
+            "tenure_months": intent.tenure_months,
+            "annual_rate": intent.annual_rate,
+            "estimated_emi": calculate_emi(principal, intent.annual_rate or 0, intent.tenure_months or 12),
+        })
+    return response
 
 
 def mount_premium_configurator_routes(app, db: AsyncIOMotorDatabase, auth_dependency: OptionalUserPhone = None) -> None:
@@ -94,5 +121,28 @@ def mount_premium_configurator_routes(app, db: AsyncIOMotorDatabase, auth_depend
         document.pop("_id", None)
         document.pop("owner_phone", None)
         return document
+
+    @router.post("/conversion-handoff")
+    async def conversion_handoff(payload: ConfiguredLeadPayload, intent: ConversionIntent, auth_phone: Optional[str] = Depends(auth_dependency)):
+        """Validate a configuration and create finance, insurance and dealer handoff intent."""
+        if not auth_phone:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        try:
+            purchasable = PurchasableConfiguration.model_validate(payload.configuration.get("purchasable", {}))
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        if purchasable.variant_id != payload.variant_id:
+            raise HTTPException(status_code=422, detail="configuration variant does not match conversion variant")
+        validation = await validate_configuration(ConfigurationValidationRequest(configuration=purchasable), db)
+        if not validation.valid:
+            raise HTTPException(status_code=422, detail={"message": "Invalid configuration", "errors": validation.errors})
+        try:
+            price = await calculate_configuration_price(ConfigurationPriceRequest(configuration=purchasable, city=payload.city), db)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        document = build_conversion_document(payload, auth_phone, price.estimated_on_road, _utcnow_iso())
+        document["conversion_intent"] = intent.model_dump(mode="json")
+        await db.configurator_conversion_leads.insert_one(document)
+        return build_conversion_response(document, intent, price.estimated_on_road)
 
     app.include_router(router)
