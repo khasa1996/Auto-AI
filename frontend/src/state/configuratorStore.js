@@ -49,6 +49,7 @@ const defaultAsset = {
   paintMaterialNames: [],
   wheelMeshNames: {},
   optionMeshNames: {},
+  interactionAnimationNames: {},
   configuratorStatus: 'COMING_SOON',
   loadedAt: null,
 };
@@ -100,49 +101,37 @@ export const useConfiguratorStore = create((set, get) => ({
   setWheels(wheelId) { set((s) => ({ purchasable: { ...s.purchasable, wheelId } })); },
   setInterior(interiorId) { set((s) => ({ purchasable: { ...s.purchasable, interiorId } })); },
   setRoof(roofId) { set((s) => ({ purchasable: { ...s.purchasable, roofId } })); },
-  toggleAccessory(accessoryId) {
-    set((s) => {
-      const current = s.purchasable.accessoryIds;
-      const next = current.includes(accessoryId)
-        ? current.filter((id) => id !== accessoryId)
-        : [...current, accessoryId];
-      return { purchasable: { ...s.purchasable, accessoryIds: next } };
-    });
-  },
-  toggleDoor(side) {
-    set((s) => ({ interaction: { ...s.interaction, doors: { ...s.interaction.doors, [side]: !s.interaction.doors[side] } } }));
-  },
-  toggleHood() { set((s) => ({ interaction: { ...s.interaction, hoodOpen: !s.interaction.hoodOpen } })); },
-  toggleBoot() { set((s) => ({ interaction: { ...s.interaction, bootOpen: !s.interaction.bootOpen } })); },
-  toggleFrunk() { set((s) => ({ interaction: { ...s.interaction, frunkOpen: !s.interaction.frunkOpen } })); },
-  toggleSunroof() { set((s) => ({ interaction: { ...s.interaction, sunroofOpen: !s.interaction.sunroofOpen } })); },
-  toggleLight(lightKey) {
-    set((s) => ({ interaction: { ...s.interaction, lighting: { ...s.interaction.lighting, [lightKey]: !s.interaction.lighting[lightKey] } } }));
-  },
-  toggleHazard() {
-    set((s) => {
-      const nextHazard = !s.interaction.lighting.hazard;
-      return { interaction: { ...s.interaction, lighting: { ...s.interaction.lighting, hazard: nextHazard, left_indicator: nextHazard ? false : s.interaction.lighting.left_indicator, right_indicator: nextHazard ? false : s.interaction.lighting.right_indicator } } };
-    });
-  },
-  setCameraPreset(preset) {
-    set((s) => {
-      if (!isCameraPresetSupported(s.asset.supportedInteractions, preset)) return s;
-      return { interaction: { ...s.interaction, cameraPreset: preset } };
-    });
-  },
-  setAutoRotate(value) { set((s) => ({ interaction: { ...s.interaction, autoRotate: value } })); },
-  pauseAutoRotate() { set((s) => ({ interaction: { ...s.interaction, autoRotate: false } })); },
-  setAsset(assetData) { set({ asset: { ...defaultAsset, ...assetData, loadedAt: new Date().toISOString() } }); },
-  setAssetUnavailable(status = 'COMING_SOON') { set({ asset: { ...defaultAsset, configuratorStatus: status } }); },
-  setPriceLoading() { set({ price: { ...get().price, loading: true, error: null } }); },
-  setPriceResult(data) { set({ price: { loading: false, error: null, data, lastFetchedFor: JSON.stringify(get().purchasable) } }); },
-  setPriceError(error) { set({ price: { ...get().price, loading: false, error } }); },
-  setValidationLoading() { set({ validation: { loading: true, error: null, result: null } }); },
+  setAccessories(accessoryIds) { set((s) => ({ purchasable: { ...s.purchasable, accessoryIds: [...accessoryIds] } })); },
+  setAsset(asset) { set({ asset: { ...defaultAsset, ...asset } }); },
+  setPrice(data) { set({ price: { loading: false, error: null, data, lastFetchedFor: null } }); },
+  setPriceLoading(loading) { set((s) => ({ price: { ...s.price, loading } })); },
+  setPriceError(error) { set((s) => ({ price: { ...s.price, loading: false, error } })); },
+  setValidationLoading(loading) { set((s) => ({ validation: { ...s.validation, loading } })); },
   setValidationResult(result) { set({ validation: { loading: false, error: null, result } }); },
-  setValidationError(error) { set({ validation: { loading: false, error, result: null } }); },
+  setValidationError(error) { set((s) => ({ validation: { ...s.validation, loading: false, error } })); },
   setCity(city) { set({ city }); },
+  setCameraPreset(preset) {
+    const { asset } = get();
+    if (!isCameraPresetSupported(asset.supportedInteractions, preset)) return;
+    set((s) => ({ interaction: { ...s.interaction, cameraPreset: preset } }));
+  },
+  toggleAutoRotate() { set((s) => ({ interaction: { ...s.interaction, autoRotate: !s.interaction.autoRotate } })); },
+  pauseAutoRotate() { set((s) => ({ interaction: { ...s.interaction, autoRotate: false } })); },
+  setDoor(side, open) { set((s) => ({ interaction: { ...s.interaction, doors: { ...s.interaction.doors, [side]: Boolean(open) } } })); },
+  setHoodOpen(open) { set((s) => ({ interaction: { ...s.interaction, hoodOpen: Boolean(open) } })); },
+  setBootOpen(open) { set((s) => ({ interaction: { ...s.interaction, bootOpen: Boolean(open) } })); },
+  setFrunkOpen(open) { set((s) => ({ interaction: { ...s.interaction, frunkOpen: Boolean(open) } })); },
+  setSunroofOpen(open) { set((s) => ({ interaction: { ...s.interaction, sunroofOpen: Boolean(open) } })); },
+  setLighting(key, value) { set((s) => ({ interaction: { ...s.interaction, lighting: { ...s.interaction.lighting, [key]: Boolean(value) } } })); },
   reset() {
-    set({ purchasable: { ...defaultPurchasable }, interaction: { ...defaultInteraction }, asset: { ...defaultAsset }, price: { ...defaultPrice }, validation: { ...defaultValidation }, city: null, isInitialized: false });
+    set({
+      purchasable: { ...defaultPurchasable },
+      interaction: { ...defaultInteraction },
+      asset: { ...defaultAsset },
+      price: { ...defaultPrice },
+      validation: { ...defaultValidation },
+      city: null,
+      isInitialized: false,
+    });
   },
 }));
