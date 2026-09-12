@@ -5,13 +5,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Bounds, ContactShadows, Environment } from '@react-three/drei';
-import { Maximize2, Minimize2, Share2, Camera } from 'lucide-react';
+import { Maximize2, Minimize2, Share2, Camera, Info } from 'lucide-react';
 
 import VehicleModel from '../../three/VehicleModel';
 import { AssetSuspense, AssetUnavailable } from '../../three/AssetLoader';
 import { useLightingController } from '../../three/LightingController';
 import { ConfiguratorControls, useCameraPreset } from '../../three/CameraPresets';
 import { useConfiguratorStore } from '../../state/configuratorStore';
+import { configuratorApi } from '../../services/configuratorApi';
+import { normalizeHotspots } from './premiumShowroom';
 
 function ConfiguratorScene({ modelUrl, paintColorHex, paintMaterialNames, wheelMeshNames, optionMeshNames, purchasable, interaction, supportedInteractions, sceneRef }) {
   const controlsRef = useRef();
@@ -40,16 +42,36 @@ export default function ConfiguratorViewer({ style, options }) {
   const canvasRef = useRef(null);
   const [cinematic, setCinematic] = useState(false);
   const [captureState, setCaptureState] = useState(null);
+  const [hotspots, setHotspots] = useState([]);
+  const [selectedHotspot, setSelectedHotspot] = useState(null);
   const asset = useConfiguratorStore((state) => state.asset);
   const purchasable = useConfiguratorStore((state) => state.purchasable);
   const interaction = useConfiguratorStore((state) => state.interaction);
   const isInitialized = useConfiguratorStore((state) => state.isInitialized);
+  const setCameraPreset = useConfiguratorStore((state) => state.setCameraPreset);
 
   useEffect(() => {
     const handleFullscreenChange = () => setCinematic(document.fullscreenElement === canvasRef.current);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    if (!isInitialized || !asset.available || !purchasable.variantId) {
+      setHotspots([]);
+      setSelectedHotspot(null);
+      return undefined;
+    }
+    configuratorApi.getHotspots(purchasable.variantId)
+      .then(({ data }) => {
+        if (active) setHotspots(normalizeHotspots(data?.hotspots));
+      })
+      .catch(() => {
+        if (active) setHotspots([]);
+      });
+    return () => { active = false; };
+  }, [asset.available, isInitialized, purchasable.variantId]);
 
   if (!isInitialized) return <div style={{ minHeight: 480, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#080808', borderRadius: 20, color: 'rgba(255,255,255,0.3)', fontFamily: 'monospace', fontSize: 12, letterSpacing: '0.15em', textTransform: 'uppercase', ...style }}>Select a vehicle to open the configurator</div>;
   if (!asset.available || !asset.url) return <AssetUnavailable status={asset.configuratorStatus} variantName={purchasable.variantId} />;
@@ -89,10 +111,18 @@ export default function ConfiguratorViewer({ style, options }) {
     }
   };
 
+  const selectHotspot = (hotspot) => {
+    setSelectedHotspot(hotspot);
+    if (hotspot.cameraPreset) setCameraPreset(hotspot.cameraPreset);
+  };
+
   return <div ref={canvasRef} className={`auto-ai-configurator-canvas relative w-full overflow-hidden rounded-[20px] transition-all duration-700 ${cinematic ? 'min-h-[680px] ring-1 ring-amber-400/30' : 'min-h-[480px]'}`} style={style}>
     <Canvas shadows dpr={[1, 1.75]} camera={{ position: [4.5, 1.6, 5.5], fov: 38 }} gl={{ antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: true }}>
       <ConfiguratorScene modelUrl={asset.url} paintColorHex={selectedPaint?.primary_hex || null} paintMaterialNames={asset.paintMaterialNames || []} wheelMeshNames={asset.wheelMeshNames || {}} optionMeshNames={asset.optionMeshNames || {}} purchasable={purchasable} interaction={interaction} supportedInteractions={asset.supportedInteractions || []} sceneRef={sceneRef} />
     </Canvas>
+    <div className="pointer-events-none absolute inset-0">
+      {hotspots.map((hotspot) => <button key={hotspot.id} type="button" onClick={() => selectHotspot(hotspot)} className="pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-amber-300/60 bg-black/70 p-2 text-amber-300 shadow-[0_0_24px_rgba(251,191,36,0.25)] backdrop-blur hover:scale-110" style={{ left: `${hotspot.x}%`, top: `${hotspot.y}%` }} aria-label={`Show ${hotspot.label}`} title={hotspot.label}><Info size={13} /></button>)}
+    </div>
     <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between p-4">
       <div className="pointer-events-auto rounded-full border border-white/10 bg-black/45 px-3 py-1.5 text-[9px] uppercase tracking-[0.2em] text-white/50 backdrop-blur">Verified asset only</div>
       <div className="pointer-events-auto flex gap-2">
@@ -101,6 +131,9 @@ export default function ConfiguratorViewer({ style, options }) {
         <button type="button" title="Share configuration" onClick={() => capture(true)} className="rounded-full border border-white/10 bg-black/45 p-2.5 text-white/70 backdrop-blur hover:border-amber-400/50 hover:text-amber-300" aria-label="Share configuration screenshot"><Share2 size={14} /></button>
       </div>
     </div>
+    {selectedHotspot && <div className="absolute bottom-4 left-4 right-4 max-w-md rounded-2xl border border-white/10 bg-black/80 p-4 text-white/80 shadow-2xl backdrop-blur-xl">
+      <div className="flex items-start justify-between gap-4"><div><div className="text-sm font-semibold text-white">{selectedHotspot.label}</div>{selectedHotspot.description && <div className="mt-1 text-xs leading-5 text-white/55">{selectedHotspot.description}</div>}</div><button type="button" onClick={() => setSelectedHotspot(null)} className="text-white/40 hover:text-white" aria-label="Close hotspot details">×</button></div>
+    </div>}
     {captureState && <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-white/10 bg-black/75 px-4 py-2 text-[9px] uppercase tracking-widest text-white/70 backdrop-blur">{captureState === 'capturing' ? 'Creating screenshot…' : captureState === 'done' ? 'Ready' : 'Capture unavailable'}</div>}
   </div>;
 }
