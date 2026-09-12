@@ -20,7 +20,7 @@ import ConfiguratorAIAssistant from './ConfiguratorAIAssistant';
 function ConfiguratorScene({ modelUrl, paintColorHex, paintMaterialNames, wheelMeshNames, optionMeshNames, purchasable, interaction, supportedInteractions, sceneRef }) {
   const controlsRef = useRef();
   useCameraPreset(interaction.cameraPreset, controlsRef);
-  useLightingController(sceneRef, interaction.lighting);
+  useLightingController(sceneRef, interaction.lighting, supportedInteractions);
   return <>
     <color attach="background" args={['#060606']} />
     <ambientLight intensity={0.6} />
@@ -82,86 +82,65 @@ export default function ConfiguratorViewer({ style, options, variant }) {
     return () => { active = false; };
   }, [asset.available, isInitialized, purchasable.variantId]);
 
-  if (!isInitialized) return <div style={{ minHeight: 480, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#080808', borderRadius: 20, color: 'rgba(255,255,255,0.3)', fontFamily: 'monospace', fontSize: 12, letterSpacing: '0.15em', textTransform: 'uppercase', ...style }}>Select a vehicle to open the configurator</div>;
-  if (!asset.available || !asset.url) return <AssetUnavailable status={asset.configuratorStatus} variantName={purchasable.variantId} />;
-  const selectedPaint = options?.colors?.find((color) => color.color_id === purchasable.paintId);
-
   const toggleCinematic = async () => {
-    try {
-      if (document.fullscreenElement === canvasRef.current) await document.exitFullscreen();
-      else if (canvasRef.current?.requestFullscreen) await canvasRef.current.requestFullscreen();
-      else setCinematic((value) => !value);
-    } catch {
-      setCinematic((value) => !value);
+    if (document.fullscreenElement) {
+      await document.exitFullscreen?.();
+      return;
     }
+    if (canvasRef.current?.requestFullscreen) {
+      await canvasRef.current.requestFullscreen();
+      return;
+    }
+    setCinematic((value) => !value);
   };
 
-  const resetCamera = () => {
-    useConfiguratorStore.getState().pauseAutoRotate();
-    setCameraPreset('exterior');
-  };
-
-  const capture = async (share = false) => {
+  const capture = () => {
     const canvas = canvasRef.current?.querySelector('canvas');
     if (!canvas) return;
-    setCaptureState('capturing');
-    try {
-      const blob = await buildConfiguratorShareCard({
-        sourceCanvas: canvas,
-        vehicleName: variant?.model || variant?.name || purchasable.variantId,
-        variantName: variant?.variant || variant?.trim || purchasable.variantId,
-        color: optionLabel(options?.colors, purchasable.paintId),
-        wheels: optionLabel(options?.wheels, purchasable.wheelId),
-        interior: optionLabel(options?.interiors, purchasable.interiorId),
-        roof: optionLabel(options?.roofs, purchasable.roofId),
-        price: price.data?.estimated_on_road,
-        city: price.data?.city || city,
-      });
-      const file = new File([blob], 'auto-ai-configured-car.png', { type: 'image/png' });
-      if (share && navigator.share && navigator.canShare?.({ files: [file] })) await navigator.share({ title: 'My Auto AI India configuration', files: [file] });
-      else {
+    setCaptureState({ status: 'capturing' });
+    buildConfiguratorShareCard(canvas, {
+      variant: variant?.display_name || variant?.name || purchasable.variantId,
+      color: optionLabel(options?.colors, purchasable.paintId),
+      wheels: optionLabel(options?.wheels, purchasable.wheelId),
+      interior: optionLabel(options?.interiors, purchasable.interiorId),
+      roof: optionLabel(options?.roofs, purchasable.roofId),
+      price: price?.total,
+      city,
+    })
+      .then((blob) => {
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement('a');
         anchor.href = url;
-        anchor.download = file.name;
+        anchor.download = 'auto-ai-india-configuration.png';
         anchor.click();
         URL.revokeObjectURL(url);
-      }
-      setCaptureState('done');
-      window.setTimeout(() => setCaptureState(null), 1600);
-    } catch (error) {
-      setCaptureState(error?.name === 'AbortError' ? null : 'error');
-      window.setTimeout(() => setCaptureState(null), 1600);
-    }
+        setCaptureState({ status: 'ready' });
+      })
+      .catch(() => setCaptureState({ status: 'error' }));
   };
 
-  const selectHotspot = (hotspot) => {
-    setSelectedHotspot(hotspot);
-    if (hotspot.cameraPreset) setCameraPreset(hotspot.cameraPreset);
+  const share = async () => {
+    const canvas = canvasRef.current?.querySelector('canvas');
+    if (!canvas) return;
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+    if (!blob || !navigator.share) return;
+    const file = new File([blob], 'auto-ai-india-configuration.png', { type: 'image/png' });
+    await navigator.share({ title: 'My Auto AI India configuration', files: [file] });
   };
 
-  return <div ref={canvasRef} className={`auto-ai-configurator-canvas relative w-full overflow-hidden rounded-[20px] transition-all duration-700 ${cinematic ? 'min-h-[680px] ring-1 ring-amber-400/30' : 'min-h-[480px]'}`} style={style}>
-    <Canvas shadows dpr={[1, 1.75]} camera={{ position: [4.5, 1.6, 5.5], fov: 38 }} gl={{ antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: true }}>
-      <ConfiguratorScene modelUrl={asset.url} paintColorHex={selectedPaint?.primary_hex || null} paintMaterialNames={asset.paintMaterialNames || []} wheelMeshNames={asset.wheelMeshNames || {}} optionMeshNames={asset.optionMeshNames || {}} purchasable={purchasable} interaction={interaction} supportedInteractions={asset.supportedInteractions || []} sceneRef={sceneRef} />
+  return <div ref={canvasRef} style={style} className={`configurator-viewer${cinematic ? ' cinematic' : ''}`}>
+    <Canvas gl={{ preserveDrawingBuffer: true }} camera={{ position: [5, 2.5, 5], fov: 35 }}>
+      <ConfiguratorScene modelUrl={asset.url} paintColorHex={asset.paintColorHex} paintMaterialNames={asset.paintMaterialNames} wheelMeshNames={asset.wheelMeshNames} optionMeshNames={asset.optionMeshNames} purchasable={purchasable} interaction={interaction} supportedInteractions={asset.supportedInteractions} sceneRef={sceneRef} />
     </Canvas>
-    <div className="pointer-events-none absolute inset-0">
-      {hotspots.map((hotspot) => <button key={hotspot.id} type="button" onClick={() => selectHotspot(hotspot)} className="pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-amber-300/60 bg-black/70 p-2 text-amber-300 shadow-[0_0_24px_rgba(251,191,36,0.25)] backdrop-blur hover:scale-110" style={{ left: `${hotspot.x}%`, top: `${hotspot.y}%` }} aria-label={`Show ${hotspot.label}`} title={hotspot.label}><Info size={13} /></button>)}
+    <div className="configurator-viewer-controls">
+      <button type="button" onClick={toggleCinematic} aria-label={cinematic ? 'Exit cinematic mode' : 'Enter cinematic mode'}>{cinematic ? <Minimize2 /> : <Maximize2 />}</button>
+      <button type="button" onClick={() => setCameraPreset('exterior')} aria-label="Reset camera"><RotateCw /></button>
+      <button type="button" onClick={capture} aria-label="Capture configuration"><Camera /></button>
+      <button type="button" onClick={share} aria-label="Share configuration"><Share2 /></button>
     </div>
-    <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between p-4">
-      <div className="pointer-events-auto rounded-full border border-white/10 bg-black/45 px-3 py-1.5 text-[9px] uppercase tracking-[0.2em] text-white/50 backdrop-blur">Verified asset only</div>
-      <div className="pointer-events-auto flex gap-2">
-        <button type="button" title="Reset camera" onClick={resetCamera} className="rounded-full border border-white/10 bg-black/45 p-2.5 text-white/70 backdrop-blur hover:border-amber-400/50 hover:text-amber-300" aria-label="Reset camera view"><RotateCw size={14} /></button>
-        <button type="button" title={cinematic ? 'Exit cinematic mode' : 'Cinematic mode'} onClick={toggleCinematic} className="rounded-full border border-white/10 bg-black/45 p-2.5 text-white/70 backdrop-blur hover:border-amber-400/50 hover:text-amber-300" aria-label="Toggle cinematic mode">{cinematic ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</button>
-        <button type="button" title="Capture configuration" onClick={() => capture(false)} className="rounded-full border border-white/10 bg-black/45 p-2.5 text-white/70 backdrop-blur hover:border-amber-400/50 hover:text-amber-300" aria-label="Capture configuration screenshot"><Camera size={14} /></button>
-        <button type="button" title="Share configuration" onClick={() => capture(true)} className="rounded-full border border-white/10 bg-black/45 p-2.5 text-white/70 backdrop-blur hover:border-amber-400/50 hover:text-amber-300" aria-label="Share configuration screenshot"><Share2 size={14} /></button>
-      </div>
-    </div>
-    {selectedHotspot && <div className="absolute bottom-4 left-4 right-4 max-w-md rounded-2xl border border-white/10 bg-black/80 p-4 text-white/80 shadow-2xl backdrop-blur-xl">
-      <div className="flex items-start justify-between gap-4"><div><div className="text-sm font-semibold text-white">{selectedHotspot.label}</div>{selectedHotspot.description && <div className="mt-1 text-xs leading-5 text-white/55">{selectedHotspot.description}</div>}</div><button type="button" onClick={() => setSelectedHotspot(null)} className="text-white/40 hover:text-white" aria-label="Close hotspot details">×</button></div>
-    </div>}
-    {captureState && <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-white/10 bg-black/75 px-4 py-2 text-[9px] uppercase tracking-widest text-white/70 backdrop-blur">{captureState === 'capturing' ? 'Creating share card…' : captureState === 'done' ? 'Ready' : 'Capture unavailable'}</div>}
-    <div className="absolute bottom-4 left-4 z-20">
-      <ConfiguratorAIAssistant />
-    </div>
+    {captureState?.status === 'error' && <div role="status">Unable to capture configuration.</div>}
+    {hotspots.map((hotspot) => <button key={hotspot.id} type="button" className="configurator-hotspot" style={{ left: `${hotspot.x}%`, top: `${hotspot.y}%` }} onClick={() => { setSelectedHotspot(hotspot); if (hotspot.cameraPreset) setCameraPreset(hotspot.cameraPreset); }} aria-label={hotspot.label}><Info /></button>)}
+    {selectedHotspot && <aside className="configurator-hotspot-panel"><strong>{selectedHotspot.label}</strong>{selectedHotspot.description && <p>{selectedHotspot.description}</p>}<button type="button" onClick={() => setSelectedHotspot(null)}>Close</button></aside>}
+    {!asset.available && <AssetUnavailable />}
   </div>;
 }
