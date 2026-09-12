@@ -13,7 +13,7 @@
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 1 | Real GLB/GLTF 3D vehicle | PARTIAL | Verified asset contract, binary GLB inspection, and R3F viewer exist; real licensed production assets are not yet seeded. |
-| 2 | 360° orbit / rotate / zoom / pan / reset | PARTIAL | Orbit/zoom foundation exists; dedicated reset/polish remains. |
+| 2 | 360° orbit / rotate / zoom / pan / reset | BUILT | Orbit/zoom foundation plus smooth reset-to-exterior behavior are wired. |
 | 3 | Exterior/interior/camera presets | PARTIAL | Preset state exists; asset-supported camera availability needs enforcement. |
 | 4 | Auto-rotate | BUILT | Store and controls are implemented. |
 | 5 | OEM paint/color selection | BUILT | Backend-driven color controls and semantic paint-material application are wired. |
@@ -37,7 +37,7 @@
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 21 | AI conversational configurator | BUILT | Natural-language intent is resolved only against backend catalog IDs, then validated and priced server-side. |
+| 21 | AI conversational configurator | BUILT | Natural-language intent is resolved only against backend catalog IDs, then validated and priced server-side; an in-configurator AI assistant now applies only the returned backend configuration. |
 | 22 | AI configuration recommendations | PARTIAL | Safe option selection exists; broader multi-variant recommendation remains. |
 | 23 | Door open/close | PARTIAL | State and UI are asset-capability gated; real asset animation must be present. |
 | 24 | Boot open/close | PARTIAL | State and UI are asset-capability gated; real asset animation must be present. |
