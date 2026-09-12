@@ -24,5 +24,6 @@ export const configuratorApi = {
   getHistory: (limit = 20) => api.get(`${V1}/configurator/history`, { params: { limit } }),
   compareConfigurations: (left, right) => api.post(`${V1}/configurator/compare`, { left, right }),
   createConversionLead: (payload) => api.post(`${V1}/configurator/conversion-lead`, payload),
+  createConversionHandoff: (payload, intent) => api.post(`${V1}/configurator/conversion-handoff`, { ...payload, intent }),
   validateAssetUrl: (url) => api.post(`${V1}/configurator/assets/validate-url`, { url }),
 };
