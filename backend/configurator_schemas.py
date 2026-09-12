@@ -138,3 +138,193 @@ class ConfiguratorOption(BaseModel):
     reference_id: str = Field(..., max_length=100)
     preview_color_hex: Optional[str] = Field(None, max_length=10)
     preview_image_url: Optional[str] = Field(None, max_length=500)
+
+
+class RuleEffect(str, Enum):
+    ALLOW = "allow"
+    DENY = "deny"
+    REQUIRE = "require"
+    EXCLUDE = "exclude"
+
+
+class RuleConditionType(str, Enum):
+    VARIANT_IS = "variant_is"
+    OPTION_SELECTED = "option_selected"
+    FUEL_TYPE = "fuel_type"
+    MARKET_SEGMENT = "market_segment"
+    DATE_BEFORE = "date_before"
+    DATE_AFTER = "date_after"
+
+
+class RuleCondition(BaseModel):
+    condition_type: RuleConditionType
+    value: Any = Field(..., description="The value to match against")
+
+
+class ConfiguratorRule(BaseModel):
+    """A compatibility rule evaluated by the backend rules engine."""
+    rule_id: str = Field(..., max_length=100)
+    variant_id: Optional[str] = Field(None, max_length=100)
+    model_id: Optional[str] = Field(None, max_length=80)
+    target_option_type: ConfiguratorOptionType
+    target_option_id: str = Field(..., max_length=100)
+    effect: RuleEffect
+    conditions: List[RuleCondition] = Field(default_factory=list)
+    explanation: Optional[str] = Field(None, max_length=500)
+    active: bool = True
+    priority: int = Field(0, ge=0)
+
+
+class DoorState(BaseModel):
+    """Showroom interaction — does NOT affect price."""
+    front_left: bool = False
+    front_right: bool = False
+    rear_left: bool = False
+    rear_right: bool = False
+
+
+class LightingState(BaseModel):
+    """Showroom interaction — does NOT affect price."""
+    headlights: bool = False
+    drl: bool = False
+    taillights: bool = False
+    fog_lights: bool = False
+    left_indicator: bool = False
+    right_indicator: bool = False
+    hazard: bool = False
+    interior: bool = False
+
+
+class InteractionState(BaseModel):
+    """All showroom interactions bundled."""
+    doors: DoorState = Field(default_factory=DoorState)
+    hood_open: bool = False
+    boot_open: bool = False
+    frunk_open: bool = False
+    sunroof_open: bool = False
+    lighting: LightingState = Field(default_factory=LightingState)
+    camera_preset: Optional[str] = Field(None, max_length=40)
+
+
+class PurchasableConfiguration(BaseModel):
+    """The parts of configuration that affect price."""
+    variant_id: str = Field(..., max_length=100)
+    paint_id: Optional[str] = Field(None, max_length=80)
+    wheel_id: Optional[str] = Field(None, max_length=80)
+    interior_id: Optional[str] = Field(None, max_length=80)
+    roof_id: Optional[str] = Field(None, max_length=80)
+    accessory_ids: List[str] = Field(default_factory=list)
+
+    @field_validator("accessory_ids")
+    @classmethod
+    def max_accessories(cls, v: List[str]) -> List[str]:
+        if len(v) > 30:
+            raise ValueError("Maximum 30 accessories per configuration")
+        return v
+
+
+class ConfigurationState(BaseModel):
+    """The complete authoritative configuration state."""
+    purchasable: PurchasableConfiguration
+    interaction: InteractionState = Field(default_factory=InteractionState)
+
+
+class SavedConfigurationCreate(BaseModel):
+    """Payload for saving a user configuration."""
+    configuration: ConfigurationState
+    city: Optional[str] = Field(None, max_length=80)
+    price_snapshot: Optional[int] = Field(None, ge=0, description="Client snapshot retained for request compatibility; server recalculates before persistence")
+    asset_id: Optional[str] = Field(None, max_length=100)
+    asset_version: Optional[str] = Field(None, max_length=30)
+
+
+class SavedConfiguration(SavedConfigurationCreate):
+    """A persisted saved configuration."""
+    config_id: str
+    owner_phone: Optional[str] = None
+    share_token: Optional[str] = Field(None, max_length=64)
+    price_breakdown: Optional[Dict[str, Any]] = None
+    created_at: str
+    updated_at: str
+    stale: bool = False
+    stale_reason: Optional[str] = Field(None, max_length=500)
+
+
+class PriceComponent(BaseModel):
+    """A single named component of the on-road price."""
+    name: str = Field(..., max_length=80)
+    amount: int = Field(..., ge=0)
+    description: Optional[str] = Field(None, max_length=200)
+
+
+class ConfigurationPriceRequest(BaseModel):
+    """Request to calculate on-road price for a configuration."""
+    configuration: PurchasableConfiguration
+    city: Optional[str] = Field(None, max_length=80)
+    state: Optional[str] = Field(None, max_length=80)
+    offer_codes: List[str] = Field(default_factory=list, max_length=10)
+
+
+class ConfigurationPriceResponse(BaseModel):
+    """Backend-authoritative price breakdown."""
+    variant_id: str
+    city: Optional[str] = None
+    base_ex_showroom: int
+    option_deltas: List[PriceComponent] = Field(default_factory=list)
+    total_options: int = 0
+    subtotal_ex_showroom: int = 0
+    rto: Optional[int] = None
+    insurance_approx: Optional[int] = None
+    tcs: Optional[int] = None
+    other_charges: Optional[int] = None
+    offers_applied: List[PriceComponent] = Field(default_factory=list)
+    total_discount: int = 0
+    estimated_on_road: int
+    price_is_estimate: bool = True
+    effective_date: str
+    source: Optional[str] = None
+
+    @model_validator(mode="after")
+    def compute_totals(self) -> "ConfigurationPriceResponse":
+        self.total_options = sum(c.amount for c in self.option_deltas)
+        self.subtotal_ex_showroom = self.base_ex_showroom + self.total_options
+        self.total_discount = sum(c.amount for c in self.offers_applied)
+        return self
+
+
+class ValidationResult(BaseModel):
+    valid: bool
+    errors: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
+    rules_applied: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class ConfigurationValidationRequest(BaseModel):
+    """Request to validate a purchasable configuration."""
+    configuration: PurchasableConfiguration
+
+
+class AIConfiguratorIntent(BaseModel):
+    """Structured intent extracted from natural language by the AI."""
+    variant_id: str = Field(..., max_length=100)
+    raw_request: str = Field(..., max_length=2000)
+    preferred_segment: Optional[str] = Field(None, max_length=60)
+    max_budget: Optional[int] = Field(None, ge=0)
+    preferred_fuel: Optional[str] = Field(None, max_length=40)
+    preferred_color_description: Optional[str] = Field(None, max_length=200)
+    preferred_interior_description: Optional[str] = Field(None, max_length=200)
+    open_hood: Optional[bool] = None
+    open_doors: Optional[bool] = None
+    open_boot: Optional[bool] = None
+    open_sunroof: Optional[bool] = None
+    lights_on: Optional[bool] = None
+    camera_preset: Optional[str] = Field(None, max_length=40)
+
+
+class AIConfiguratorResponse(BaseModel):
+    """The resolved configuration returned after AI intent is validated."""
+    configuration: Optional[ConfigurationState] = None
+    price: Optional[ConfigurationPriceResponse] = None
+    explanation: str = Field(..., max_length=2000)
+    unavailable_options: List[Dict[str, str]] = Field(default_factory=list)
+    valid: bool
