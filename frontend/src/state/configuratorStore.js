@@ -56,6 +56,26 @@ const defaultAsset = {
 const defaultPrice = { loading: false, error: null, data: null, lastFetchedFor: null };
 const defaultValidation = { loading: false, error: null, result: null };
 
+const CAMERA_CAPABILITIES = {
+  exterior: ['camera_exterior'],
+  front: ['camera_exterior'],
+  rear: ['camera_exterior'],
+  left: ['camera_exterior'],
+  right: ['camera_exterior'],
+  top: ['camera_exterior'],
+  wheel: ['camera_exterior'],
+  boot: ['camera_exterior', 'boot'],
+  interior: ['camera_interior'],
+  cockpit: ['camera_interior'],
+};
+
+export function isCameraPresetSupported(supportedInteractions, preset) {
+  if (!Array.isArray(supportedInteractions)) return false;
+  const required = CAMERA_CAPABILITIES[preset];
+  if (!required) return false;
+  return required.every((capability) => supportedInteractions.includes(capability));
+}
+
 export const useConfiguratorStore = create((set, get) => ({
   purchasable: { ...defaultPurchasable },
   interaction: { ...defaultInteraction },
@@ -72,6 +92,7 @@ export const useConfiguratorStore = create((set, get) => ({
       asset: { ...defaultAsset },
       price: { ...defaultPrice },
       validation: { ...defaultValidation },
+      city: null,
       isInitialized: true,
     });
   },
@@ -104,7 +125,12 @@ export const useConfiguratorStore = create((set, get) => ({
       return { interaction: { ...s.interaction, lighting: { ...s.interaction.lighting, hazard: nextHazard, left_indicator: nextHazard ? false : s.interaction.lighting.left_indicator, right_indicator: nextHazard ? false : s.interaction.lighting.right_indicator } } };
     });
   },
-  setCameraPreset(preset) { set((s) => ({ interaction: { ...s.interaction, cameraPreset: preset } })); },
+  setCameraPreset(preset) {
+    set((s) => {
+      if (!isCameraPresetSupported(s.asset.supportedInteractions, preset)) return s;
+      return { interaction: { ...s.interaction, cameraPreset: preset } };
+    });
+  },
   setAutoRotate(value) { set((s) => ({ interaction: { ...s.interaction, autoRotate: value } })); },
   pauseAutoRotate() { set((s) => ({ interaction: { ...s.interaction, autoRotate: false } })); },
   setAsset(assetData) { set({ asset: { ...defaultAsset, ...assetData, loadedAt: new Date().toISOString() } }); },
@@ -117,6 +143,6 @@ export const useConfiguratorStore = create((set, get) => ({
   setValidationError(error) { set({ validation: { loading: false, error, result: null } }); },
   setCity(city) { set({ city }); },
   reset() {
-    set({ purchasable: { ...defaultPurchasable }, interaction: { ...defaultInteraction }, asset: { ...defaultAsset }, price: { ...defaultPrice }, validation: { ...defaultValidation }, isInitialized: false });
+    set({ purchasable: { ...defaultPurchasable }, interaction: { ...defaultInteraction }, asset: { ...defaultAsset }, price: { ...defaultPrice }, validation: { ...defaultValidation }, city: null, isInitialized: false });
   },
 }));
