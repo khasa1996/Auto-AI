@@ -12,16 +12,29 @@ _INTERACTION_TOKENS = {
     "boot": ("boot", "trunk"),
     "frunk": ("frunk",),
     "sunroof": ("sunroof", "roof"),
-    "headlights": ("headlight", "headlights"),
-    "drl": ("drl",),
-    "taillights": ("taillight", "taillights"),
-    "fog_lights": ("fog", "foglight", "fog_lights"),
-    "left_indicator": ("left_indicator", "indicator_left", "leftindicator"),
-    "right_indicator": ("right_indicator", "indicator_right", "rightindicator"),
-    "hazard": ("hazard",),
-    "interior_lights": ("interior_light", "interior_lights"),
-    "camera_exterior": ("camera_exterior",),
-    "camera_interior": ("camera_interior",),
+}
+
+_LIGHTING_MATERIALS = {
+    "headlights": "MAT_HEADLIGHT",
+    "drl": "MAT_DRL",
+    "taillights": "MAT_TAILLIGHT",
+    "fog_lights": "MAT_FOGLIGHT",
+    "left_indicator": "MAT_INDICATOR_L",
+    "right_indicator": "MAT_INDICATOR_R",
+    "interior_lights": "MAT_INTERIOR_LIGHT",
+}
+
+_NON_ANIMATED_INTERACTIONS = {
+    "headlights",
+    "drl",
+    "taillights",
+    "fog_lights",
+    "left_indicator",
+    "right_indicator",
+    "hazard",
+    "interior_lights",
+    "camera_exterior",
+    "camera_interior",
 }
 
 
@@ -60,20 +73,29 @@ def build_verified_asset_metadata(asset: ConfiguratorAssetCreate, inspected: Dic
     if missing_materials:
         errors.append("Manifest references missing paint materials: " + ", ".join(missing_materials))
 
-    missing_animations = sorted(
-        interaction
-        for interaction in asset.supported_interactions
-        if not _has_animation(interaction, animation_names)
-    )
+    normalized_materials = {str(name).upper() for name in material_names}
+    missing_animations: List[str] = []
+    missing_lighting_materials: List[str] = []
+    for interaction in asset.supported_interactions:
+        if interaction in _NON_ANIMATED_INTERACTIONS:
+            if interaction in _LIGHTING_MATERIALS and _LIGHTING_MATERIALS[interaction].upper() not in normalized_materials:
+                missing_lighting_materials.append(_LIGHTING_MATERIALS[interaction])
+            continue
+        if not _has_animation(interaction, animation_names):
+            missing_animations.append(interaction)
+
     if missing_animations:
-        errors.append("Manifest declares interactions without matching animations: " + ", ".join(missing_animations))
+        errors.append("Manifest declares interactions without matching animations: " + ", ".join(sorted(missing_animations)))
+    if missing_lighting_materials:
+        errors.append("Manifest declares lighting interactions without matching materials: " + ", ".join(sorted(missing_lighting_materials)))
 
     return {
         "valid": not errors,
         "errors": errors,
         "missing_meshes": missing_meshes,
         "missing_materials": missing_materials,
-        "missing_animations": missing_animations,
+        "missing_animations": sorted(missing_animations),
+        "missing_lighting_materials": sorted(missing_lighting_materials),
         "inspected": {
             "mesh_count": inspected.get("mesh_count", len(mesh_names)),
             "node_count": inspected.get("node_count", len(node_names)),
