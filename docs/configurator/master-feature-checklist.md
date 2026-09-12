@@ -29,7 +29,7 @@
 | 15 | Share configuration | BUILT | Share-token copy UI and public-token loading are wired. |
 | 16 | Configuration restore/persistence | BUILT | `?config=` restore is wired and revalidated; history is available. |
 | 17 | Verified/licensed asset gating | BUILT | Publication contract, provenance rules and availability gating exist. |
-| 18 | Responsive desktop/mobile configurator | PARTIAL | Responsive layout exists; dedicated mobile bottom-sheet UX remains. |
+| 18 | Responsive desktop/mobile configurator | BUILT | Desktop remains two-column; mobile uses a sticky, scrollable bottom control sheet with safe-area handling. |
 | 19 | Production tests and gates | BUILT | Contract/regression tests and production smoke gates pass on the current Phase 3 head. |
 | 20 | Security/backend authority | BUILT | Pricing, options, rules, save ownership and saved snapshots are backend-controlled. |
 
@@ -56,7 +56,7 @@
 | 37 | OEM/variant data hierarchy | PARTIAL | Backend models/variants/options exist; scalable data population remains. |
 | 38 | Admin asset management | BUILT | Admin create, validation, publish, assignment and unassignment workflow exists. |
 | 39 | Asset ingestion/validation pipeline | BUILT | Multipart GLB ingestion, SHA-256 capture, structural inspection and manifest validation are implemented; storage/CDN delivery remains. |
-| 40 | Mobile/PWA premium UX | PARTIAL | PWA/mobile architecture exists; configurator-specific mobile polish remains. |
+| 40 | Mobile/PWA premium UX | PARTIAL | PWA/mobile architecture exists; broader app-shell polish remains beyond the configurator-specific mobile sheet. |
 
 ## P2 — Advanced / future
 
