@@ -15,13 +15,14 @@ _INTERACTION_TOKENS = {
 }
 
 _LIGHTING_MATERIALS = {
-    "headlights": "MAT_HEADLIGHT",
-    "drl": "MAT_DRL",
-    "taillights": "MAT_TAILLIGHT",
-    "fog_lights": "MAT_FOGLIGHT",
-    "left_indicator": "MAT_INDICATOR_L",
-    "right_indicator": "MAT_INDICATOR_R",
-    "interior_lights": "MAT_INTERIOR_LIGHT",
+    "headlights": ("MAT_HEADLIGHT",),
+    "drl": ("MAT_DRL",),
+    "taillights": ("MAT_TAILLIGHT",),
+    "fog_lights": ("MAT_FOGLIGHT",),
+    "left_indicator": ("MAT_INDICATOR_L",),
+    "right_indicator": ("MAT_INDICATOR_R",),
+    "hazard": ("MAT_INDICATOR_L", "MAT_INDICATOR_R"),
+    "interior_lights": ("MAT_INTERIOR_LIGHT",),
 }
 
 _NON_ANIMATED_INTERACTIONS = {
@@ -78,8 +79,10 @@ def build_verified_asset_metadata(asset: ConfiguratorAssetCreate, inspected: Dic
     missing_lighting_materials: List[str] = []
     for interaction in asset.supported_interactions:
         if interaction in _NON_ANIMATED_INTERACTIONS:
-            if interaction in _LIGHTING_MATERIALS and _LIGHTING_MATERIALS[interaction].upper() not in normalized_materials:
-                missing_lighting_materials.append(_LIGHTING_MATERIALS[interaction])
+            required_materials = _LIGHTING_MATERIALS.get(interaction, ())
+            missing_lighting_materials.extend(
+                material for material in required_materials if material.upper() not in normalized_materials
+            )
             continue
         if not _has_animation(interaction, animation_names):
             missing_animations.append(interaction)
@@ -87,7 +90,7 @@ def build_verified_asset_metadata(asset: ConfiguratorAssetCreate, inspected: Dic
     if missing_animations:
         errors.append("Manifest declares interactions without matching animations: " + ", ".join(sorted(missing_animations)))
     if missing_lighting_materials:
-        errors.append("Manifest declares lighting interactions without matching materials: " + ", ".join(sorted(missing_lighting_materials)))
+        errors.append("Manifest declares lighting interactions without matching materials: " + ", ".join(sorted(set(missing_lighting_materials))))
 
     return {
         "valid": not errors,
@@ -95,7 +98,7 @@ def build_verified_asset_metadata(asset: ConfiguratorAssetCreate, inspected: Dic
         "missing_meshes": missing_meshes,
         "missing_materials": missing_materials,
         "missing_animations": sorted(missing_animations),
-        "missing_lighting_materials": sorted(missing_lighting_materials),
+        "missing_lighting_materials": sorted(set(missing_lighting_materials)),
         "inspected": {
             "mesh_count": inspected.get("mesh_count", len(mesh_names)),
             "node_count": inspected.get("node_count", len(node_names)),
