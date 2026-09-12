@@ -2,7 +2,7 @@
  * ConfiguratorViewer — React Three Fiber scene for the verified 3D configurator.
  */
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Bounds, ContactShadows, Environment } from '@react-three/drei';
 import { Maximize2, Minimize2, Share2, Camera } from 'lucide-react';
@@ -44,9 +44,30 @@ export default function ConfiguratorViewer({ style, options }) {
   const purchasable = useConfiguratorStore((state) => state.purchasable);
   const interaction = useConfiguratorStore((state) => state.interaction);
   const isInitialized = useConfiguratorStore((state) => state.isInitialized);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => setCinematic(document.fullscreenElement === canvasRef.current);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
   if (!isInitialized) return <div style={{ minHeight: 480, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#080808', borderRadius: 20, color: 'rgba(255,255,255,0.3)', fontFamily: 'monospace', fontSize: 12, letterSpacing: '0.15em', textTransform: 'uppercase', ...style }}>Select a vehicle to open the configurator</div>;
   if (!asset.available || !asset.url) return <AssetUnavailable status={asset.configuratorStatus} variantName={purchasable.variantId} />;
   const selectedPaint = options?.colors?.find((color) => color.color_id === purchasable.paintId);
+
+  const toggleCinematic = async () => {
+    try {
+      if (document.fullscreenElement === canvasRef.current) {
+        await document.exitFullscreen();
+      } else if (canvasRef.current?.requestFullscreen) {
+        await canvasRef.current.requestFullscreen();
+      } else {
+        setCinematic((value) => !value);
+      }
+    } catch {
+      setCinematic((value) => !value);
+    }
+  };
 
   const capture = async (share = false) => {
     const canvas = canvasRef.current?.querySelector('canvas');
@@ -79,7 +100,7 @@ export default function ConfiguratorViewer({ style, options }) {
     <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between p-4">
       <div className="pointer-events-auto rounded-full border border-white/10 bg-black/45 px-3 py-1.5 text-[9px] uppercase tracking-[0.2em] text-white/50 backdrop-blur">Verified asset only</div>
       <div className="pointer-events-auto flex gap-2">
-        <button type="button" title={cinematic ? 'Exit cinematic mode' : 'Cinematic mode'} onClick={() => setCinematic((value) => !value)} className="rounded-full border border-white/10 bg-black/45 p-2.5 text-white/70 backdrop-blur hover:border-amber-400/50 hover:text-amber-300" aria-label="Toggle cinematic mode">{cinematic ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</button>
+        <button type="button" title={cinematic ? 'Exit cinematic mode' : 'Cinematic mode'} onClick={toggleCinematic} className="rounded-full border border-white/10 bg-black/45 p-2.5 text-white/70 backdrop-blur hover:border-amber-400/50 hover:text-amber-300" aria-label="Toggle cinematic mode">{cinematic ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</button>
         <button type="button" title="Capture configuration" onClick={() => capture(false)} className="rounded-full border border-white/10 bg-black/45 p-2.5 text-white/70 backdrop-blur hover:border-amber-400/50 hover:text-amber-300" aria-label="Capture configuration screenshot"><Camera size={14} /></button>
         <button type="button" title="Share configuration" onClick={() => capture(true)} className="rounded-full border border-white/10 bg-black/45 p-2.5 text-white/70 backdrop-blur hover:border-amber-400/50 hover:text-amber-300" aria-label="Share configuration screenshot"><Share2 size={14} /></button>
       </div>
