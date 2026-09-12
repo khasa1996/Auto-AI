@@ -13,6 +13,7 @@ import BookCar from "./pages/BookCar";
 import Showroom from "./pages/Showroom";
 import CarConfigurator from "./pages/CarConfigurator";
 import ConfiguratorHistory from "./pages/ConfiguratorHistory";
+import ConfiguratorConversion from "./pages/ConfiguratorConversion";
 import Premium from "./pages/Premium";
 import Dealer from "./pages/Dealer";
 import DealerApply from "./pages/DealerApply";
@@ -44,6 +45,7 @@ function App() {
                 <Route path="/showroom/:carId" element={<Showroom />} />
                 <Route path="/configurator/:variantId" element={<CarConfigurator />} />
                 <Route path="/configurator/history" element={<ConfiguratorHistory />} />
+                <Route path="/configurator/conversion" element={<ConfiguratorConversion />} />
                 <Route path="/premium" element={<Premium />} />
                 <Route path="/dealer" element={<Dealer />} />
                 <Route path="/dealers/apply" element={<DealerApply />} />
