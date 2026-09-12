@@ -13,7 +13,7 @@ import { useLightingController } from '../../three/LightingController';
 import { ConfiguratorControls, useCameraPreset } from '../../three/CameraPresets';
 import { useConfiguratorStore } from '../../state/configuratorStore';
 
-function ConfiguratorScene({ modelUrl, paintColorHex, paintMaterialNames, wheelMeshNames, optionMeshNames, purchasable, interaction, sceneRef }) {
+function ConfiguratorScene({ modelUrl, paintColorHex, paintMaterialNames, wheelMeshNames, optionMeshNames, purchasable, interaction, supportedInteractions, sceneRef }) {
   const controlsRef = useRef();
   useCameraPreset(interaction.cameraPreset, controlsRef);
   useLightingController(sceneRef, interaction.lighting);
@@ -26,7 +26,7 @@ function ConfiguratorScene({ modelUrl, paintColorHex, paintMaterialNames, wheelM
     <Bounds fit clip observe margin={1.3}>
       <AssetSuspense>
         <group ref={sceneRef} position={[0, -0.5, 0]}>
-          <VehicleModel url={modelUrl} paintColorHex={paintColorHex} paintMaterialNames={paintMaterialNames} wheelMeshNames={wheelMeshNames} optionMeshNames={optionMeshNames} purchasable={purchasable} interaction={interaction} />
+          <VehicleModel url={modelUrl} paintColorHex={paintColorHex} paintMaterialNames={paintMaterialNames} wheelMeshNames={wheelMeshNames} optionMeshNames={optionMeshNames} purchasable={purchasable} interaction={interaction} supportedInteractions={supportedInteractions} />
         </group>
       </AssetSuspense>
     </Bounds>
@@ -57,13 +57,9 @@ export default function ConfiguratorViewer({ style, options }) {
 
   const toggleCinematic = async () => {
     try {
-      if (document.fullscreenElement === canvasRef.current) {
-        await document.exitFullscreen();
-      } else if (canvasRef.current?.requestFullscreen) {
-        await canvasRef.current.requestFullscreen();
-      } else {
-        setCinematic((value) => !value);
-      }
+      if (document.fullscreenElement === canvasRef.current) await document.exitFullscreen();
+      else if (canvasRef.current?.requestFullscreen) await canvasRef.current.requestFullscreen();
+      else setCinematic((value) => !value);
     } catch {
       setCinematic((value) => !value);
     }
@@ -95,7 +91,7 @@ export default function ConfiguratorViewer({ style, options }) {
 
   return <div ref={canvasRef} className={`auto-ai-configurator-canvas relative w-full overflow-hidden rounded-[20px] transition-all duration-700 ${cinematic ? 'min-h-[680px] ring-1 ring-amber-400/30' : 'min-h-[480px]'}`} style={style}>
     <Canvas shadows dpr={[1, 1.75]} camera={{ position: [4.5, 1.6, 5.5], fov: 38 }} gl={{ antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: true }}>
-      <ConfiguratorScene modelUrl={asset.url} paintColorHex={selectedPaint?.primary_hex || null} paintMaterialNames={asset.paintMaterialNames || []} wheelMeshNames={asset.wheelMeshNames || {}} optionMeshNames={asset.optionMeshNames || {}} purchasable={purchasable} interaction={interaction} sceneRef={sceneRef} />
+      <ConfiguratorScene modelUrl={asset.url} paintColorHex={selectedPaint?.primary_hex || null} paintMaterialNames={asset.paintMaterialNames || []} wheelMeshNames={asset.wheelMeshNames || {}} optionMeshNames={asset.optionMeshNames || {}} purchasable={purchasable} interaction={interaction} supportedInteractions={asset.supportedInteractions || []} sceneRef={sceneRef} />
     </Canvas>
     <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between p-4">
       <div className="pointer-events-auto rounded-full border border-white/10 bg-black/45 px-3 py-1.5 text-[9px] uppercase tracking-[0.2em] text-white/50 backdrop-blur">Verified asset only</div>
