@@ -60,6 +60,38 @@ def test_build_verified_metadata_rejects_manifest_mismatch():
     assert "doors" in result["missing_animations"]
 
 
+def test_build_verified_metadata_accepts_lighting_capability_from_materials():
+    result = build_verified_asset_metadata(
+        make_asset(supported_interactions=["headlights", "drl"]),
+        {
+            "format": "glb",
+            "mesh_names": ["Wheel_FL"],
+            "node_names": ["Sunroof"],
+            "material_names": ["MAT_HEADLIGHT", "MAT_DRL"],
+            "animation_names": [],
+        },
+    )
+
+    assert result["valid"] is True
+    assert result["missing_animations"] == []
+
+
+def test_build_verified_metadata_rejects_missing_lighting_material():
+    result = build_verified_asset_metadata(
+        make_asset(supported_interactions=["headlights"]),
+        {
+            "format": "glb",
+            "mesh_names": ["Wheel_FL"],
+            "node_names": ["Sunroof"],
+            "material_names": ["MAT_DRL"],
+            "animation_names": [],
+        },
+    )
+
+    assert result["valid"] is False
+    assert any("MAT_HEADLIGHT" in error for error in result["errors"])
+
+
 def test_build_verified_metadata_requires_glb():
     result = build_verified_asset_metadata(make_asset(), {"format": "gltf", "mesh_names": []})
     assert result["valid"] is False
