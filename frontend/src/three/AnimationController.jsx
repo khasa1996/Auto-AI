@@ -44,6 +44,15 @@ export const ANIMATION_NAMES = {
   FRUNK_CLOSE: 'Frunk_Close',
 };
 
+export function resolveAnimationName(animationMappings, interactionKey, fallbackName) {
+  const mapping = animationMappings?.[interactionKey];
+  if (mapping && typeof mapping === 'object') {
+    const mapped = mapping[interactionKey] || mapping.name || mapping.clip;
+    if (typeof mapped === 'string' && mapped.trim()) return mapped;
+  }
+  return fallbackName;
+}
+
 /**
  * useVehicleAnimations — hook that wraps useAnimations with lifecycle guards.
  *
@@ -62,13 +71,10 @@ export function useVehicleAnimations(clips, ref) {
     const action = actions[animationName];
 
     if (!action || !mixer) {
-      // Animation not present in this asset — silently ignore.
-      // Never substitute fake movement.
       return;
     }
 
     if (playingRef.current.has(animationName)) {
-      // Already playing — ignore rapid repeated clicks.
       return;
     }
 
@@ -103,5 +109,4 @@ export function useVehicleAnimations(clips, ref) {
   return { play, availableAnimations };
 }
 
-// THREE.LoopOnce = 2200 (avoid importing full THREE in hooks)
 const THREE_LoopOnce = 2200;
