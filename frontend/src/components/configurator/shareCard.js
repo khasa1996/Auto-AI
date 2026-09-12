@@ -1,10 +1,18 @@
-/**
- * Build a privacy-safe branded image from the current configuration snapshot.
- * No owner identity, phone number, auth token or private database fields are included.
- */
-
 function text(value, fallback = "Not selected") {
   return String(value || fallback).slice(0, 80);
+}
+
+export function buildShareCardData({ vehicleName, variantName, color, wheels, interior, roof, price, city }) {
+  return {
+    vehicleName: text(vehicleName, "Configured vehicle"),
+    variantName: text(variantName, "Custom configuration"),
+    color: text(color),
+    wheels: text(wheels),
+    interior: text(interior),
+    roof: text(roof),
+    price: price ? text(price) : "Price on request",
+    city: city ? text(city) : "",
+  };
 }
 
 function wrapLines(ctx, value, maxWidth, maxLines = 2) {
@@ -36,6 +44,7 @@ export async function buildConfiguratorShareCard({
   city,
 }) {
   if (!sourceCanvas) throw new Error("Configurator canvas is unavailable");
+  const data = buildShareCardData({ vehicleName, variantName, color, wheels, interior, roof, price, city });
   const canvas = document.createElement("canvas");
   canvas.width = 1200;
   canvas.height = 760;
@@ -75,16 +84,16 @@ export async function buildConfiguratorShareCard({
   ctx.fillText("AUTO AI INDIA", 40, 548);
   ctx.font = "500 32px Arial, sans-serif";
   ctx.fillStyle = "#ffffff";
-  ctx.fillText(text(vehicleName, "Configured vehicle"), 40, 590);
+  ctx.fillText(data.vehicleName, 40, 590);
   ctx.font = "400 16px Arial, sans-serif";
   ctx.fillStyle = "rgba(255,255,255,0.55)";
-  ctx.fillText(text(variantName, "Custom configuration"), 40, 616);
+  ctx.fillText(data.variantName, 40, 616);
 
   const specs = [
-    ["Colour", color],
-    ["Wheels", wheels],
-    ["Interior", interior],
-    ["Roof", roof],
+    ["Colour", data.color],
+    ["Wheels", data.wheels],
+    ["Interior", data.interior],
+    ["Roof", data.roof],
   ];
   let x = 40;
   for (const [label, value] of specs) {
@@ -100,10 +109,10 @@ export async function buildConfiguratorShareCard({
   ctx.textAlign = "right";
   ctx.font = "700 26px Arial, sans-serif";
   ctx.fillStyle = "#fbbf24";
-  ctx.fillText(price ? text(price) : "Price on request", 1160, 590);
+  ctx.fillText(data.price, 1160, 590);
   ctx.font = "400 12px Arial, sans-serif";
   ctx.fillStyle = "rgba(255,255,255,0.35)";
-  ctx.fillText(city ? `Estimated on-road · ${text(city)}` : "Estimated on-road", 1160, 616);
+  ctx.fillText(data.city ? `Estimated on-road · ${data.city}` : "Estimated on-road", 1160, 616);
   ctx.textAlign = "left";
 
   return new Promise((resolve, reject) => {
