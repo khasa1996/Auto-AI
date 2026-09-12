@@ -49,6 +49,8 @@ test('normalizes backend validation messages', () => {
 });
 
 test('does not enable unsupported showroom interactions', () => {
-  expect(isInteractionSupported(['Door_FL_Open'], 'Door_FL_Open')).toBe(true);
+  expect(isInteractionSupported(['doors'], 'Door_FL_Open')).toBe(true);
+  expect(isInteractionSupported(['doors'], 'Door_FR_Open')).toBe(true);
+  expect(isInteractionSupported(['hood'], 'Hood_Open')).toBe(true);
   expect(isInteractionSupported(['Door_FL_Open'], 'Door_FR_Open')).toBe(false);
 });
