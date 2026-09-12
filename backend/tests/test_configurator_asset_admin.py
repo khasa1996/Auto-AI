@@ -5,7 +5,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from configurator_asset_admin_routes import make_asset_admin_router
+from configurator_asset_admin_routes import _require_admin, make_asset_admin_router
 
 
 class FakeCollection:
@@ -27,7 +27,7 @@ class FakeDB:
 
 
 @pytest.fixture
-def client(monkeypatch):
+def client():
     doc = {
         "asset_id": "asset-1",
         "variant_id": "variant-1",
@@ -52,7 +52,7 @@ def client(monkeypatch):
     async def fake_admin():
         return "admin"
 
-    monkeypatch.setattr("configurator_asset_admin_routes._require_admin", fake_admin)
+    app.dependency_overrides[_require_admin] = fake_admin
     return TestClient(app), doc
 
 
