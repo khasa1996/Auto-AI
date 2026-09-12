@@ -12,8 +12,8 @@
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 1 | Real GLB/GLTF 3D vehicle | PARTIAL | Verified asset contract and R3F viewer exist; real licensed production assets are not yet seeded. |
-| 2 | 360° orbit / rotate / zoom / pan / reset | PARTIAL | Orbit foundation exists; dedicated reset/polish remains. |
+| 1 | Real GLB/GLTF 3D vehicle | PARTIAL | Verified asset contract, binary GLB inspection, and R3F viewer exist; real licensed production assets are not yet seeded. |
+| 2 | 360° orbit / rotate / zoom / pan / reset | PARTIAL | Orbit/zoom foundation exists; dedicated reset/polish remains. |
 | 3 | Exterior/interior/camera presets | PARTIAL | Preset state exists; asset-supported camera availability needs enforcement. |
 | 4 | Auto-rotate | BUILT | Store and controls are implemented. |
 | 5 | OEM paint/color selection | BUILT | Backend-driven color controls and semantic paint-material application are wired. |
@@ -25,12 +25,12 @@
 | 11 | Backend-authoritative validation | BUILT | Purchasable configurations are revalidated before pricing and save. |
 | 12 | Backend-authoritative live pricing | BUILT | Server recalculates price; client snapshots are not trusted for persistence. |
 | 13 | Configuration summary | BUILT | Vehicle, color, wheels, interior, roof and accessories are summarized from backend option data. |
-| 14 | Save configuration | BUILT | Authenticated save now revalidates configuration and persists server-calculated price. |
-| 15 | Share configuration | PARTIAL | Share-token copy UI and public-token loading are wired; branded share card remains. |
-| 16 | Configuration restore/persistence | PARTIAL | `?config=` restore is wired and revalidated; history is now available. |
-| 17 | Verified/licensed asset gating | BUILT | Publication contract and availability gating exist. |
+| 14 | Save configuration | BUILT | Authenticated save revalidates configuration and persists server-calculated price. |
+| 15 | Share configuration | BUILT | Share-token copy UI and public-token loading are wired. |
+| 16 | Configuration restore/persistence | BUILT | `?config=` restore is wired and revalidated; history is available. |
+| 17 | Verified/licensed asset gating | BUILT | Publication contract, provenance rules and availability gating exist. |
 | 18 | Responsive desktop/mobile configurator | PARTIAL | Responsive layout exists; dedicated mobile bottom-sheet UX remains. |
-| 19 | Production tests and gates | BUILT | Contract/regression tests exist; final CI verification is required on the main-target PR. |
+| 19 | Production tests and gates | BUILT | Contract/regression tests and production smoke gates pass on the current Phase 3 head. |
 | 20 | Security/backend authority | BUILT | Pricing, options, rules, save ownership and saved snapshots are backend-controlled. |
 
 ## P1 — Premium V1
@@ -44,18 +44,18 @@
 | 25 | Bonnet/hood open/close | PARTIAL | State and UI are asset-capability gated; real asset animation must be present. |
 | 26 | Sunroof open/close | PARTIAL | State and UI are asset-capability gated; real asset animation must be present. |
 | 27 | Lights/DRL/hazard/interior lighting | PARTIAL | Controls are capability-gated; complete asset light animation remains. |
-| 28 | Feature hotspots | PARTIAL | Hotspot normalization contract exists; viewer integration remains. |
-| 29 | Cinematic showroom mode | PARTIAL | Premium presentation mode is wired; guided camera sequence remains. |
-| 30 | Configuration screenshot/share card | PARTIAL | Screenshot/native-share foundation exists; branded share-card/QR composition remains. |
-| 31 | EMI/finance handoff | PARTIAL | Configured conversion-lead backend contract exists; final finance UI handoff remains. |
-| 32 | Insurance handoff | MISSING | Under-One-Roof conversion flow. |
-| 33 | Dealer availability/enquiry/booking | PARTIAL | Configured conversion-lead backend contract exists; dealer-specific UI remains. |
+| 28 | Feature hotspots | BUILT | Backend hotspot manifest, publication gating, API and viewer markers/details are wired. |
+| 29 | Cinematic showroom mode | PARTIAL | Fullscreen presentation mode is wired; guided camera sequence remains. |
+| 30 | Configuration screenshot/share card | BUILT | Screenshot capture and branded share-card composition are implemented; QR composition remains. |
+| 31 | EMI/finance handoff | BUILT | Configured conversion-lead backend and saved-configuration finance UI handoff are wired. |
+| 32 | Insurance handoff | BUILT | Insurance assistance selection is included in the validated conversion handoff. |
+| 33 | Dealer availability/enquiry/booking | BUILT | Dealer availability, enquiry, test-drive and booking intents are selectable in conversion handoff. |
 | 34 | City/state pricing selector | PARTIAL | City input is wired to backend pricing; authoritative city/state picker remains. |
 | 35 | Configuration history / saved cars | BUILT | Authenticated history endpoint and history UI are implemented. |
 | 36 | Compare configurations | BUILT | Two saved configurations can be compared through the backend comparison contract. |
 | 37 | OEM/variant data hierarchy | PARTIAL | Backend models/variants/options exist; scalable data population remains. |
-| 38 | Admin asset management | PARTIAL | Asset schema/publication gates exist; full admin workflow is missing. |
-| 39 | Asset ingestion/validation pipeline | PARTIAL | Verified metadata/mesh-manifest validation exists; binary ingestion and semantic inspection remain. |
+| 38 | Admin asset management | BUILT | Admin create, validation, publish, assignment and unassignment workflow exists. |
+| 39 | Asset ingestion/validation pipeline | BUILT | Multipart GLB ingestion, SHA-256 capture, structural inspection and manifest validation are implemented; storage/CDN delivery remains. |
 | 40 | Mobile/PWA premium UX | PARTIAL | PWA/mobile architecture exists; configurator-specific mobile polish remains. |
 
 ## P2 — Advanced / future
