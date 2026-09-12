@@ -15,7 +15,6 @@ import { useConfiguratorStore } from '../../state/configuratorStore';
 import { configuratorApi } from '../../services/configuratorApi';
 import { normalizeHotspots } from './premiumShowroom';
 import { buildConfiguratorShareCard } from './shareCard';
-import ConfiguratorAIAssistant from './ConfiguratorAIAssistant';
 
 function ConfiguratorScene({ modelUrl, paintColorHex, paintMaterialNames, wheelMeshNames, optionMeshNames, purchasable, interaction, supportedInteractions, sceneRef }) {
   const controlsRef = useRef();
