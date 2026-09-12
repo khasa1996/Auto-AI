@@ -1,5 +1,6 @@
 import {
   buildPurchasablePayload,
+  getCameraPresets,
   getOptionGroups,
   getValidationMessages,
   isInteractionSupported,
@@ -53,4 +54,14 @@ test('does not enable unsupported showroom interactions', () => {
   expect(isInteractionSupported(['doors'], 'Door_FR_Open')).toBe(true);
   expect(isInteractionSupported(['hood'], 'Hood_Open')).toBe(true);
   expect(isInteractionSupported(['Door_FL_Open'], 'Door_FR_Open')).toBe(false);
+});
+
+test('filters camera presets to capabilities declared by the verified asset', () => {
+  expect(getCameraPresets(['camera_exterior', 'camera_interior', 'boot'])).toEqual([
+    'exterior', 'front', 'rear', 'left', 'right', 'top', 'interior', 'cockpit', 'boot', 'wheel',
+  ]);
+  expect(getCameraPresets(['camera_exterior'])).toEqual([
+    'exterior', 'front', 'rear', 'left', 'right', 'top', 'wheel',
+  ]);
+  expect(getCameraPresets([])).toEqual([]);
 });
