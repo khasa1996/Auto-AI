@@ -11,7 +11,7 @@ import EMI from "./pages/EMI";
 import News from "./pages/News";
 import BookCar from "./pages/BookCar";
 import Showroom from "./pages/Showroom";
-import CarConfigurator from "./pages/CarConfigurator";
+import ConfiguratorExperience from "./pages/ConfiguratorExperience";
 import ConfiguratorHistory from "./pages/ConfiguratorHistory";
 import ConfiguratorConversion from "./pages/ConfiguratorConversion";
 import Premium from "./pages/Premium";
@@ -43,7 +43,7 @@ function App() {
                 <Route path="/news" element={<News />} />
                 <Route path="/book/:carId" element={<BookCar />} />
                 <Route path="/showroom/:carId" element={<Showroom />} />
-                <Route path="/configurator/:variantId" element={<CarConfigurator />} />
+                <Route path="/configurator/:variantId" element={<ConfiguratorExperience />} />
                 <Route path="/configurator/history" element={<ConfiguratorHistory />} />
                 <Route path="/configurator/conversion" element={<ConfiguratorConversion />} />
                 <Route path="/premium" element={<Premium />} />
