@@ -78,7 +78,7 @@ export default function CarConfigurator() {
     }
     load();
     return () => { cancelled = true; };
-  }, [variantId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [variantId]);
 
   const validateAndPrice = useCallback(async () => {
     const sequence = ++requestSequence.current;
@@ -160,6 +160,7 @@ export default function CarConfigurator() {
       <ConfigurationSummary variant={variant} options={options} purchasable={store.purchasable} />
       <CityPanel city={store.city} setCity={store.setCity} />
       <SaveSharePanel canCommit={canCommit} saveState={saveState} onSave={saveConfiguration} onShare={copyShareLink} shareCopied={shareCopied} />
+      {saveState.shareToken && <Link to={`/configurator/conversion?config=${encodeURIComponent(saveState.shareToken)}`} className="block w-full rounded-xl border border-amber-400/30 bg-amber-400/5 py-3 text-center text-xs font-bold uppercase tracking-widest text-amber-300 transition hover:bg-amber-400/10">Finance · Insurance · Dealer →</Link>}
       <InteractionPanel supportedInteractions={store.asset.supportedInteractions} /><CameraPanel />
       <Link aria-disabled={!canCommit} className={`block w-full rounded-xl py-3 text-center text-xs font-bold uppercase tracking-widest transition ${canCommit ? 'bg-amber-400 text-black hover:bg-amber-300' : 'pointer-events-none bg-white/10 text-white/20'}`} to={canCommit ? `/book/${variantId}` : '#'}>Book configured test drive →</Link>
     </aside></div></div></main>;
