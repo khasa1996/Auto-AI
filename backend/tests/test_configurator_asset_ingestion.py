@@ -92,6 +92,38 @@ def test_build_verified_metadata_rejects_missing_lighting_material():
     assert any("MAT_HEADLIGHT" in error for error in result["errors"])
 
 
+def test_build_verified_metadata_requires_both_indicator_materials_for_hazard():
+    result = build_verified_asset_metadata(
+        make_asset(supported_interactions=["hazard"]),
+        {
+            "format": "glb",
+            "mesh_names": ["Wheel_FL"],
+            "node_names": ["Sunroof"],
+            "material_names": ["MAT_INDICATOR_L"],
+            "animation_names": [],
+        },
+    )
+
+    assert result["valid"] is False
+    assert "MAT_INDICATOR_R" in result["missing_lighting_materials"]
+
+
+def test_build_verified_metadata_accepts_hazard_with_both_indicator_materials():
+    result = build_verified_asset_metadata(
+        make_asset(supported_interactions=["hazard"]),
+        {
+            "format": "glb",
+            "mesh_names": ["Wheel_FL"],
+            "node_names": ["Sunroof"],
+            "material_names": ["MAT_INDICATOR_L", "MAT_INDICATOR_R"],
+            "animation_names": [],
+        },
+    )
+
+    assert result["valid"] is True
+    assert result["missing_lighting_materials"] == []
+
+
 def test_build_verified_metadata_requires_glb():
     result = build_verified_asset_metadata(make_asset(), {"format": "gltf", "mesh_names": []})
     assert result["valid"] is False
