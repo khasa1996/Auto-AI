@@ -17,4 +17,4 @@ def test_zero_rate_emi():
 
 
 def test_reducing_balance_emi_is_rounded():
-    assert calculate_emi(800000, 9.5, 60) == 16795
+    assert calculate_emi(800000, 9.5, 60) == 16801
