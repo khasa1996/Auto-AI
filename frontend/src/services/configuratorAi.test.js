@@ -1,4 +1,4 @@
-import { buildConfiguratorAIIntent, getAIConfigurationSelection } from './configuratorAi';
+import { buildConfiguratorAIIntent, getAIConfigurationSelection, getAIInteractionState } from './configuratorAi';
 
 describe('configurator AI contract helpers', () => {
   test('builds a bounded intent for the active variant', () => {
@@ -37,6 +37,26 @@ describe('configurator AI contract helpers', () => {
     expect(getAIConfigurationSelection(response)).toEqual({
       purchasable: response.data.configuration.purchasable,
       interaction: response.data.configuration.interaction,
+    });
+  });
+
+  test('normalizes the complete non-purchasable showroom state', () => {
+    expect(getAIInteractionState({
+      doors: { front_left: true, front_right: false, rear_left: true, rear_right: false },
+      hood_open: true,
+      boot_open: false,
+      frunk_open: true,
+      sunroof_open: true,
+      lighting: { headlights: true, drl: true, taillights: false, fog_lights: true, left_indicator: true, right_indicator: false, hazard: false, interior: true },
+      camera_preset: 'interior',
+    })).toEqual({
+      doors: { frontLeft: true, frontRight: false, rearLeft: true, rearRight: false },
+      hoodOpen: true,
+      bootOpen: false,
+      frunkOpen: true,
+      sunroofOpen: true,
+      lighting: { headlights: true, drl: true, taillights: false, fog_lights: true, left_indicator: true, right_indicator: false, hazard: false, interior: true },
+      cameraPreset: 'interior',
     });
   });
 
