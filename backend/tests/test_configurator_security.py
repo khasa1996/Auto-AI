@@ -53,9 +53,23 @@ class FakeConfigurations:
         return None
 
 
+class FakeCollection:
+    def __init__(self, responses: list[Optional[Dict[str, Any]]]) -> None:
+        self.responses = iter(responses)
+
+    async def find_one(
+        self,
+        query: Dict[str, Any],
+        projection: Optional[Dict[str, int]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        return next(self.responses)
+
+
 class FakeDatabase:
     def __init__(self) -> None:
         self.configurations = FakeConfigurations()
+        self.variants = FakeCollection([None])
+        self.configurator_assets = FakeCollection([None])
 
 
 @pytest.fixture(autouse=True)
