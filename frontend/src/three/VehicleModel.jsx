@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
-import { ANIMATION_NAMES, useVehicleAnimations } from './AnimationController';
+import { ANIMATION_NAMES, resolveAnimationName, useVehicleAnimations } from './AnimationController';
 
 function applyPaintColor(scene, colorHex, paintMaterialNames) {
   if (!scene || !colorHex || !paintMaterialNames?.length) return;
@@ -53,7 +53,7 @@ function normalizeWheelMappings(wheelMeshNames) {
   );
 }
 
-function LoadedVehicle({ url, paintColorHex, paintMaterialNames, wheelMeshNames, optionMeshNames, purchasable, interaction, supportedInteractions }) {
+function LoadedVehicle({ url, paintColorHex, paintMaterialNames, wheelMeshNames, optionMeshNames, interactionAnimationNames, purchasable, interaction, supportedInteractions }) {
   const { scene, animations } = useGLTF(url);
   const groupRef = useRef();
   const previousInteractionRef = useRef(null);
@@ -82,19 +82,20 @@ function LoadedVehicle({ url, paintColorHex, paintMaterialNames, wheelMeshNames,
     previousInteractionRef.current = interaction;
     if (!previous) return;
     const supported = new Set(Array.isArray(supportedInteractions) ? supportedInteractions : []);
-    const playToggle = (capability, current, before, openName, closeName) => {
+    const playToggle = (capability, current, before, group, key, fallback) => {
       if (!supported.has(capability) || current === before) return;
-      play(current ? openName : closeName);
+      play(resolveAnimationName(interactionAnimationNames, group, key, fallback));
     };
-    playToggle('doors', interaction.doors.frontLeft, previous.doors.frontLeft, ANIMATION_NAMES.DOOR_FL_OPEN, ANIMATION_NAMES.DOOR_FL_CLOSE);
-    playToggle('doors', interaction.doors.frontRight, previous.doors.frontRight, ANIMATION_NAMES.DOOR_FR_OPEN, ANIMATION_NAMES.DOOR_FR_CLOSE);
-    playToggle('doors', interaction.doors.rearLeft, previous.doors.rearLeft, ANIMATION_NAMES.DOOR_RL_OPEN, ANIMATION_NAMES.DOOR_RL_CLOSE);
-    playToggle('doors', interaction.doors.rearRight, previous.doors.rearRight, ANIMATION_NAMES.DOOR_RR_OPEN, ANIMATION_NAMES.DOOR_RR_CLOSE);
-    playToggle('hood', interaction.hoodOpen, previous.hoodOpen, ANIMATION_NAMES.HOOD_OPEN, ANIMATION_NAMES.HOOD_CLOSE);
-    playToggle('boot', interaction.bootOpen, previous.bootOpen, ANIMATION_NAMES.BOOT_OPEN, ANIMATION_NAMES.BOOT_CLOSE);
-    playToggle('frunk', interaction.frunkOpen, previous.frunkOpen, ANIMATION_NAMES.FRUNK_OPEN, ANIMATION_NAMES.FRUNK_CLOSE);
-    playToggle('sunroof', interaction.sunroofOpen, previous.sunroofOpen, ANIMATION_NAMES.SUNROOF_OPEN, ANIMATION_NAMES.SUNROOF_CLOSE);
-  }, [interaction, play, supportedInteractions]);
+    playToggle('doors', interaction.doors.frontLeft, previous.doors.frontLeft, 'doors', 'front_left_open', ANIMATION_NAMES.DOOR_FL_OPEN);
+    playToggle('doors', interaction.doors.frontRight, previous.doors.frontRight, 'doors', 'front_right_open', ANIMATION_NAMES.DOOR_FR_OPEN);
+    playToggle('doors', interaction.doors.rearLeft, previous.doors.rearLeft, 'doors', 'rear_left_open', ANIMATION_NAMES.DOOR_RL_OPEN);
+    playToggle('doors', interaction.doors.rearRight, previous.doors.rearRight, 'doors', 'rear_right_open', ANIMATION_NAMES.DOOR_RR_OPEN);
+    playToggle('hood', interaction.hoodOpen, previous.hoodOpen, 'hood', 'open', ANIMATION_NAMES.HOOD_OPEN);
+    playToggle('boot', interaction.bootOpen, previous.bootOpen, 'boot', 'open', ANIMATION_NAMES.BOOT_OPEN);
+    playToggle('frunk', interaction.frunkOpen, previous.frunkOpen, 'frunk', 'open', ANIMATION_NAMES.FRUNK_OPEN);
+    playToggle('sunroof', interaction.sunroofOpen, previous.sunroofOpen, 'sunroof', 'open', ANIMATION_NAMES.SUNROOF_OPEN);
+    playToggle('doors', interaction.doors.frontLeft, previous.doors.frontLeft, 'doors', 'front_left_close', ANIMATION_NAMES.DOOR_FL_CLOSE);
+  }, [interaction, play, supportedInteractions, interactionAnimationNames]);
 
   useEffect(() => () => {
     clonedScene.traverse((node) => {
@@ -107,12 +108,12 @@ function LoadedVehicle({ url, paintColorHex, paintMaterialNames, wheelMeshNames,
   return <primitive ref={groupRef} object={clonedScene} />;
 }
 
-export default function VehicleModel({ url, paintColorHex, paintMaterialNames = [], wheelMeshNames = {}, optionMeshNames = {}, purchasable, interaction, supportedInteractions = [] }) {
+export default function VehicleModel({ url, paintColorHex, paintMaterialNames = [], wheelMeshNames = {}, optionMeshNames = {}, interactionAnimationNames = {}, purchasable, interaction, supportedInteractions = [] }) {
   if (!url) return null;
   const lower = url.toLowerCase();
   if (!lower.endsWith('.glb') && !lower.endsWith('.gltf')) {
     console.error('[VehicleModel] Rejected non-GLB/GLTF URL.', url);
     return null;
   }
-  return <LoadedVehicle url={url} paintColorHex={paintColorHex} paintMaterialNames={paintMaterialNames} wheelMeshNames={wheelMeshNames} optionMeshNames={optionMeshNames} purchasable={purchasable} interaction={interaction} supportedInteractions={supportedInteractions} />;
+  return <LoadedVehicle url={url} paintColorHex={paintColorHex} paintMaterialNames={paintMaterialNames} wheelMeshNames={wheelMeshNames} optionMeshNames={optionMeshNames} interactionAnimationNames={interactionAnimationNames} purchasable={purchasable} interaction={interaction} supportedInteractions={supportedInteractions} />;
 }
