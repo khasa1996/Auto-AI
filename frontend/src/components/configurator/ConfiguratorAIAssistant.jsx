@@ -8,6 +8,7 @@ import { useConfiguratorStore } from '../../state/configuratorStore';
 export default function ConfiguratorAIAssistant() {
   const variantId = useConfiguratorStore((state) => state.purchasable.variantId);
   const [request, setRequest] = useState('');
+  const [expanded, setExpanded] = useState(false);
   const [state, setState] = useState({ loading: false, error: null, explanation: null });
 
   const applySelection = (selection) => {
@@ -21,6 +22,7 @@ export default function ConfiguratorAIAssistant() {
     const currentAccessories = [...store.purchasable.accessoryIds];
     currentAccessories.forEach((id) => store.toggleAccessory(id));
     (purchasable.accessory_ids || []).forEach((id) => store.toggleAccessory(id));
+
     const interaction = selection.interaction || {};
     if (interaction.camera_preset) store.setCameraPreset(interaction.camera_preset);
     if (interaction.hood_open !== undefined && interaction.hood_open !== store.interaction.hoodOpen) store.toggleHood();
@@ -58,22 +60,29 @@ export default function ConfiguratorAIAssistant() {
   if (!variantId) return null;
 
   return (
-    <section className="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <Sparkles size={14} className="text-amber-300" />
-        <div>
-          <h3 className="text-[10px] font-semibold uppercase tracking-widest text-amber-300">AI configurator</h3>
-          <p className="mt-0.5 text-[9px] text-white/35">Describe your build. Only verified catalog options can be applied.</p>
-        </div>
-      </div>
-      <form onSubmit={submit} className="space-y-2">
-        <textarea value={request} onChange={(event) => setRequest(event.target.value.slice(0, 2000))} rows={3} maxLength={2000} placeholder="e.g. Make it black with premium interior and sporty wheels" className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none placeholder:text-white/20 focus:border-amber-400/40" />
-        <button type="submit" disabled={state.loading || !request.trim()} className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-black transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-40">
-          <Sparkles size={12} /> {state.loading ? 'Building configuration…' : 'Build with AI'}
-        </button>
-      </form>
-      {state.explanation && <p className="mt-3 text-[10px] leading-4 text-emerald-300">{state.explanation}</p>}
-      {state.error && <p className="mt-3 text-[10px] leading-4 text-red-400">{state.error}</p>}
-    </section>
+    <div className="flex flex-col items-start gap-2">
+      {expanded && (
+        <section className="w-[min(360px,calc(100vw-2rem))] rounded-2xl border border-amber-400/20 bg-[#090909]/95 p-4 shadow-2xl backdrop-blur-xl">
+          <div className="mb-3 flex items-center gap-2">
+            <Sparkles size={14} className="text-amber-300" />
+            <div>
+              <h3 className="text-[10px] font-semibold uppercase tracking-widest text-amber-300">AI configurator</h3>
+              <p className="mt-0.5 text-[9px] text-white/35">Describe your build. Only verified catalog options can be applied.</p>
+            </div>
+          </div>
+          <form onSubmit={submit} className="space-y-2">
+            <textarea value={request} onChange={(event) => setRequest(event.target.value.slice(0, 2000))} rows={3} maxLength={2000} placeholder="e.g. Make it black with premium interior and sporty wheels" className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none placeholder:text-white/20 focus:border-amber-400/40" />
+            <button type="submit" disabled={state.loading || !request.trim()} className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-black transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-40">
+              <Sparkles size={12} /> {state.loading ? 'Building configuration…' : 'Build with AI'}
+            </button>
+          </form>
+          {state.explanation && <p className="mt-3 text-[10px] leading-4 text-emerald-300">{state.explanation}</p>}
+          {state.error && <p className="mt-3 text-[10px] leading-4 text-red-400">{state.error}</p>}
+        </section>
+      )}
+      <button type="button" onClick={() => setExpanded((value) => !value)} className="inline-flex items-center gap-2 rounded-full border border-amber-400/30 bg-black/80 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-widest text-amber-300 shadow-xl backdrop-blur-xl transition hover:border-amber-300/60 hover:bg-black" aria-expanded={expanded} aria-label="Toggle AI configurator">
+        <Sparkles size={13} /> {expanded ? 'Close AI' : 'Build with AI'}
+      </button>
+    </div>
   );
 }
