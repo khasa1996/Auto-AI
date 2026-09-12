@@ -6,7 +6,7 @@ import json
 import re
 from typing import Any, Dict, Iterable, List, Optional
 
-from configurator_schemas import AIConfiguratorIntent, ConfigurationState, InteractionState, PurchasableConfiguration
+from configurator_schemas import AIConfiguratorIntent, InteractionState, PurchasableConfiguration
 from llm_provider import LLMProviderError, LlmChat, UserMessage, resolve_model
 from rules_engine import get_available_options_for_variant
 
@@ -109,7 +109,9 @@ def build_ai_prompt(intent: AIConfiguratorIntent, catalog: Dict[str, List[Dict[s
         "You are Auto AI India's configurator selection engine.\n"
         "Select only IDs present in the supplied catalog. Never invent an ID or price.\n"
         "Return JSON only with keys: variant_id, paint_id, wheel_id, interior_id, roof_id, "
-        "accessory_ids, explanation. Use null for an unselected option and [] for no accessories.\n\n"
+        "accessory_ids, explanation, open_hood, open_doors, open_boot, open_sunroof, lights_on, camera_preset. "
+        "Use null for an unselected option and [] for no accessories. Interaction flags are showroom state only "
+        "and must never change pricing.\n\n"
         f"Variant: {intent.variant_id}\n"
         f"User request: {intent.raw_request}\n"
         f"Preferred color: {intent.preferred_color_description or 'none'}\n"
@@ -161,6 +163,10 @@ def build_interaction_state(intent: AIConfiguratorIntent) -> InteractionState:
     state = InteractionState(camera_preset=intent.camera_preset)
     if intent.open_hood is not None:
         state.hood_open = intent.open_hood
+    if intent.open_boot is not None:
+        state.boot_open = intent.open_boot
+    if intent.open_sunroof is not None:
+        state.sunroof_open = intent.open_sunroof
     if intent.open_doors:
         state.doors.front_left = True
         state.doors.front_right = True
