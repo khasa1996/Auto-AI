@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Sparkles } from 'lucide-react';
 
 import { configuratorApi } from '../../services/configuratorApi';
-import { buildConfiguratorAIIntent, getAIConfigurationSelection } from '../../services/configuratorAi';
+import { buildConfiguratorAIIntent, getAIConfigurationSelection, getAIInteractionState } from '../../services/configuratorAi';
 import { useConfiguratorStore } from '../../state/configuratorStore';
 
 export default function ConfiguratorAIAssistant() {
@@ -19,22 +19,25 @@ export default function ConfiguratorAIAssistant() {
     store.setWheels(purchasable.wheel_id || null);
     store.setInterior(purchasable.interior_id || null);
     store.setRoof(purchasable.roof_id || null);
-    const currentAccessories = [...store.purchasable.accessoryIds];
-    currentAccessories.forEach((id) => store.toggleAccessory(id));
+    [...store.purchasable.accessoryIds].forEach((id) => store.toggleAccessory(id));
     (purchasable.accessory_ids || []).forEach((id) => store.toggleAccessory(id));
 
-    const interaction = selection.interaction || {};
-    if (interaction.camera_preset) store.setCameraPreset(interaction.camera_preset);
-    if (interaction.hood_open !== undefined && interaction.hood_open !== store.interaction.hoodOpen) store.toggleHood();
-    if (interaction.boot_open !== undefined && interaction.boot_open !== store.interaction.bootOpen) store.toggleBoot();
-    if (interaction.sunroof_open !== undefined && interaction.sunroof_open !== store.interaction.sunroofOpen) store.toggleSunroof();
-    if (interaction.doors) {
-      Object.entries({
-        front_left: 'frontLeft', front_right: 'frontRight', rear_left: 'rearLeft', rear_right: 'rearRight',
-      }).forEach(([source, target]) => {
-        if (interaction.doors[source] !== undefined && interaction.doors[source] !== store.interaction.doors[target]) store.toggleDoor(target);
-      });
-    }
+    const interaction = getAIInteractionState(selection.interaction);
+    if (interaction.cameraPreset && interaction.cameraPreset !== store.interaction.cameraPreset) store.setCameraPreset(interaction.cameraPreset);
+    if (interaction.hoodOpen !== store.interaction.hoodOpen) store.toggleHood();
+    if (interaction.bootOpen !== store.interaction.bootOpen) store.toggleBoot();
+    if (interaction.frunkOpen !== store.interaction.frunkOpen) store.toggleFrunk();
+    if (interaction.sunroofOpen !== store.interaction.sunroofOpen) store.toggleSunroof();
+    Object.entries(interaction.doors).forEach(([target, value]) => {
+      if (value !== store.interaction.doors[target]) store.toggleDoor(target);
+    });
+    Object.entries(interaction.lighting).forEach(([key, value]) => {
+      if (key === 'hazard') {
+        if (value !== store.interaction.lighting.hazard) store.toggleHazard();
+      } else if (value !== store.interaction.lighting[key]) {
+        store.toggleLight(key);
+      }
+    });
     return true;
   };
 
