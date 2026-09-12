@@ -14,6 +14,7 @@ import { ConfiguratorControls, useCameraPreset } from '../../three/CameraPresets
 import { useConfiguratorStore } from '../../state/configuratorStore';
 import { configuratorApi } from '../../services/configuratorApi';
 import { normalizeHotspots } from './premiumShowroom';
+import { buildConfiguratorShareCard } from './shareCard';
 
 function ConfiguratorScene({ modelUrl, paintColorHex, paintMaterialNames, wheelMeshNames, optionMeshNames, purchasable, interaction, supportedInteractions, sceneRef }) {
   const controlsRef = useRef();
@@ -92,7 +93,17 @@ export default function ConfiguratorViewer({ style, options }) {
     if (!canvas) return;
     setCaptureState('capturing');
     try {
-      const blob = await new Promise((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error('Screenshot unavailable')), 'image/png', 1));
+      const blob = await buildConfiguratorShareCard({
+        sourceCanvas: canvas,
+        vehicleName: purchasable.vehicleName || purchasable.variantId,
+        variantName: purchasable.variantName || purchasable.variantId,
+        color: selectedPaint?.name || purchasable.paintId,
+        wheels: purchasable.wheelId,
+        interior: purchasable.interiorId,
+        roof: purchasable.roofId,
+        price: purchasable.priceSnapshot?.formatted_total || purchasable.priceSnapshot?.total || purchasable.price,
+        city: purchasable.city,
+      });
       const file = new File([blob], 'auto-ai-configured-car.png', { type: 'image/png' });
       if (share && navigator.share && navigator.canShare?.({ files: [file] })) await navigator.share({ title: 'My Auto AI India configuration', files: [file] });
       else {
@@ -134,6 +145,6 @@ export default function ConfiguratorViewer({ style, options }) {
     {selectedHotspot && <div className="absolute bottom-4 left-4 right-4 max-w-md rounded-2xl border border-white/10 bg-black/80 p-4 text-white/80 shadow-2xl backdrop-blur-xl">
       <div className="flex items-start justify-between gap-4"><div><div className="text-sm font-semibold text-white">{selectedHotspot.label}</div>{selectedHotspot.description && <div className="mt-1 text-xs leading-5 text-white/55">{selectedHotspot.description}</div>}</div><button type="button" onClick={() => setSelectedHotspot(null)} className="text-white/40 hover:text-white" aria-label="Close hotspot details">×</button></div>
     </div>}
-    {captureState && <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-white/10 bg-black/75 px-4 py-2 text-[9px] uppercase tracking-widest text-white/70 backdrop-blur">{captureState === 'capturing' ? 'Creating screenshot…' : captureState === 'done' ? 'Ready' : 'Capture unavailable'}</div>}
+    {captureState && <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-white/10 bg-black/75 px-4 py-2 text-[9px] uppercase tracking-widest text-white/70 backdrop-blur">{captureState === 'capturing' ? 'Creating share card…' : captureState === 'done' ? 'Ready' : 'Capture unavailable'}</div>}
   </div>;
 }
