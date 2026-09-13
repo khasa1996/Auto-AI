@@ -12,6 +12,11 @@ test('rejects runtime use when the asset is unavailable or missing a versioned G
   expect(isRuntimeAssetUsable({ available: true, url: 'https://cdn.example.com/car.glb', version: 'v1' })).toBe(true);
 });
 
+test('accepts signed or cache-busted GLB/GLTF URLs when the pathname is a valid 3D asset', () => {
+  expect(isRuntimeAssetUsable({ available: true, url: 'https://cdn.example.com/car.glb?token=abc123', version: 'v1' })).toBe(true);
+  expect(isRuntimeAssetUsable({ available: true, url: 'https://cdn.example.com/car.gltf#revision=v2', version: 'v2' })).toBe(true);
+});
+
 test('exposes only capabilities declared by the verified asset manifest', () => {
   expect(getVerifiedRuntimeCapabilities({
     supportedInteractions: ['camera_exterior', 'doors', 'bogus'],
