@@ -1,13 +1,15 @@
 /**
  * VehicleModel — GLB/GLTF loader with semantic material and animation systems.
  *
- * Visual changes use only mappings declared by the verified asset.
+ * Visual changes use only mappings declared by the verified asset runtime state.
  */
 
 import { useEffect, useMemo, useRef } from 'react';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { ANIMATION_NAMES, resolveAnimationName, useVehicleAnimations } from './AnimationController';
+import { isRuntimeAssetUsable } from '../components/configurator/assetRuntimeCapabilities';
+import { buildVehicleRuntimeState } from './vehicleRuntime';
 
 function applyPaintColor(scene, colorHex, paintMaterialNames) {
   if (!scene || !colorHex || !paintMaterialNames?.length) return;
@@ -53,7 +55,7 @@ function normalizeWheelMappings(wheelMeshNames) {
   );
 }
 
-function LoadedVehicle({ url, paintColorHex, paintMaterialNames, wheelMeshNames, optionMeshNames, interactionAnimationNames, purchasable, interaction, supportedInteractions }) {
+function LoadedVehicle({ url, paintColorHex, runtime, purchasable, interaction }) {
   const { scene, animations } = useGLTF(url);
   const groupRef = useRef();
   const previousInteractionRef = useRef(null);
@@ -70,33 +72,33 @@ function LoadedVehicle({ url, paintColorHex, paintMaterialNames, wheelMeshNames,
 
   const { play } = useVehicleAnimations(animations, groupRef);
 
-  useEffect(() => applyPaintColor(clonedScene, paintColorHex, paintMaterialNames), [clonedScene, paintColorHex, paintMaterialNames]);
+  useEffect(() => applyPaintColor(clonedScene, paintColorHex, runtime.paintMaterialNames), [clonedScene, paintColorHex, runtime.paintMaterialNames]);
 
   useEffect(() => {
-    applyMeshMappings(clonedScene, [purchasable.wheelId], normalizeWheelMappings(wheelMeshNames));
-    applyMeshMappings(clonedScene, [purchasable.interiorId, purchasable.roofId, ...purchasable.accessoryIds], optionMeshNames);
-  }, [clonedScene, purchasable, wheelMeshNames, optionMeshNames]);
+    applyMeshMappings(clonedScene, [purchasable.wheelId], normalizeWheelMappings(runtime.wheelMeshNames));
+    applyMeshMappings(clonedScene, [purchasable.interiorId, purchasable.roofId, ...purchasable.accessoryIds], runtime.optionMeshNames);
+  }, [clonedScene, purchasable, runtime.wheelMeshNames, runtime.optionMeshNames]);
 
   useEffect(() => {
     const previous = previousInteractionRef.current;
     previousInteractionRef.current = interaction;
     if (!previous) return;
-    const supported = new Set(Array.isArray(supportedInteractions) ? supportedInteractions : []);
+    const supported = new Set(runtime.supportedInteractions);
     const playToggle = (capability, current, before, group, openKey, closeKey, openFallback, closeFallback) => {
       if (!supported.has(capability) || current === before) return;
       const key = current ? openKey : closeKey;
       const fallback = current ? openFallback : closeFallback;
-      play(resolveAnimationName(interactionAnimationNames, group, key, fallback));
+      play(resolveAnimationName(runtime.interactionAnimationNames, group, key, fallback));
     };
     playToggle('doors', interaction.doors.frontLeft, previous.doors.frontLeft, 'doors', 'front_left_open', 'front_left_close', ANIMATION_NAMES.DOOR_FL_OPEN, ANIMATION_NAMES.DOOR_FL_CLOSE);
     playToggle('doors', interaction.doors.frontRight, previous.doors.frontRight, 'doors', 'front_right_open', 'front_right_close', ANIMATION_NAMES.DOOR_FR_OPEN, ANIMATION_NAMES.DOOR_FR_CLOSE);
-    playToggle('doors', interaction.doors.rearLeft, previous.doors.rearLeft, 'doors', 'rear_left_open', 'rear_left_close', ANIMATION_NAMES.DOOR_RL_OPEN, ANIMATION_NAMES.DOOR_RL_CLOSE);
+    playToggle('doors', interaction.doors.rearLeft, previous.doors.rearLeft, 'doors', 'front_left_open', 'front_left_close', ANIMATION_NAMES.DOOR_RL_OPEN, ANIMATION_NAMES.DOOR_RL_CLOSE);
     playToggle('doors', interaction.doors.rearRight, previous.doors.rearRight, 'doors', 'rear_right_open', 'rear_right_close', ANIMATION_NAMES.DOOR_RR_OPEN, ANIMATION_NAMES.DOOR_RR_CLOSE);
     playToggle('hood', interaction.hoodOpen, previous.hoodOpen, 'hood', 'open', 'close', ANIMATION_NAMES.HOOD_OPEN, ANIMATION_NAMES.HOOD_CLOSE);
     playToggle('boot', interaction.bootOpen, previous.bootOpen, 'boot', 'open', 'close', ANIMATION_NAMES.BOOT_OPEN, ANIMATION_NAMES.BOOT_CLOSE);
     playToggle('frunk', interaction.frunkOpen, previous.frunkOpen, 'frunk', 'open', 'close', ANIMATION_NAMES.FRUNK_OPEN, ANIMATION_NAMES.FRUNK_CLOSE);
     playToggle('sunroof', interaction.sunroofOpen, previous.sunroofOpen, 'sunroof', 'open', 'close', ANIMATION_NAMES.SUNROOF_OPEN, ANIMATION_NAMES.SUNROOF_CLOSE);
-  }, [interaction, play, supportedInteractions, interactionAnimationNames]);
+  }, [interaction, play, runtime]);
 
   useEffect(() => () => {
     clonedScene.traverse((node) => {
@@ -109,12 +111,13 @@ function LoadedVehicle({ url, paintColorHex, paintMaterialNames, wheelMeshNames,
   return <primitive ref={groupRef} object={clonedScene} />;
 }
 
-export default function VehicleModel({ url, paintColorHex, paintMaterialNames = [], wheelMeshNames = {}, optionMeshNames = {}, interactionAnimationNames = {}, purchasable, interaction, supportedInteractions = [] }) {
-  if (!url) return null;
-  const lower = url.toLowerCase();
-  if (!lower.endsWith('.glb') && !lower.endsWith('.gltf')) {
-    console.error('[VehicleModel] Rejected non-GLB/GLTF URL.', url);
+export default function VehicleModel({ asset, purchasable, interaction }) {
+  const runtime = useMemo(() => buildVehicleRuntimeState(asset), [asset]);
+
+  if (!isRuntimeAssetUsable(asset)) {
+    console.error('[VehicleModel] Rejected unavailable or invalid runtime asset.', asset);
     return null;
   }
-  return <LoadedVehicle url={url} paintColorHex={paintColorHex} paintMaterialNames={paintMaterialNames} wheelMeshNames={wheelMeshNames} optionMeshNames={optionMeshNames} interactionAnimationNames={interactionAnimationNames} purchasable={purchasable} interaction={interaction} supportedInteractions={supportedInteractions} />;
+
+  return <LoadedVehicle url={asset.url} paintColorHex={asset.paintColorHex} runtime={runtime} purchasable={purchasable} interaction={interaction} />;
 }
