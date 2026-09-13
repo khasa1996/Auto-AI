@@ -67,7 +67,14 @@ def inspect_gltf_bytes(payload: bytes, filename: Optional[str] = None) -> Dict[s
     materials = document.get("materials", [])
     nodes = document.get("nodes", [])
     animations = document.get("animations", [])
-    for collection, kind in ((meshes, "meshes"), (materials, "materials"), (nodes, "nodes"), (animations, "animations")):
+    cameras = document.get("cameras", [])
+    for collection, kind in (
+        (meshes, "meshes"),
+        (materials, "materials"),
+        (nodes, "nodes"),
+        (animations, "animations"),
+        (cameras, "cameras"),
+    ):
         if not isinstance(collection, list):
             raise ValueError(f"GLTF {kind} must be an array")
 
@@ -78,8 +85,10 @@ def inspect_gltf_bytes(payload: bytes, filename: Optional[str] = None) -> Dict[s
         "node_names": _unique_names(nodes, "node"),
         "material_names": _unique_names(materials, "material"),
         "animation_names": _unique_names(animations, "animation"),
+        "camera_names": _unique_names(cameras, "camera"),
         "mesh_count": len(meshes),
         "material_count": len(materials),
         "node_count": len(nodes),
         "animation_count": len(animations),
+        "camera_count": len(cameras),
     }
