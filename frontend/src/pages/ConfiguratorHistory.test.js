@@ -1,4 +1,4 @@
-import { formatHistoryDate, getHistoryLabel } from './ConfiguratorHistory';
+import { formatHistoryDate, getHistoryLabel } from './configuratorHistoryUtils';
 
 test('formats saved configuration with semantic field labels', () => {
   expect(getHistoryLabel({
