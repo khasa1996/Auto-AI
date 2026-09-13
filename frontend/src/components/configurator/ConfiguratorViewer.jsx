@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Bounds, ContactShadows, Environment } from '@react-three/drei';
-import { Maximize2, Minimize2, Share2, Camera, Info, RotateCw, Play, Pause } from 'lucide-react';
+import { Maximize2, Minimize2, Share2, Camera, Info, RotateCw, Play, Pause, ChevronUp, ChevronDown } from 'lucide-react';
 
 import VehicleModel from '../../three/VehicleModel';
 import { AssetSuspense, AssetUnavailable } from '../../three/AssetLoader';
@@ -50,6 +50,7 @@ function optionLabel(options, id) {
 function InteractionControls({ supportedInteractions, interaction, onManualInteraction }) {
   const store = useConfiguratorStore();
   const controls = useMemo(() => getSupportedInteractionControls(supportedInteractions), [supportedInteractions]);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const has = (id) => controls.some((control) => control.id === id);
   const buttonClass = (active) => `configurator-interaction-button${active ? ' active' : ''}`;
   if (!controls.length) return null;
@@ -65,31 +66,42 @@ function InteractionControls({ supportedInteractions, interaction, onManualInter
   const lightState = (id) => Boolean(interaction.lighting[id]);
   const toggleLight = (id) => { onManualInteraction(); store.toggleLight(id); };
 
-  return <section className="configurator-interaction-panel" aria-label="Verified 3D interactions">
-    <div className="configurator-interaction-heading">
-      <div>
-        <h3>3D interactions</h3>
-        <p>Verified capabilities only</p>
+  return <section className={`configurator-interaction-panel${mobileOpen ? ' mobile-open' : ''}`} aria-label="Verified 3D interactions">
+    <button
+      type="button"
+      className="configurator-interaction-mobile-toggle"
+      aria-expanded={mobileOpen}
+      onClick={() => setMobileOpen((value) => !value)}
+    >
+      <span><strong>3D controls</strong><small>{controls.length} verified capabilities</small></span>
+      {mobileOpen ? <ChevronDown aria-hidden="true" /> : <ChevronUp aria-hidden="true" />}
+    </button>
+    <div className="configurator-interaction-content">
+      <div className="configurator-interaction-heading">
+        <div>
+          <h3>3D interactions</h3>
+          <p>Verified capabilities only</p>
+        </div>
+        <span>{controls.length} available</span>
       </div>
-      <span>{controls.length} available</span>
+      {doors.length > 0 && <div className="configurator-interaction-group">
+        <span className="configurator-interaction-label">Doors</span>
+        <div className="configurator-interaction-grid">{doors.map(([side, label]) => <button key={side} type="button" className={buttonClass(interaction.doors[side])} aria-pressed={interaction.doors[side]} onClick={() => { onManualInteraction(); store.toggleDoor(side); }}>{label}</button>)}</div>
+      </div>}
+      {(has('hood') || has('boot') || has('frunk') || has('sunroof')) && <div className="configurator-interaction-group">
+        <span className="configurator-interaction-label">Body</span>
+        <div className="configurator-interaction-grid">
+          {has('hood') && <button type="button" className={buttonClass(interaction.hoodOpen)} aria-pressed={interaction.hoodOpen} onClick={() => { onManualInteraction(); store.toggleHood(); }}>Bonnet</button>}
+          {has('boot') && <button type="button" className={buttonClass(interaction.bootOpen)} aria-pressed={interaction.bootOpen} onClick={() => { onManualInteraction(); store.toggleBoot(); }}>Boot</button>}
+          {has('frunk') && <button type="button" className={buttonClass(interaction.frunkOpen)} aria-pressed={interaction.frunkOpen} onClick={() => { onManualInteraction(); store.toggleFrunk(); }}>Frunk</button>}
+          {has('sunroof') && <button type="button" className={buttonClass(interaction.sunroofOpen)} aria-pressed={interaction.sunroofOpen} onClick={() => { onManualInteraction(); store.toggleSunroof(); }}>Sunroof</button>}
+        </div>
+      </div>}
+      {lighting.length > 0 && <div className="configurator-interaction-group">
+        <span className="configurator-interaction-label">Lighting</span>
+        <div className="configurator-interaction-grid">{lighting.map((control) => <button key={control.id} type="button" className={buttonClass(lightState(control.id))} aria-pressed={lightState(control.id)} onClick={() => control.id === 'hazard' ? (onManualInteraction(), store.toggleHazard()) : toggleLight(control.id)}>{control.label}</button>)}</div>
+      </div>}
     </div>
-    {doors.length > 0 && <div className="configurator-interaction-group">
-      <span className="configurator-interaction-label">Doors</span>
-      <div className="configurator-interaction-grid">{doors.map(([side, label]) => <button key={side} type="button" className={buttonClass(interaction.doors[side])} aria-pressed={interaction.doors[side]} onClick={() => { onManualInteraction(); store.toggleDoor(side); }}>{label}</button>)}</div>
-    </div>}
-    {(has('hood') || has('boot') || has('frunk') || has('sunroof')) && <div className="configurator-interaction-group">
-      <span className="configurator-interaction-label">Body</span>
-      <div className="configurator-interaction-grid">
-        {has('hood') && <button type="button" className={buttonClass(interaction.hoodOpen)} aria-pressed={interaction.hoodOpen} onClick={() => { onManualInteraction(); store.toggleHood(); }}>Bonnet</button>}
-        {has('boot') && <button type="button" className={buttonClass(interaction.bootOpen)} aria-pressed={interaction.bootOpen} onClick={() => { onManualInteraction(); store.toggleBoot(); }}>Boot</button>}
-        {has('frunk') && <button type="button" className={buttonClass(interaction.frunkOpen)} aria-pressed={interaction.frunkOpen} onClick={() => { onManualInteraction(); store.toggleFrunk(); }}>Frunk</button>}
-        {has('sunroof') && <button type="button" className={buttonClass(interaction.sunroofOpen)} aria-pressed={interaction.sunroofOpen} onClick={() => { onManualInteraction(); store.toggleSunroof(); }}>Sunroof</button>}
-      </div>
-    </div>}
-    {lighting.length > 0 && <div className="configurator-interaction-group">
-      <span className="configurator-interaction-label">Lighting</span>
-      <div className="configurator-interaction-grid">{lighting.map((control) => <button key={control.id} type="button" className={buttonClass(lightState(control.id))} aria-pressed={lightState(control.id)} onClick={() => control.id === 'hazard' ? (onManualInteraction(), store.toggleHazard()) : toggleLight(control.id)}>{control.label}</button>)}</div>
-    </div>}
   </section>;
 }
 
