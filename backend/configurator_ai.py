@@ -57,8 +57,7 @@ def _pick_by_description(description: Optional[str], options: Iterable[Dict[str,
     best_score = 0
     for option in options:
         option_id = _option_id(option)
-        label = _option_label(option)
-        tokens = set(re.findall(r"[a-z0-9]+", label.lower()))
+        tokens = set(re.findall(r"[a-z0-9]+", _option_label(option).lower()))
         score = len(query & tokens)
         if score > best_score and option_id:
             best_score, best_id = score, option_id
@@ -76,15 +75,7 @@ def resolve_textual_preferences(request: str, catalog: Dict[str, List[Dict[str, 
 
 
 def _allowed_ids(catalog: Dict[str, List[Dict[str, Any]]]) -> Dict[str, set[str]]:
-    allowed: Dict[str, set[str]] = {}
-    for key, values in catalog.items():
-        ids: set[str] = set()
-        for item in values:
-            option_id = _option_id(item)
-            if option_id:
-                ids.add(option_id)
-        allowed[key] = ids
-    return allowed
+    return {key: {option_id for item in values if (option_id := _option_id(item))} for key, values in catalog.items()}
 
 
 def _safe_selection(candidate: Dict[str, Any], catalog: Dict[str, List[Dict[str, Any]]], variant_id: str) -> PurchasableConfiguration:
@@ -130,8 +121,7 @@ def build_ai_prompt(intent: AIConfiguratorIntent, catalog: Dict[str, List[Dict[s
 def _supported_camera_preset(preset: Optional[str], supported: Set[str]) -> Optional[str]:
     if not preset:
         return None
-    required = {"exterior", "front", "rear", "left", "right", "top", "wheel", "boot"}
-    if preset in required and "camera_exterior" in supported:
+    if preset in {"exterior", "front", "rear", "left", "right", "top", "wheel", "boot"} and "camera_exterior" in supported:
         return preset
     if preset in {"interior", "cockpit"} and "camera_interior" in supported:
         return preset
@@ -141,7 +131,7 @@ def _supported_camera_preset(preset: Optional[str], supported: Set[str]) -> Opti
 def build_interaction_state(intent: AIConfiguratorIntent, supported_interactions: Optional[Iterable[str]] = None) -> InteractionState:
     """Convert safe interaction intent into capability-gated, non-purchasable showroom state."""
     supported = set(supported_interactions or [])
-    gate = bool(supported_interactions is not None)
+    gate = supported_interactions is not None
     state = InteractionState(camera_preset=_supported_camera_preset(intent.camera_preset, supported) if gate else intent.camera_preset)
     if intent.open_hood and (not gate or "hood" in supported):
         state.hood_open = True
@@ -163,10 +153,22 @@ def build_interaction_state(intent: AIConfiguratorIntent, supported_interactions
 async def resolve_ai_selection(intent: AIConfiguratorIntent, db: Any) -> tuple[PurchasableConfiguration, str, List[Dict[str, str]]]:
     """Resolve AI intent to a backend-catalog-only purchasable configuration."""
     catalog = await get_available_options_for_variant(intent.variant_id, db)
+    asset = await db.configurator_assets.find_one(
+        {"variant_id": intent.variant_id, "published": True, "validation_passed": True},
+        {"_id": 0, "supported_interactions": 1},
+    )
+    supported = set(asset.get("supported_interactions", [])) if asset else set()
+    intent.open_hood = bool(intent.open_hood and "hood" in supported)
+    intent.open_boot = bool(intent.open_boot and "boot" in supported)
+    intent.open_sunroof = bool(intent.open_sunroof and "sunroof" in supported)
+    intent.open_doors = bool(intent.open_doors and "doors" in supported)
+    if intent.lights_on and not ({"headlights", "drl"} & supported):
+        intent.lights_on = False
+    intent.camera_preset = _supported_camera_preset(intent.camera_preset, supported)
+
     allowed = _allowed_ids(catalog)
     unavailable: List[Dict[str, str]] = []
     candidate: Dict[str, Any] = {"variant_id": intent.variant_id}
-
     try:
         provider, model = resolve_model()
         chat = LlmChat(None, f"configurator:{intent.variant_id}", "You are a strict structured option selector.").with_model(provider, model)
@@ -177,20 +179,15 @@ async def resolve_ai_selection(intent: AIConfiguratorIntent, db: Any) -> tuple[P
 
     fallback = resolve_textual_preferences(intent.raw_request, catalog)
     configuration = _safe_selection(candidate, catalog, intent.variant_id)
-    if not configuration.paint_id:
-        configuration.paint_id = _pick_by_description(intent.preferred_color_description, catalog.get("colors", [])) or fallback["paint_id"]
-    if not configuration.wheel_id:
-        configuration.wheel_id = fallback["wheel_id"]
-    if not configuration.interior_id:
-        configuration.interior_id = _pick_by_description(intent.preferred_interior_description, catalog.get("interiors", [])) or fallback["interior_id"]
-    if not configuration.roof_id:
-        configuration.roof_id = fallback["roof_id"]
+    configuration.paint_id = configuration.paint_id or _pick_by_description(intent.preferred_color_description, catalog.get("colors", [])) or fallback["paint_id"]
+    configuration.wheel_id = configuration.wheel_id or fallback["wheel_id"]
+    configuration.interior_id = configuration.interior_id or _pick_by_description(intent.preferred_interior_description, catalog.get("interiors", [])) or fallback["interior_id"]
+    configuration.roof_id = configuration.roof_id or fallback["roof_id"]
 
     for field, catalog_key in (("paint_id", "colors"), ("wheel_id", "wheels"), ("interior_id", "interiors"), ("roof_id", "roofs")):
         requested = candidate.get(field)
         if requested and str(requested) not in allowed.get(catalog_key, set()):
             unavailable.append({"option_type": catalog_key.rstrip("s"), "option_id": str(requested)})
-
     requested_accessories = candidate.get("accessory_ids", [])
     if isinstance(requested_accessories, list):
         for value in requested_accessories:
