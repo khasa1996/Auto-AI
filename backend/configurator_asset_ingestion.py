@@ -59,7 +59,7 @@ def build_verified_asset_metadata(asset: ConfiguratorAssetCreate, inspected: Dic
     mesh_names = inspected.get("mesh_names", [])
     node_names = inspected.get("node_names", [])
     material_names = inspected.get("material_names", [])
-    pbr_material_names = inspected.get("pbr_material_names", [])
+    pbr_material_names = inspected.get("pbr_material_names")
     animation_names = inspected.get("animation_names", [])
     camera_names = inspected.get("camera_names", [])
 
@@ -70,19 +70,18 @@ def build_verified_asset_metadata(asset: ConfiguratorAssetCreate, inspected: Dic
     mapped_meshes = [*asset.wheel_mesh_names.values(), *(mesh for meshes in asset.option_mesh_names.values() for mesh in meshes)]
     missing_meshes = _missing(mapped_meshes, available_geometry_names)
     missing_materials = _missing(asset.paint_material_names, material_names)
-    missing_pbr_materials = _missing(asset.paint_material_names, pbr_material_names)
+    missing_pbr_materials = _missing(asset.paint_material_names, pbr_material_names or ())
     missing_cameras = _missing(asset.camera_preset_names, camera_names)
 
     if missing_meshes:
         errors.append("Manifest references missing meshes: " + ", ".join(missing_meshes))
     if missing_materials:
         errors.append("Manifest references missing paint materials: " + ", ".join(missing_materials))
-    if missing_pbr_materials:
+    if pbr_material_names is not None and missing_pbr_materials:
         errors.append("Manifest references paint materials without GLTF PBR metallic-roughness support: " + ", ".join(missing_pbr_materials))
-    if missing_cameras:
+    if camera_names and missing_cameras:
         errors.append("Manifest references missing cameras: " + ", ".join(missing_cameras))
 
-    normalized_animation_names = {str(name).lower(): str(name) for name in animation_names}
     missing_animations: List[str] = []
     missing_animation_names: List[str] = []
     missing_lighting_materials: List[str] = []
