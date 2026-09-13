@@ -55,7 +55,7 @@
 | 36 | Compare configurations | BUILT | Two saved configurations can be compared through the backend comparison contract. |
 | 37 | OEM/variant data hierarchy | PARTIAL | Backend models/variants/options exist; scalable data population remains. |
 | 38 | Admin asset management | BUILT | Admin create, validation, publish, assignment and unassignment workflow exists. |
-| 39 | Asset ingestion/validation pipeline | BUILT | Multipart GLB ingestion, direct S3-compatible presigned upload, SHA-256 capture, structural inspection and manifest validation are implemented; production storage credentials/bucket configuration remain. |
+| 39 | Asset ingestion/validation pipeline | BUILT | Multipart GLB ingestion, direct S3-compatible presigned upload, SHA-256 capture, structural inspection, manifest validation, immutable revision history and reviewed rollback are implemented; production storage credentials/bucket configuration remain. |
 | 40 | Mobile/PWA premium UX | PARTIAL | PWA/mobile architecture exists; broader app-shell polish remains beyond the configurator-specific mobile sheet. |
 
 ## P2 — Advanced / future
