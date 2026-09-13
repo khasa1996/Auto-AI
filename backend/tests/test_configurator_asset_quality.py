@@ -41,6 +41,8 @@ def test_asset_manifest_requires_complete_material_camera_and_interaction_mappin
     asset = make_asset(
         supported_interactions=["doors", "camera_interior", "camera_exterior", "hood"],
         paint_material_names=[],
+        interior_material_names=[],
+        camera_preset_names=[],
         interaction_animation_names={"doors": {"open": "DoorOpen"}},
     )
 
@@ -56,6 +58,8 @@ def test_asset_manifest_accepts_complete_production_capability_manifest():
     asset = make_asset(
         supported_interactions=["doors", "hood", "camera_exterior", "camera_interior"],
         paint_material_names=["BodyPaint"],
+        interior_material_names=["Dashboard", "SeatLeather"],
+        camera_preset_names=["front", "rear", "side", "interior"],
         wheel_mesh_names={"wheel-1": "WheelFL", "wheel-2": "WheelFR"},
         option_mesh_names={"sunroof-1": ["SunroofGlass"]},
         interaction_animation_names={
@@ -66,7 +70,7 @@ def test_asset_manifest_accepts_complete_production_capability_manifest():
 
     result = validate_asset_manifest(
         asset,
-        ["BodyPaint", "WheelFL", "WheelFR", "SunroofGlass", "DoorOpen", "DoorClose", "HoodOpen", "HoodClose"],
+        ["BodyPaint", "Dashboard", "SeatLeather", "WheelFL", "WheelFR", "SunroofGlass", "DoorOpen", "DoorClose", "HoodOpen", "HoodClose"],
     )
 
     assert result["valid"] is True
@@ -76,10 +80,12 @@ def test_asset_manifest_rejects_interaction_without_required_animation_mapping()
     asset = make_asset(
         supported_interactions=["hood"],
         paint_material_names=["BodyPaint"],
+        interior_material_names=["SeatLeather"],
+        camera_preset_names=["front"],
         interaction_animation_names={},
     )
 
-    result = validate_asset_manifest(asset, ["BodyPaint"])
+    result = validate_asset_manifest(asset, ["BodyPaint", "SeatLeather"])
 
     assert result["valid"] is False
     assert any("hood" in error.lower() and "animation" in error.lower() for error in result["errors"])
