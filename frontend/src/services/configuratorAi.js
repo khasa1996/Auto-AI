@@ -1,8 +1,16 @@
+const CONTEXT_PREFIX = '__AUTO_AI_CONTEXT__';
+
 export function buildConfiguratorAIIntent(variantId, rawRequest, fields = {}) {
+  const { currentConfiguration, city, state, ...intentFields } = fields;
+  const context = {};
+  if (currentConfiguration) context.current_configuration = currentConfiguration;
+  if (city) context.city = city;
+  if (state) context.state = state;
+  const contextLine = Object.keys(context).length ? `${CONTEXT_PREFIX}${JSON.stringify(context)}\n` : '';
   return {
     variant_id: variantId,
-    raw_request: String(rawRequest || '').slice(0, 2000),
-    ...fields,
+    raw_request: `${contextLine}${String(rawRequest || '')}`.slice(0, 2000),
+    ...intentFields,
   };
 }
 
@@ -12,6 +20,8 @@ export function getAIConfigurationSelection(response) {
   return {
     purchasable: payload.configuration.purchasable,
     interaction: payload.configuration.interaction,
+    price: payload.price || null,
+    explanation: payload.explanation || '',
   };
 }
 
