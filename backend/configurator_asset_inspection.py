@@ -67,19 +67,38 @@ def inspect_gltf_bytes(payload: bytes, filename: Optional[str] = None) -> Dict[s
     materials = document.get("materials", [])
     nodes = document.get("nodes", [])
     animations = document.get("animations", [])
-    for collection, kind in ((meshes, "meshes"), (materials, "materials"), (nodes, "nodes"), (animations, "animations")):
+    cameras = document.get("cameras", [])
+    for collection, kind in (
+        (meshes, "meshes"),
+        (materials, "materials"),
+        (nodes, "nodes"),
+        (animations, "animations"),
+        (cameras, "cameras"),
+    ):
         if not isinstance(collection, list):
             raise ValueError(f"GLTF {kind} must be an array")
+
+    material_names = _unique_names(materials, "material")
+    pbr_material_names = [
+        str(material["name"])
+        for material in materials
+        if isinstance(material, dict)
+        and str(material.get("name", "")).strip()
+        and isinstance(material.get("pbrMetallicRoughness"), dict)
+    ]
 
     return {
         "format": "glb",
         "version": 2,
         "mesh_names": _unique_names(meshes, "mesh"),
         "node_names": _unique_names(nodes, "node"),
-        "material_names": _unique_names(materials, "material"),
+        "material_names": material_names,
+        "pbr_material_names": pbr_material_names,
         "animation_names": _unique_names(animations, "animation"),
+        "camera_names": _unique_names(cameras, "camera"),
         "mesh_count": len(meshes),
         "material_count": len(materials),
         "node_count": len(nodes),
         "animation_count": len(animations),
+        "camera_count": len(cameras),
     }

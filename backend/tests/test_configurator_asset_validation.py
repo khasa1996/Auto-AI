@@ -17,6 +17,13 @@ def make_asset(**overrides):
         "validation_passed": True,
         "admin_reviewed": True,
         "supported_interactions": ["doors", "hood"],
+        "paint_material_names": ["BODY_PAINT"],
+        "interior_material_names": ["INTERIOR"],
+        "camera_preset_names": ["front"],
+        "interaction_animation_names": {
+            "doors": {"open": "OpenDoors", "close": "CloseDoors"},
+            "hood": {"open": "OpenHood", "close": "CloseHood"},
+        },
         "wheel_mesh_names": {"w1": "wheel-a"},
         "option_mesh_names": {"roof-1": ["roof-a"]},
     }
@@ -25,18 +32,35 @@ def make_asset(**overrides):
 
 
 def test_valid_manifest_passes_when_all_mappings_exist():
-    result = validate_asset_manifest(make_asset(), ["body", "wheel-a", "roof-a"])
+    result = validate_asset_manifest(
+        make_asset(),
+        ["wheel-a", "roof-a"],
+        material_names=["BODY_PAINT", "INTERIOR"],
+        animation_names=["OpenDoors", "CloseDoors", "OpenHood", "CloseHood"],
+        camera_names=["front"],
+    )
     assert result["valid"] is True
     assert result["errors"] == []
 
 
 def test_manifest_rejects_missing_mesh_mapping():
-    result = validate_asset_manifest(make_asset(), ["body"])
+    result = validate_asset_manifest(
+        make_asset(),
+        ["body"],
+        material_names=["BODY_PAINT", "INTERIOR"],
+        animation_names=["OpenDoors", "CloseDoors", "OpenHood", "CloseHood"],
+        camera_names=["front"],
+    )
     assert result["valid"] is False
     assert any("missing mesh" in error.lower() for error in result["errors"])
 
 
 def test_manifest_rejects_unknown_interaction():
-    result = validate_asset_manifest(make_asset(supported_interactions=["teleport"]), ["wheel-a", "roof-a"])
+    result = validate_asset_manifest(
+        make_asset(supported_interactions=["teleport"]),
+        [],
+        material_names=["BODY_PAINT", "INTERIOR"],
+        camera_names=["front"],
+    )
     assert result["valid"] is False
     assert any("unsupported interaction" in error.lower() for error in result["errors"])

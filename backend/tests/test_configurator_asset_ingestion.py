@@ -170,6 +170,39 @@ def test_build_verified_metadata_accepts_hazard_with_both_indicator_materials():
     assert result["missing_lighting_materials"] == []
 
 
+def test_build_verified_metadata_requires_pbr_paint_material():
+    result = build_verified_asset_metadata(
+        make_asset(paint_material_names=["BODY_PAINT"]),
+        {
+            "format": "glb",
+            "mesh_names": ["Wheel_FL"],
+            "node_names": ["Sunroof"],
+            "material_names": ["BODY_PAINT"],
+            "pbr_material_names": [],
+            "animation_names": ["OpenDoors"],
+        },
+    )
+
+    assert result["valid"] is False
+    assert any("pbr" in error.lower() for error in result["errors"])
+
+
+def test_build_verified_metadata_accepts_pbr_paint_material():
+    result = build_verified_asset_metadata(
+        make_asset(paint_material_names=["BODY_PAINT"]),
+        {
+            "format": "glb",
+            "mesh_names": ["Wheel_FL"],
+            "node_names": ["Sunroof"],
+            "material_names": ["BODY_PAINT"],
+            "pbr_material_names": ["BODY_PAINT"],
+            "animation_names": ["OpenDoors"],
+        },
+    )
+
+    assert result["valid"] is True
+
+
 def test_build_verified_metadata_requires_glb():
     result = build_verified_asset_metadata(make_asset(), {"format": "gltf", "mesh_names": []})
     assert result["valid"] is False
