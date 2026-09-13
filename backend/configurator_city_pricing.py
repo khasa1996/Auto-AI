@@ -27,7 +27,11 @@ async def get_pricing_locations(db: AsyncIOMotorDatabase, variant_id: str) -> Li
         if str(entry.get("verification_status", "unverified")).casefold() != "verified":
             continue
         key = f"{_normalize(city)}|{_normalize(state)}"
-        locations[key] = {"city": city, "state": state}
+        # Keep the first verified display spelling for case-insensitive duplicates.
+        # This preserves the canonical catalog label instead of letting a later
+        # differently-cased duplicate replace it.
+        if key not in locations:
+            locations[key] = {"city": city, "state": state}
 
     return sorted(locations.values(), key=lambda item: (item["state"].casefold(), item["city"].casefold()))
 
