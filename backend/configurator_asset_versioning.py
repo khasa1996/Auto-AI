@@ -53,6 +53,26 @@ def _public_revision(revision: dict) -> dict:
 def make_asset_version_router(db: AsyncIOMotorDatabase) -> APIRouter:
     router = APIRouter(prefix="/api/v1/admin/configurator", tags=["configurator-asset-versioning"])
 
+    @router.post("/assets/{asset_id}/prepare-version")
+    async def prepare_asset_version(asset_id: str, _: str = Depends(_require_admin)):
+        current = await db.configurator_assets.find_one({"asset_id": asset_id}, {"_id": 0})
+        if not current:
+            raise HTTPException(status_code=404, detail="Asset not found")
+        if not current.get("storage_key") or not current.get("checksum_sha256"):
+            return {"asset_id": asset_id, "revision_id": None, "snapshotted": False}
+
+        now = datetime.now(timezone.utc).isoformat()
+        revision_id = f"rev-{uuid4().hex}"
+        await db.configurator_asset_versions.insert_one(
+            snapshot_asset(
+                current,
+                revision_id=revision_id,
+                snapshot_type="UPLOAD_SOURCE",
+                created_at=now,
+            )
+        )
+        return {"asset_id": asset_id, "revision_id": revision_id, "snapshotted": True}
+
     @router.get("/assets/{asset_id}/versions")
     async def list_asset_versions(asset_id: str, _: str = Depends(_require_admin)):
         revisions = await db.configurator_asset_versions.find(
