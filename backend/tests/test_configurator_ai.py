@@ -1,5 +1,5 @@
-from configurator_ai import _extract_json, _safe_selection, build_interaction_state, build_ai_prompt, resolve_textual_preferences
-from configurator_schemas import AIConfiguratorIntent
+from configurator_ai import _extract_json, _extract_live_context, _merge_selection, _safe_selection, build_interaction_state, build_ai_prompt, resolve_textual_preferences
+from configurator_schemas import AIConfiguratorIntent, PurchasableConfiguration
 
 
 def catalog():
@@ -58,3 +58,30 @@ def test_ai_prompt_contains_only_catalog_option_ids_and_interaction_contract():
     assert '"id":"w1"' in prompt
     assert "open_boot" in prompt
     assert "open_sunroof" in prompt
+
+
+def test_live_context_extracts_city_and_current_configuration():
+    request = '__AUTO_AI_CONTEXT__{"city":"Delhi","current_configuration":{"variant_id":"v1","paint_id":"red"}}\nmake it sporty'
+    user_request, context = _extract_live_context(request)
+    assert user_request == "make it sporty"
+    assert context["city"] == "Delhi"
+    assert context["current_configuration"]["paint_id"] == "red"
+
+
+def test_live_context_merge_preserves_unspecified_options():
+    base = PurchasableConfiguration(variant_id="v1", paint_id="red", wheel_id="w1", interior_id="i1", roof_id="r1", accessory_ids=["a1"])
+    resolved = PurchasableConfiguration(variant_id="v1", paint_id="black", wheel_id="w2", interior_id=None, roof_id=None, accessory_ids=[])
+    merged = _merge_selection(base, {"paint_id": "black", "wheel_id": "w2"}, resolved)
+    assert merged.paint_id == "black"
+    assert merged.wheel_id == "w2"
+    assert merged.interior_id == "i1"
+    assert merged.roof_id == "r1"
+    assert merged.accessory_ids == ["a1"]
+
+
+def test_ai_prompt_includes_live_city_and_existing_build():
+    intent = AIConfiguratorIntent(variant_id="v1", raw_request="make it black")
+    base = PurchasableConfiguration(variant_id="v1", paint_id="red", wheel_id="w1")
+    prompt = build_ai_prompt(intent, catalog(), base, "Delhi")
+    assert "Pricing city: Delhi" in prompt
+    assert '"paint_id":"red"' in prompt
