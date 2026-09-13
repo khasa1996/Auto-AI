@@ -111,7 +111,9 @@ def test_snapshot_is_immutable_copy():
         snapshot_type="UPLOAD_SOURCE",
         created_at="2026-09-12T00:00:00+00:00",
     )
+    asset["nested"]["value"] = 99
     assert revision["asset_id"] == "asset-1"
+    assert revision["nested"]["value"] == 1
     assert revision["revision_id"] == "rev-12345678"
     assert revision["snapshot_type"] == "UPLOAD_SOURCE"
     assert "_id" not in revision
