@@ -70,7 +70,10 @@ def test_asset_manifest_accepts_complete_production_capability_manifest():
 
     result = validate_asset_manifest(
         asset,
-        ["BodyPaint", "Dashboard", "SeatLeather", "WheelFL", "WheelFR", "SunroofGlass", "DoorOpen", "DoorClose", "HoodOpen", "HoodClose"],
+        ["WheelFL", "WheelFR", "SunroofGlass"],
+        material_names=["BodyPaint", "Dashboard", "SeatLeather"],
+        animation_names=["DoorOpen", "DoorClose", "HoodOpen", "HoodClose"],
+        camera_names=["front", "rear", "side", "interior"],
     )
 
     assert result["valid"] is True
@@ -85,7 +88,12 @@ def test_asset_manifest_rejects_interaction_without_required_animation_mapping()
         interaction_animation_names={},
     )
 
-    result = validate_asset_manifest(asset, ["BodyPaint", "SeatLeather"])
+    result = validate_asset_manifest(
+        asset,
+        [],
+        material_names=["BodyPaint", "SeatLeather"],
+        camera_names=["front"],
+    )
 
     assert result["valid"] is False
     assert any("hood" in error.lower() and "animation" in error.lower() for error in result["errors"])
