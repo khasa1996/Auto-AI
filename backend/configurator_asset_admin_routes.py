@@ -34,6 +34,9 @@ _MAX_UPLOAD_BYTES = 200 * 1024 * 1024
 class AssetManifestValidationRequest(BaseModel):
     asset: ConfiguratorAssetCreate
     mesh_names: List[str] = Field(default_factory=list, max_length=10000)
+    material_names: List[str] = Field(default_factory=list, max_length=10000)
+    animation_names: List[str] = Field(default_factory=list, max_length=10000)
+    camera_names: List[str] = Field(default_factory=list, max_length=1000)
 
 
 class AssetPublicationRequest(BaseModel):
@@ -81,7 +84,13 @@ def make_asset_admin_router(db: AsyncIOMotorDatabase) -> APIRouter:
         request: AssetManifestValidationRequest,
         _: str = Depends(_require_admin),
     ):
-        result = validate_asset_manifest(request.asset, request.mesh_names)
+        result = validate_asset_manifest(
+            request.asset,
+            request.mesh_names,
+            material_names=request.material_names,
+            animation_names=request.animation_names,
+            camera_names=request.camera_names,
+        )
         now = datetime.now(timezone.utc).isoformat()
         update = {
             "validation_passed": result["valid"],
@@ -189,7 +198,13 @@ def make_asset_admin_router(db: AsyncIOMotorDatabase) -> APIRouter:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
         asset = ConfiguratorAssetCreate.model_validate(asset_doc)
-        manifest_result = validate_asset_manifest(asset, [*inspected["mesh_names"], *inspected["node_names"]])
+        manifest_result = validate_asset_manifest(
+            asset,
+            [*inspected["mesh_names"], *inspected["node_names"]],
+            material_names=inspected["material_names"],
+            animation_names=inspected["animation_names"],
+            camera_names=inspected["camera_names"],
+        )
         structure_result = build_verified_asset_metadata(asset, inspected)
         valid = manifest_result["valid"] and structure_result["valid"]
         now = datetime.now(timezone.utc).isoformat()
@@ -249,158 +264,17 @@ def make_asset_admin_router(db: AsyncIOMotorDatabase) -> APIRouter:
         except (TypeError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-        manifest_result = validate_asset_manifest(asset, [*inspected["mesh_names"], *inspected["node_names"]])
-        structure_result = build_verified_asset_metadata(asset, inspected)
-        valid = manifest_result["valid"] and structure_result["valid"]
-        checksum = hashlib.sha256(payload).hexdigest()
-        now = datetime.now(timezone.utc).isoformat()
-
-        await db.configurator_assets.update_one(
-            {"asset_id": asset.asset_id},
-            {
-                "$set": {
-                    "file_size_bytes": len(payload),
-                    "checksum_sha256": checksum,
-                    "validation_passed": valid,
-                    "published": False,
-                    "admin_reviewed": False,
-                    "review_notes": "",
-                    "updated_at": now,
-                    "validation_errors": [*manifest_result["errors"], *structure_result["errors"]],
-                    "validation_warnings": manifest_result["warnings"],
-                    "inspected_structure": inspected,
-                }
-            },
-            upsert=False,
+        manifest_result = validate_asset_manifest(
+            asset,
+            [*inspected["mesh_names"], *inspected["node_names"]],
+            material_names=inspected["material_names"],
+            animation_names=inspected["animation_names"],
+            camera_names=inspected["camera_names"],
         )
-
+        structure_result = build_verified_asset_metadata(asset, inspected)
         return {
-            "asset_id": asset.asset_id,
-            "valid": valid,
-            "checksum_sha256": checksum,
-            "file_size_bytes": len(payload),
+            "valid": manifest_result["valid"] and structure_result["valid"],
             "inspection": inspected,
             "manifest": manifest_result,
             "structure": structure_result,
         }
-
-    @router.post("/assets")
-    async def upsert_asset(
-        asset: ConfiguratorAssetCreate,
-        _: str = Depends(_require_admin),
-    ):
-        variant = await db.variants.find_one(
-            {"variant_id": asset.variant_id},
-            {"_id": 0, "model_id": 1, "brand_id": 1},
-        )
-        if not variant:
-            raise HTTPException(status_code=404, detail="Variant not found")
-        if variant.get("model_id") != asset.model_id or variant.get("brand_id") != asset.brand_id:
-            raise HTTPException(status_code=422, detail="Asset model_id/brand_id does not match the variant")
-
-        now = datetime.now(timezone.utc).isoformat()
-        existing = await db.configurator_assets.find_one({"asset_id": asset.asset_id}, {"_id": 0})
-        document = asset.model_dump(mode="json")
-        document["created_at"] = existing.get("created_at", now) if existing else now
-        document["updated_at"] = now
-        document["published"] = False
-        document["validation_passed"] = False
-        document["admin_reviewed"] = False
-        document["review_notes"] = ""
-        for field in ("storage_key", "storage_provider", "storage_status"):
-            if existing and existing.get(field) and not document.get(field):
-                document[field] = existing[field]
-
-        await db.configurator_assets.replace_one(
-            {"asset_id": asset.asset_id},
-            document,
-            upsert=True,
-        )
-        return ConfiguratorAsset(**document)
-
-    @router.post("/assets/review")
-    async def review_asset(
-        request: AssetReviewRequest,
-        _: str = Depends(_require_admin),
-    ):
-        asset_doc = await db.configurator_assets.find_one({"asset_id": request.asset_id}, {"_id": 0})
-        if not asset_doc:
-            raise HTTPException(status_code=404, detail="Asset not found")
-        if request.approved and not asset_doc.get("validation_passed"):
-            raise HTTPException(status_code=422, detail="Technical validation must pass before admin approval")
-
-        now = datetime.now(timezone.utc).isoformat()
-        update = {
-            "admin_reviewed": request.approved,
-            "review_notes": request.review_notes,
-            "updated_at": now,
-        }
-        if not request.approved:
-            update["published"] = False
-        await db.configurator_assets.update_one({"asset_id": request.asset_id}, {"$set": update})
-        return {
-            "asset_id": request.asset_id,
-            "admin_reviewed": request.approved,
-            "review_notes": request.review_notes,
-            "published": False if not request.approved else bool(asset_doc.get("published")),
-        }
-    
-    @router.post("/assets/publish")
-    async def publish_asset(
-        request: AssetPublicationRequest,
-        _: str = Depends(_require_admin),
-    ):
-        asset_doc = await db.configurator_assets.find_one({"asset_id": request.asset_id}, {"_id": 0})
-        if not asset_doc:
-            raise HTTPException(status_code=404, detail="Asset not found")
-        asset = ConfiguratorAsset(**asset_doc)
-        if request.publish:
-            if not asset.is_publishable():
-                raise HTTPException(status_code=422, detail="Asset does not satisfy publication gates")
-            update = {"published": True, "updated_at": datetime.now(timezone.utc).isoformat(), "storage_status": "PUBLISHED"}
-        else:
-            update = {"published": False, "updated_at": datetime.now(timezone.utc).isoformat()}
-        await db.configurator_assets.update_one({"asset_id": request.asset_id}, {"$set": update})
-        return {"asset_id": request.asset_id, "published": request.publish}
-
-    @router.post("/assets/assign")
-    async def assign_asset(
-        request: AssetAssignmentRequest,
-        _: str = Depends(_require_admin),
-    ):
-        variant = await db.variants.find_one({"variant_id": request.variant_id}, {"_id": 0, "configurator_asset_id": 1})
-        if not variant:
-            raise HTTPException(status_code=404, detail="Variant not found")
-        asset = await db.configurator_assets.find_one({"asset_id": request.asset_id}, {"_id": 0, "variant_id": 1})
-        if not asset:
-            raise HTTPException(status_code=404, detail="Asset not found")
-        if asset.get("variant_id") != request.variant_id:
-            raise HTTPException(status_code=422, detail="Asset is registered for a different variant")
-        await db.variants.update_one({"variant_id": request.variant_id}, {"$set": {"configurator_asset_id": request.asset_id}})
-        return {"variant_id": request.variant_id, "configurator_asset_id": request.asset_id}
-
-    @router.delete("/assets/assign/{variant_id}")
-    async def unassign_asset(variant_id: str, _: str = Depends(_require_admin)):
-        result = await db.variants.update_one({"variant_id": variant_id}, {"$unset": {"configurator_asset_id": ""}})
-        if not result.matched_count:
-            raise HTTPException(status_code=404, detail="Variant not found")
-        return {"variant_id": variant_id, "configurator_asset_id": None}
-
-    @router.post("/assets/inspect-binary")
-    async def inspect_binary_asset(
-        asset_file: UploadFile = File(...),
-        _: str = Depends(_require_admin),
-    ):
-        payload = await asset_file.read(_MAX_UPLOAD_BYTES + 1)
-        if len(payload) > _MAX_UPLOAD_BYTES:
-            raise HTTPException(status_code=413, detail="Asset exceeds the 200 MB upload limit")
-        try:
-            return inspect_gltf_bytes(payload, filename=asset_file.filename)
-        except (TypeError, ValueError) as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-    return router
-
-
-def mount_asset_admin_routes(app, db):
-    app.include_router(make_asset_admin_router(db))
