@@ -1,4 +1,4 @@
-import { getVerifiedRuntimeCapabilities } from '../components/configurator/assetRuntimeCapabilities';
+import { getVerifiedMappings, getVerifiedRuntimeCapabilities } from '../components/configurator/assetRuntimeCapabilities';
 
 function cleanAnimationMap(value, supportedInteractions) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
@@ -28,11 +28,17 @@ function cleanAnimationMap(value, supportedInteractions) {
   );
 }
 
-export function buildVehicleRuntimeState(asset = {}) {
+export function resolveRuntimeMappings(asset = {}, inspectedAsset = {}) {
+  return getVerifiedMappings(asset, inspectedAsset);
+}
+
+export function buildVehicleRuntimeState(asset = {}, inspectedAsset = {}) {
   const capabilities = getVerifiedRuntimeCapabilities(asset);
+  const mappings = resolveRuntimeMappings(asset, inspectedAsset);
 
   return {
     ...capabilities,
+    ...mappings,
     interactionAnimationNames: cleanAnimationMap(
       asset.interactionAnimationNames,
       capabilities.supportedInteractions,
