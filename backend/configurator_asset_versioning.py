@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import uuid4
@@ -23,7 +24,7 @@ async def _require_admin(authorization: Optional[str] = Header(None)) -> str:
 
 def snapshot_asset(asset: dict, *, revision_id: str, snapshot_type: str, created_at: str) -> dict:
     """Create an immutable revision document without Mongo's internal id."""
-    snapshot = {key: value for key, value in asset.items() if key != "_id"}
+    snapshot = deepcopy({key: value for key, value in asset.items() if key != "_id"})
     snapshot["revision_id"] = revision_id
     snapshot["snapshot_type"] = snapshot_type
     snapshot["revision_created_at"] = created_at
@@ -121,7 +122,7 @@ def make_asset_version_router(db: AsyncIOMotorDatabase) -> APIRouter:
         )
         await db.configurator_asset_versions.insert_one(source_revision)
 
-        restored = {key: value for key, value in revision.items() if key not in {"revision_id", "snapshot_type", "revision_created_at"}}
+        restored = deepcopy({key: value for key, value in revision.items() if key not in {"revision_id", "snapshot_type", "revision_created_at"}})
         restored["asset_id"] = asset_id
         restored["created_at"] = current.get("created_at", now)
         restored["updated_at"] = now
