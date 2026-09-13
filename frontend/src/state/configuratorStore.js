@@ -56,6 +56,7 @@ const defaultAsset = {
 
 const defaultPrice = { loading: false, error: null, data: null, lastFetchedFor: null };
 const defaultValidation = { loading: false, error: null, result: null };
+const defaultShowroom = { active: false, paused: true };
 
 const CAMERA_CAPABILITIES = {
   exterior: ['camera_exterior'],
@@ -83,6 +84,7 @@ export const useConfiguratorStore = create((set, get) => ({
   asset: { ...defaultAsset },
   price: { ...defaultPrice },
   validation: { ...defaultValidation },
+  showroom: { ...defaultShowroom },
   city: null,
   isInitialized: false,
 
@@ -93,6 +95,7 @@ export const useConfiguratorStore = create((set, get) => ({
       asset: { ...defaultAsset },
       price: { ...defaultPrice },
       validation: { ...defaultValidation },
+      showroom: { ...defaultShowroom },
       city: null,
       isInitialized: true,
     });
@@ -126,14 +129,23 @@ export const useConfiguratorStore = create((set, get) => ({
       return { interaction: { ...s.interaction, lighting: { ...s.interaction.lighting, hazard: nextHazard, left_indicator: nextHazard ? false : s.interaction.lighting.left_indicator, right_indicator: nextHazard ? false : s.interaction.lighting.right_indicator } } };
     });
   },
-  setCameraPreset(preset) {
+  setCameraPreset(preset, { pauseShowroom = true } = {}) {
     set((s) => {
       if (!isCameraPresetSupported(s.asset.supportedInteractions, preset)) return s;
-      return { interaction: { ...s.interaction, cameraPreset: preset } };
+      return {
+        interaction: { ...s.interaction, cameraPreset: preset },
+        showroom: pauseShowroom ? { ...s.showroom, paused: true } : s.showroom,
+      };
     });
   },
   setAutoRotate(value) { set((s) => ({ interaction: { ...s.interaction, autoRotate: value } })); },
   pauseAutoRotate() { set((s) => ({ interaction: { ...s.interaction, autoRotate: false } })); },
+  setShowroomActive(active) {
+    set((s) => ({ showroom: { ...s.showroom, active, paused: !active } }));
+  },
+  setShowroomPaused(paused) {
+    set((s) => ({ showroom: { ...s.showroom, paused } }));
+  },
   setAsset(assetData) { set({ asset: { ...defaultAsset, ...assetData, loadedAt: new Date().toISOString() } }); },
   setAssetUnavailable(status = 'COMING_SOON') { set({ asset: { ...defaultAsset, configuratorStatus: status } }); },
   setPriceLoading() { set({ price: { ...get().price, loading: true, error: null } }); },
@@ -144,6 +156,6 @@ export const useConfiguratorStore = create((set, get) => ({
   setValidationError(error) { set({ validation: { loading: false, error, result: null } }); },
   setCity(city) { set({ city }); },
   reset() {
-    set({ purchasable: { ...defaultPurchasable }, interaction: { ...defaultInteraction }, asset: { ...defaultAsset }, price: { ...defaultPrice }, validation: { ...defaultValidation }, city: null, isInitialized: false });
+    set({ purchasable: { ...defaultPurchasable }, interaction: { ...defaultInteraction }, asset: { ...defaultAsset }, price: { ...defaultPrice }, validation: { ...defaultValidation }, showroom: { ...defaultShowroom }, city: null, isInitialized: false });
   },
 }));

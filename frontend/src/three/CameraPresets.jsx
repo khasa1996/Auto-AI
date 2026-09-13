@@ -24,6 +24,19 @@ export const CAMERA_PRESETS = {
   wheel: { position: [2.2, 0.4, 1.8], target: [1.5, 0.3, 1.5] },
 };
 
+export const CAMERA_TRANSITION_DURATION_MS = 650;
+
+export function easeCameraTransition(progress) {
+  const value = Math.min(Math.max(progress, 0), 1);
+  return value < 0.5
+    ? 4 * value * value * value
+    : 1 - Math.pow(-2 * value + 2, 3) / 2;
+}
+
+export function getCameraTransitionDuration(reducedMotion = false) {
+  return reducedMotion ? 0 : CAMERA_TRANSITION_DURATION_MS;
+}
+
 export function useCameraPreset(preset, controlsRef) {
   const { camera } = useThree();
 
@@ -34,18 +47,29 @@ export function useCameraPreset(preset, controlsRef) {
     const targetLook = new THREE.Vector3(...target);
     const startPos = camera.position.clone();
     const startTarget = controlsRef?.current?.target?.clone() || targetLook.clone();
-    const duration = 420;
+    const reducedMotion = typeof window !== "undefined"
+      && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const duration = getCameraTransitionDuration(reducedMotion);
     const startedAt = performance.now();
     let frameId;
 
-    const animate = (now) => {
-      const progress = Math.min((now - startedAt) / duration, 1);
-      const ease = 1 - Math.pow(1 - progress, 3);
+    const apply = (progress) => {
+      const ease = easeCameraTransition(progress);
       camera.position.lerpVectors(startPos, targetPos, ease);
       if (controlsRef?.current) {
         controlsRef.current.target.lerpVectors(startTarget, targetLook, ease);
         controlsRef.current.update();
       }
+    };
+
+    if (duration === 0) {
+      apply(1);
+      return undefined;
+    }
+
+    const animate = (now) => {
+      const progress = Math.min((now - startedAt) / duration, 1);
+      apply(progress);
       if (progress < 1) frameId = requestAnimationFrame(animate);
     };
 
