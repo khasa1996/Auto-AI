@@ -5,7 +5,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from configurator_asset_versioning import _require_admin, make_asset_version_router, snapshot_asset
+from configurator_asset_versioning import _require_admin, make_asset_version_router, snapshot_asset, snapshot_before_upload
 
 
 class FakeCursor:
@@ -117,6 +117,30 @@ def test_snapshot_is_immutable_copy():
     assert revision["revision_id"] == "rev-12345678"
     assert revision["snapshot_type"] == "UPLOAD_SOURCE"
     assert "_id" not in revision
+
+
+@pytest.mark.asyncio
+async def test_snapshot_before_upload_captures_only_verified_assets():
+    now = datetime.now(timezone.utc).isoformat()
+    verified = {
+        "asset_id": "asset-1",
+        "storage_key": "configurator/asset-1/v1.0.0/current.glb",
+        "checksum_sha256": "a" * 64,
+        "validation_passed": True,
+        "nested": {"material": "MAT_PAINT"},
+    }
+    db = SimpleNamespace(configurator_asset_versions=FakeCollection())
+
+    revision_id = await snapshot_before_upload(db, verified)
+
+    assert revision_id
+    assert len(db.configurator_asset_versions.documents) == 1
+    verified["nested"]["material"] = "MUTATED"
+    assert db.configurator_asset_versions.documents[0]["nested"]["material"] == "MAT_PAINT"
+
+    unverified = {**verified, "validation_passed": False}
+    assert await snapshot_before_upload(db, unverified) is None
+    assert len(db.configurator_asset_versions.documents) == 1
 
 
 def test_rollback_restores_reviewed_revision_and_preserves_current(client):
