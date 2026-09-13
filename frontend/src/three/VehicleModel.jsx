@@ -12,6 +12,9 @@ import { ANIMATION_NAMES, resolveAnimationName, useVehicleAnimations } from './A
 import { isRuntimeAssetUsable } from '../components/configurator/assetRuntimeCapabilities';
 import { buildVehicleRuntimeState } from './vehicleRuntime';
 import { collectOwnedMaterialResources, disposeOwnedMaterialResources } from './runtimeLifecycle';
+import { inspectTextureBudget } from './runtimeTextureBudget';
+
+const RUNTIME_TEXTURE_BUDGET_BYTES = 256 * 1024 * 1024;
 
 function applyPaintColor(scene, colorHex, paintMaterialNames) {
   if (!scene || !colorHex || !paintMaterialNames?.length) return;
@@ -102,6 +105,10 @@ function LoadedVehicle({ url, paintColorHex, runtime, purchasable, interaction }
     [inspectedScene, runtime],
   );
   const clonedScene = useMemo(() => cloneOwnedMaterials(scene), [scene]);
+  const textureBudget = useMemo(
+    () => inspectTextureBudget(collectSceneMeshes(scene), RUNTIME_TEXTURE_BUDGET_BYTES),
+    [scene],
+  );
   const { play } = useVehicleAnimations(animations, groupRef);
 
   useEffect(() => applyPaintColor(clonedScene, paintColorHex, resolvedRuntime.paintMaterialNames), [clonedScene, paintColorHex, resolvedRuntime.paintMaterialNames]);
@@ -132,6 +139,11 @@ function LoadedVehicle({ url, paintColorHex, runtime, purchasable, interaction }
   useEffect(() => () => {
     disposeOwnedMaterialResources(collectOwnedMaterialResources(collectSceneMeshes(clonedScene)));
   }, [clonedScene]);
+
+  if (textureBudget.overBudget) {
+    console.error('[VehicleModel] Rejected runtime asset above texture memory budget.', textureBudget);
+    return null;
+  }
 
   return <primitive ref={groupRef} object={clonedScene} />;
 }
