@@ -35,8 +35,13 @@ function nonEmptyString(value) {
 
 function validAssetUrl(url) {
   if (!nonEmptyString(url)) return false;
-  const normalized = url.trim().toLowerCase();
-  return normalized.endsWith('.glb') || normalized.endsWith('.gltf');
+  try {
+    const parsed = new URL(url.trim());
+    const path = parsed.pathname.toLowerCase();
+    return path.endsWith('.glb') || path.endsWith('.gltf');
+  } catch {
+    return false;
+  }
 }
 
 function cleanStringList(value) {
