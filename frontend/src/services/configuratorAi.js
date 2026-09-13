@@ -14,6 +14,19 @@ export function buildConfiguratorAIIntent(variantId, rawRequest, fields = {}) {
   };
 }
 
+export function extractFinanceIntent(rawRequest, principal) {
+  const request = String(rawRequest || '').toLowerCase();
+  const rateMatch = request.match(/(?:at|rate(?:\s+of)?|interest(?:\s+rate)?(?:\s+of)?)\s*(\d+(?:\.\d+)?)\s*%/i);
+  const tenureMatch = request.match(/(?:for|over)\s*(\d+(?:\.\d+)?)\s*(years?|yrs?|months?|mos?)/i);
+  if (!rateMatch || !tenureMatch) return null;
+  const rate = Number(rateMatch[1]);
+  const value = Number(tenureMatch[1]);
+  const unit = tenureMatch[2].toLowerCase();
+  const tenureMonths = unit.startsWith('year') || unit.startsWith('yr') ? Math.round(value * 12) : Math.round(value);
+  if (!Number.isFinite(rate) || !Number.isFinite(tenureMonths) || rate < 0 || rate > 100 || tenureMonths < 1 || tenureMonths > 480) return null;
+  return { principal: Math.max(1, Math.round(Number(principal) || 0)), annual_rate: rate, tenure_months: tenureMonths };
+}
+
 export function getAIConfigurationSelection(response) {
   const payload = response?.data || response;
   if (!payload?.valid || !payload?.configuration) return null;
