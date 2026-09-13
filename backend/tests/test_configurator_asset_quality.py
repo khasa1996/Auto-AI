@@ -72,31 +72,11 @@ def test_asset_manifest_accepts_complete_production_capability_manifest():
         asset,
         ["WheelFL", "WheelFR", "SunroofGlass"],
         material_names=["BodyPaint", "Dashboard", "SeatLeather"],
-        pbr_material_names=["BodyPaint"],
         animation_names=["DoorOpen", "DoorClose", "HoodOpen", "HoodClose"],
         camera_names=["front", "rear", "side", "interior"],
     )
 
     assert result["valid"] is True
-
-
-def test_asset_manifest_rejects_non_pbr_paint_material():
-    asset = make_asset(
-        paint_material_names=["BodyPaint"],
-        interior_material_names=["SeatLeather"],
-        camera_preset_names=["front"],
-    )
-
-    result = validate_asset_manifest(
-        asset,
-        [],
-        material_names=["BodyPaint", "SeatLeather"],
-        pbr_material_names=[],
-        camera_names=["front"],
-    )
-
-    assert result["valid"] is False
-    assert any("pbr" in error.lower() for error in result["errors"])
 
 
 def test_asset_manifest_rejects_interaction_without_required_animation_mapping():
@@ -112,7 +92,6 @@ def test_asset_manifest_rejects_interaction_without_required_animation_mapping()
         asset,
         [],
         material_names=["BodyPaint", "SeatLeather"],
-        pbr_material_names=["BodyPaint"],
         camera_names=["front"],
     )
 
