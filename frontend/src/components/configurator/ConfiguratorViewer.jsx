@@ -16,6 +16,7 @@ import { configuratorApi } from '../../services/configuratorApi';
 import { normalizeHotspots } from './premiumShowroom';
 import { buildConfiguratorShareCard } from './shareCard';
 import { buildCinematicSequence, getNextCinematicPreset } from './cinematicShowroom';
+import { getSupportedInteractionControls } from './interactionControls';
 
 const CINEMATIC_INTERVAL_MS = 4200;
 
@@ -44,6 +45,52 @@ function ConfiguratorScene({ modelUrl, paintColorHex, paintMaterialNames, wheelM
 function optionLabel(options, id) {
   const option = options?.find((item) => (item.option_id || item.color_id || item.wheel_id || item.interior_id || item.roof_id) === id);
   return option?.display_name || option?.name || option?.color_name || option?.wheel_name || option?.interior_name || id || 'Not selected';
+}
+
+function InteractionControls({ supportedInteractions, interaction, onManualInteraction }) {
+  const store = useConfiguratorStore();
+  const controls = useMemo(() => getSupportedInteractionControls(supportedInteractions), [supportedInteractions]);
+  const has = (id) => controls.some((control) => control.id === id);
+  const buttonClass = (active) => `configurator-interaction-button${active ? ' active' : ''}`;
+  if (!controls.length) return null;
+
+  const doors = has('doors') ? [
+    ['frontLeft', 'Front L'],
+    ['frontRight', 'Front R'],
+    ['rearLeft', 'Rear L'],
+    ['rearRight', 'Rear R'],
+  ] : [];
+  const lighting = controls.filter((control) => control.group === 'lighting');
+
+  const lightState = (id) => Boolean(interaction.lighting[id]);
+  const toggleLight = (id) => { onManualInteraction(); store.toggleLight(id); };
+
+  return <section className="configurator-interaction-panel" aria-label="Verified 3D interactions">
+    <div className="configurator-interaction-heading">
+      <div>
+        <h3>3D interactions</h3>
+        <p>Verified capabilities only</p>
+      </div>
+      <span>{controls.length} available</span>
+    </div>
+    {doors.length > 0 && <div className="configurator-interaction-group">
+      <span className="configurator-interaction-label">Doors</span>
+      <div className="configurator-interaction-grid">{doors.map(([side, label]) => <button key={side} type="button" className={buttonClass(interaction.doors[side])} aria-pressed={interaction.doors[side]} onClick={() => { onManualInteraction(); store.toggleDoor(side); }}>{label}</button>)}</div>
+    </div>}
+    {(has('hood') || has('boot') || has('frunk') || has('sunroof')) && <div className="configurator-interaction-group">
+      <span className="configurator-interaction-label">Body</span>
+      <div className="configurator-interaction-grid">
+        {has('hood') && <button type="button" className={buttonClass(interaction.hoodOpen)} aria-pressed={interaction.hoodOpen} onClick={() => { onManualInteraction(); store.toggleHood(); }}>Bonnet</button>}
+        {has('boot') && <button type="button" className={buttonClass(interaction.bootOpen)} aria-pressed={interaction.bootOpen} onClick={() => { onManualInteraction(); store.toggleBoot(); }}>Boot</button>}
+        {has('frunk') && <button type="button" className={buttonClass(interaction.frunkOpen)} aria-pressed={interaction.frunkOpen} onClick={() => { onManualInteraction(); store.toggleFrunk(); }}>Frunk</button>}
+        {has('sunroof') && <button type="button" className={buttonClass(interaction.sunroofOpen)} aria-pressed={interaction.sunroofOpen} onClick={() => { onManualInteraction(); store.toggleSunroof(); }}>Sunroof</button>}
+      </div>
+    </div>}
+    {lighting.length > 0 && <div className="configurator-interaction-group">
+      <span className="configurator-interaction-label">Lighting</span>
+      <div className="configurator-interaction-grid">{lighting.map((control) => <button key={control.id} type="button" className={buttonClass(lightState(control.id))} aria-pressed={lightState(control.id)} onClick={() => control.id === 'hazard' ? (onManualInteraction(), store.toggleHazard()) : toggleLight(control.id)}>{control.label}</button>)}</div>
+    </div>}
+  </section>;
 }
 
 export default function ConfiguratorViewer({ style, options, variant }) {
@@ -183,6 +230,7 @@ export default function ConfiguratorViewer({ style, options, variant }) {
       <button type="button" onClick={capture} aria-label="Capture configuration"><Camera /></button>
       <button type="button" onClick={share} aria-label="Share configuration"><Share2 /></button>
     </div>
+    <InteractionControls supportedInteractions={asset.supportedInteractions} interaction={interaction} onManualInteraction={takeManualControl} />
     {showroom.active && <div className="configurator-showroom-status" role="status">{showroom.paused ? 'Manual control' : 'Cinematic showroom'} · {interaction.cameraPreset}</div>}
     {captureState?.status === 'error' && <div role="status">Unable to capture configuration.</div>}
     {hotspots.map((hotspot) => <button key={hotspot.id} type="button" className="configurator-hotspot" style={{ left: `${hotspot.x}%`, top: `${hotspot.y}%` }} onClick={() => { takeManualControl(); setSelectedHotspot(hotspot); if (hotspot.cameraPreset) setCameraPreset(hotspot.cameraPreset); }} aria-label={hotspot.label}><Info /></button>)}
