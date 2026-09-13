@@ -20,12 +20,6 @@ Formula:
     + other_charges
     - SUM(offer discounts)
     = estimated_on_road
-
-Status: IMPLEMENTED (engine logic complete)
-  - Base price lookup from variant_pricing collection: IMPLEMENTED
-  - Option delta calculation: IMPLEMENTED
-  - City component lookup: FOUNDATION (city data is DATA REQUIRED)
-  - Offer/discount engine: FOUNDATION (structure defined, eval in Phase 3+)
 """
 
 from __future__ import annotations
@@ -33,11 +27,11 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
+from configurator_city_pricing import validate_pricing_location
 from configurator_schemas import (
     ConfigurationPriceRequest,
     ConfigurationPriceResponse,
     PriceComponent,
-    PurchasableConfiguration,
 )
 
 if TYPE_CHECKING:
@@ -52,21 +46,14 @@ async def calculate_configuration_price(
     request: ConfigurationPriceRequest,
     db: "AsyncIOMotorDatabase",
 ) -> ConfigurationPriceResponse:
-    """
-    Calculate the authoritative price for a vehicle configuration.
-
-    Raises ValueError if the variant cannot be found.
-    Never invents prices for unknown components.
-    """
+    """Calculate the authoritative price for a vehicle configuration."""
     config = request.configuration
     variant_id = config.variant_id
 
-    # 1. Look up base pricing from normalized variant_pricing collection
     pricing_doc = await db.variant_pricing.find_one(
         {"variant_id": variant_id}, {"_id": 0}
     )
 
-    # Fallback: look up in legacy flat cars collection for backward compat
     if pricing_doc is None:
         legacy = await db.cars.find_one({"id": variant_id}, {"_id": 0})
         if legacy is None:
@@ -75,9 +62,11 @@ async def calculate_configuration_price(
     else:
         base_ex_showroom = pricing_doc.get("base_ex_showroom", 0)
 
+    if request.city and not await validate_pricing_location(db, variant_id, request.city):
+        raise ValueError(f"No verified pricing is available for city: {request.city}")
+
     option_deltas: List[PriceComponent] = []
 
-    # 2. Paint delta
     if config.paint_id:
         color_doc = await db.variant_colors.find_one(
             {"color_id": config.paint_id, "variant_id": variant_id},
@@ -89,7 +78,6 @@ async def calculate_configuration_price(
                 amount=color_doc["price_delta"],
             ))
 
-    # 3. Wheel delta
     if config.wheel_id:
         wheel_doc = await db.variant_wheels.find_one(
             {"wheel_id": config.wheel_id, "variant_id": variant_id},
@@ -101,7 +89,6 @@ async def calculate_configuration_price(
                 amount=wheel_doc["price_delta"],
             ))
 
-    # 4. Interior delta
     if config.interior_id:
         interior_doc = await db.variant_interiors.find_one(
             {"interior_id": config.interior_id, "variant_id": variant_id},
@@ -113,7 +100,6 @@ async def calculate_configuration_price(
                 amount=interior_doc["price_delta"],
             ))
 
-    # 5. Roof delta
     if config.roof_id:
         roof_doc = await db.configurator_options.find_one(
             {
@@ -129,7 +115,6 @@ async def calculate_configuration_price(
                 amount=roof_doc["price_delta"],
             ))
 
-    # 6. Accessory deltas
     for acc_id in config.accessory_ids:
         acc_doc = await db.configurator_options.find_one(
             {
@@ -145,9 +130,6 @@ async def calculate_configuration_price(
                 amount=acc_doc["price_delta"],
             ))
 
-    # 7. City-specific components
-    # FOUNDATION: city pricing data is DATA REQUIRED.
-    # The structure is defined; real RTO/insurance data needs Phase 3+ population.
     rto: Optional[int] = None
     insurance_approx: Optional[int] = None
     tcs: Optional[int] = None
@@ -158,7 +140,8 @@ async def calculate_configuration_price(
         city_entry = next(
             (
                 cp for cp in city_pricing_list
-                if cp.get("city", "").lower() == request.city.lower()
+                if cp.get("city", "").strip().casefold() == request.city.strip().casefold()
+                and str(cp.get("verification_status", "unverified")).casefold() == "verified"
             ),
             None,
         )
@@ -168,22 +151,16 @@ async def calculate_configuration_price(
             tcs = city_entry.get("tcs")
             other_charges = city_entry.get("handling")
 
-    # 8. Offers
-    # FOUNDATION: offer engine is DATA REQUIRED.
     offers_applied: List[PriceComponent] = []
 
-    # 9. Compute final on-road estimate
     subtotal = base_ex_showroom + sum(c.amount for c in option_deltas)
-    on_road_components = [
+    estimated_on_road = sum([
         subtotal,
         rto or 0,
         insurance_approx or 0,
         tcs or 0,
         other_charges or 0,
-    ]
-    estimated_on_road = sum(on_road_components) - sum(
-        c.amount for c in offers_applied
-    )
+    ]) - sum(c.amount for c in offers_applied)
 
     return ConfigurationPriceResponse(
         variant_id=variant_id,
@@ -203,13 +180,9 @@ async def calculate_configuration_price(
 
 
 async def validate_asset_url(url: str) -> Dict[str, Any]:
-    """
-    Validate a 3D asset URL structurally.
-
-    Does NOT download the file (that happens during admin asset ingest).
-    Returns a dict with 'valid', 'errors', 'warnings'.
-    """
+    """Validate a 3D asset URL structurally without downloading it."""
     from urllib.parse import urlparse
+
     errors: List[str] = []
     warnings: List[str] = []
 
@@ -221,7 +194,6 @@ async def validate_asset_url(url: str) -> Dict[str, Any]:
 
     if parsed.scheme != "https":
         errors.append("Asset URL must use HTTPS")
-
     if not parsed.netloc:
         errors.append("Asset URL must include a hostname")
 
@@ -234,12 +206,7 @@ async def validate_asset_url(url: str) -> Dict[str, Any]:
 
     if parsed.username or parsed.password:
         errors.append("Asset URL must not contain credentials")
-
     if parsed.fragment:
         warnings.append("Asset URL contains a fragment identifier — this may cause issues")
 
-    return {
-        "valid": len(errors) == 0,
-        "errors": errors,
-        "warnings": warnings,
-    }
+    return {"valid": len(errors) == 0, "errors": errors, "warnings": warnings}

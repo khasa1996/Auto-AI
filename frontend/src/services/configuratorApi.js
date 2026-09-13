@@ -17,6 +17,7 @@ export const configuratorApi = {
   getHotspots: (variantId) => api.get(`${V1}/configurator/${variantId}/hotspots`),
   getOptions: (variantId) => api.get(`${V1}/configurator/${variantId}/options`),
   getRules: (variantId) => api.get(`${V1}/configurator/${variantId}/rules`),
+  getPricingLocations: (variantId) => api.get(`${V1}/configurator/${variantId}/pricing-locations`),
   validateConfiguration: (configuration) => api.post(`${V1}/configurator/validate`, { configuration }),
   calculatePrice: (configuration, city = null) => api.post(`${V1}/configurator/price`, { configuration, city }),
   resolveWithAI: (intent) => api.post(`${V1}/configurator/ai`, intent),
