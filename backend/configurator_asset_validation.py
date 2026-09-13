@@ -35,6 +35,7 @@ def validate_asset_manifest(
     mesh_names: Iterable[str],
     *,
     material_names: Iterable[str] = (),
+    pbr_material_names: Iterable[str] = (),
     animation_names: Iterable[str] = (),
     camera_names: Iterable[str] = (),
 ) -> Dict[str, Any]:
@@ -43,6 +44,7 @@ def validate_asset_manifest(
     warnings: List[str] = []
     available_meshes = {str(name) for name in mesh_names if str(name).strip()}
     available_materials = {str(name) for name in material_names if str(name).strip()}
+    available_pbr_materials = {str(name) for name in pbr_material_names if str(name).strip()}
     available_animations = {str(name) for name in animation_names if str(name).strip()}
     available_cameras = {str(name) for name in camera_names if str(name).strip()}
 
@@ -59,6 +61,9 @@ def validate_asset_manifest(
         missing = [name for name in asset.paint_material_names if name not in available_materials]
         if missing:
             errors.append("Paint material bindings reference missing materials: " + ", ".join(missing))
+        non_pbr = [name for name in asset.paint_material_names if name not in available_pbr_materials]
+        if non_pbr:
+            errors.append("Paint materials must use GLTF PBR metallic-roughness materials: " + ", ".join(non_pbr))
 
     if not asset.interior_material_names:
         errors.append("Production asset must declare at least one interior material binding")
