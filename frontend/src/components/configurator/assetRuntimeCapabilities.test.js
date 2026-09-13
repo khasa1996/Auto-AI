@@ -56,3 +56,17 @@ test('does not expose undeclared material or mesh mappings to the viewer', () =>
     optionMeshNames: { roof_black: ['RoofBlack'] },
   });
 });
+
+test('resolves only camera presets declared by the verified runtime manifest', async () => {
+  const { resolveCameraPreset } = await import('../../three/CameraPresets');
+  expect(resolveCameraPreset('exterior', ['exterior', 'rear'])).toEqual({
+    position: [4.5, 1.6, 5.5],
+    target: [0, 0.3, 0],
+  });
+  expect(resolveCameraPreset('interior', ['exterior', 'rear'])).toBeNull();
+});
+
+test('does not treat an empty verified camera declaration as all presets', async () => {
+  const { resolveCameraPreset } = await import('../../three/CameraPresets');
+  expect(resolveCameraPreset('exterior', [])).toBeNull();
+});
