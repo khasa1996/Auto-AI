@@ -40,6 +40,8 @@ export async function uploadConfiguratorAsset({ api, assetId, file, onProgress }
   const validationError = validateConfiguratorAssetFile(file);
   if (validationError) throw new Error(validationError);
 
+  await api.post(`/v1/admin/configurator/assets/${encodeURIComponent(assetId)}/prepare-version`);
+
   const { data: session } = await api.post("/v1/admin/configurator/assets/upload-url", {
     asset_id: assetId,
     filename: file.name,
