@@ -11,6 +11,7 @@ import VehicleModel from '../../three/VehicleModel';
 import { AssetSuspense, AssetUnavailable } from '../../three/AssetLoader';
 import { useLightingController } from '../../three/LightingController';
 import { ConfiguratorControls, useCameraPreset } from '../../three/CameraPresets';
+import { getConfiguratorDpr } from '../../three/runtimePerformance';
 import { useConfiguratorStore } from '../../state/configuratorStore';
 import { configuratorApi } from '../../services/configuratorApi';
 import { normalizeHotspots } from './premiumShowroom';
@@ -102,6 +103,10 @@ export default function ConfiguratorViewer({ style, options, variant }) {
   const setCameraPreset = useConfiguratorStore((state) => state.setCameraPreset);
   const setShowroomActive = useConfiguratorStore((state) => state.setShowroomActive);
   const setShowroomPaused = useConfiguratorStore((state) => state.setShowroomPaused);
+  const renderDpr = useMemo(() => getConfiguratorDpr({
+    deviceMemory: typeof navigator !== 'undefined' ? navigator.deviceMemory : undefined,
+    hardwareConcurrency: typeof navigator !== 'undefined' ? navigator.hardwareConcurrency : undefined,
+  }), []);
 
   const cinematicSequence = useMemo(
     () => buildCinematicSequence(asset.supportedInteractions, asset.cameraPresetNames),
@@ -206,7 +211,7 @@ export default function ConfiguratorViewer({ style, options, variant }) {
   };
 
   return <div ref={canvasRef} style={style} className={`configurator-viewer${cinematic ? ' cinematic' : ''}`}>
-    <Canvas gl={{ preserveDrawingBuffer: true }} camera={{ position: [5, 2.5, 5], fov: 35 }}>
+    <Canvas dpr={renderDpr} gl={{ preserveDrawingBuffer: true }} camera={{ position: [5, 2.5, 5], fov: 35 }}>
       <ConfiguratorScene modelUrl={asset.url} paintColorHex={asset.paintColorHex} paintMaterialNames={asset.paintMaterialNames} wheelMeshNames={asset.wheelMeshNames} optionMeshNames={asset.optionMeshNames} interactionAnimationNames={asset.interactionAnimationNames} purchasable={purchasable} interaction={interaction} supportedInteractions={asset.supportedInteractions} cameraPresetNames={asset.cameraPresetNames} sceneRef={sceneRef} onManualInteraction={takeManualControl} />
     </Canvas>
     <div className="configurator-viewer-controls">
