@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import { ANIMATION_NAMES, resolveAnimationName, useVehicleAnimations } from './AnimationController';
 import { isRuntimeAssetUsable } from '../components/configurator/assetRuntimeCapabilities';
 import { buildVehicleRuntimeState } from './vehicleRuntime';
+import { collectOwnedMaterialResources, disposeOwnedMaterialResources } from './runtimeLifecycle';
 
 function applyPaintColor(scene, colorHex, paintMaterialNames) {
   if (!scene || !colorHex || !paintMaterialNames?.length) return;
@@ -61,10 +62,34 @@ function inspectScene(scene) {
       if (material?.name) materialNames.add(material.name);
     });
   });
-  return {
-    materialNames: [...materialNames],
-    meshNames: [...meshNames],
-  };
+  return { materialNames: [...materialNames], meshNames: [...meshNames] };
+}
+
+function cloneOwnedMaterials(scene) {
+  const clone = scene.clone(true);
+  clone.traverse((node) => {
+    if (!node.isMesh) return;
+    node.material = Array.isArray(node.material)
+      ? node.material.map((material) => {
+          const owned = material.clone();
+          owned.userData = { ...owned.userData, runtimeOwnedMaterial: true };
+          return owned;
+        })
+      : (() => {
+          const owned = node.material.clone();
+          owned.userData = { ...owned.userData, runtimeOwnedMaterial: true };
+          return owned;
+        })();
+  });
+  return clone;
+}
+
+function collectSceneMeshes(scene) {
+  const meshes = [];
+  scene?.traverse((node) => {
+    if (node.isMesh) meshes.push(node);
+  });
+  return meshes;
 }
 
 function LoadedVehicle({ url, paintColorHex, runtime, purchasable, interaction }) {
@@ -76,16 +101,7 @@ function LoadedVehicle({ url, paintColorHex, runtime, purchasable, interaction }
     () => buildVehicleRuntimeState(runtime, inspectedScene),
     [inspectedScene, runtime],
   );
-  const clonedScene = useMemo(() => {
-    const clone = scene.clone(true);
-    clone.traverse((node) => {
-      if (!node.isMesh) return;
-      node.material = Array.isArray(node.material)
-        ? node.material.map((material) => material.clone())
-        : node.material.clone();
-    });
-    return clone;
-  }, [scene]);
+  const clonedScene = useMemo(() => cloneOwnedMaterials(scene), [scene]);
   const { play } = useVehicleAnimations(animations, groupRef);
 
   useEffect(() => applyPaintColor(clonedScene, paintColorHex, resolvedRuntime.paintMaterialNames), [clonedScene, paintColorHex, resolvedRuntime.paintMaterialNames]);
@@ -114,11 +130,7 @@ function LoadedVehicle({ url, paintColorHex, runtime, purchasable, interaction }
   }, [interaction, play, resolvedRuntime]);
 
   useEffect(() => () => {
-    clonedScene.traverse((node) => {
-      if (!node.isMesh) return;
-      const materials = Array.isArray(node.material) ? node.material : [node.material];
-      materials.forEach((material) => material?.dispose());
-    });
+    disposeOwnedMaterialResources(collectOwnedMaterialResources(collectSceneMeshes(clonedScene)));
   }, [clonedScene]);
 
   return <primitive ref={groupRef} object={clonedScene} />;
