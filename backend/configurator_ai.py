@@ -89,21 +89,16 @@ def _safe_selection(candidate: Dict[str, Any], catalog: Dict[str, List[Dict[str,
     if not isinstance(accessory_ids, list):
         accessory_ids = []
     safe_accessories = [str(value) for value in accessory_ids if str(value) in allowed.get("accessories", set())][:30]
-    return PurchasableConfiguration(
-        variant_id=variant_id,
-        paint_id=pick("paint_id", "colors"),
-        wheel_id=pick("wheel_id", "wheels"),
-        interior_id=pick("interior_id", "interiors"),
-        roof_id=pick("roof_id", "roofs"),
-        accessory_ids=safe_accessories,
-    )
+    return PurchasableConfiguration(variant_id=variant_id, paint_id=pick("paint_id", "colors"), wheel_id=pick("wheel_id", "wheels"), interior_id=pick("interior_id", "interiors"), roof_id=pick("roof_id", "roofs"), accessory_ids=safe_accessories)
 
 
 def _merge_selection(base: PurchasableConfiguration, candidate: Dict[str, Any], resolved: PurchasableConfiguration) -> PurchasableConfiguration:
     values: Dict[str, Any] = {}
     for field in ("paint_id", "wheel_id", "interior_id", "roof_id"):
-        values[field] = getattr(resolved, field) if field in candidate else getattr(base, field)
-    values["accessory_ids"] = resolved.accessory_ids if "accessory_ids" in candidate else list(base.accessory_ids)
+        requested = candidate.get(field)
+        values[field] = getattr(resolved, field) if requested is not None else getattr(base, field)
+    requested_accessories = candidate.get("accessory_ids")
+    values["accessory_ids"] = resolved.accessory_ids if isinstance(requested_accessories, list) and requested_accessories else list(base.accessory_ids)
     return PurchasableConfiguration(variant_id=base.variant_id, **values)
 
 
@@ -133,7 +128,7 @@ def build_ai_prompt(intent: AIConfiguratorIntent, catalog: Dict[str, List[Dict[s
     return (
         "You are Auto AI India's configurator selection engine.\n"
         "Select only IDs present in the supplied catalog. Never invent an ID or price.\n"
-        "Preserve the current configuration unless the user explicitly asks to change that field.\n"
+        "Preserve the current configuration unless the user explicitly asks to change that field. Omit unchanged option fields; do not use null to mean clear.\n"
         "Return JSON only with keys: variant_id, paint_id, wheel_id, interior_id, roof_id, accessory_ids, explanation, open_hood, open_doors, open_boot, open_sunroof, lights_on, camera_preset.\n"
         "Interaction flags are showroom state only and must never change pricing.\n\n"
         f"Variant: {intent.variant_id}\nUser request: {intent.raw_request}\n"
