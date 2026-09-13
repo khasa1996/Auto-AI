@@ -19,10 +19,13 @@ export const api = axios.create({
 export const USER_TOKEN_KEY = "autoai_token";
 export const ADMIN_TOKEN_KEY = "autoai_admin_token";
 
+function isAdminApiCall(url = "") {
+  return url.startsWith("/admin") || url.startsWith("admin") || url.startsWith("/v1/admin") || url.startsWith("v1/admin");
+}
+
 // Admin routes carry the admin session token; everything else uses the user token.
 api.interceptors.request.use((config) => {
-  const isAdminCall = (config.url || "").startsWith("/admin") || (config.url || "").startsWith("admin");
-  const key = isAdminCall ? ADMIN_TOKEN_KEY : USER_TOKEN_KEY;
+  const key = isAdminApiCall(config.url || "") ? ADMIN_TOKEN_KEY : USER_TOKEN_KEY;
   const token = localStorage.getItem(key);
   if (token) {
     config.headers = { ...config.headers, Authorization: `Bearer ${token}` };
@@ -50,7 +53,6 @@ export const formatINR = (n) => {
   if (n >= 100000) return `₹${(n / 100000).toFixed(2)} L`;
   return `₹${n.toLocaleString("en-IN")}`;
 };
-
 
 export function createIdempotencyKey() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {

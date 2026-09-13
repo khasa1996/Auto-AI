@@ -1,2 +1,48 @@
 /* Minimal App-level overrides */
 .App { min-height: 100vh; }
+
+/* The configurator keeps its desktop two-column layout, while mobile gets a
+   sticky, scrollable control sheet so the 3D viewport stays primary. */
+@media (max-width: 1023px) {
+  main:has(aside button[aria-pressed]) > div > div.grid.gap-6 {
+    display: block;
+  }
+
+  main:has(aside button[aria-pressed]) > div > div.grid.gap-6 > div:first-child {
+    min-height: 52vh;
+  }
+
+  main:has(aside button[aria-pressed]) > div > div.grid.gap-6 > aside {
+    position: sticky;
+    bottom: 0;
+    z-index: 30;
+    max-height: 48vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    margin-top: 0.75rem;
+    padding: 0.9rem 0.75rem calc(0.9rem + env(safe-area-inset-bottom));
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 1.5rem 1.5rem 0 0;
+    background: rgba(10, 10, 10, 0.96);
+    box-shadow: 0 -16px 40px rgba(0, 0, 0, 0.42);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    scrollbar-width: thin;
+  }
+
+  main:has(aside button[aria-pressed]) > div > div.grid.gap-6 > aside::before {
+    content: "";
+    display: block;
+    width: 2.75rem;
+    height: 0.2rem;
+    margin: 0 auto 0.65rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  main:has(aside button[aria-pressed]) > div > div.grid.gap-6 > aside > div:first-child {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+}

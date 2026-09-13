@@ -18,6 +18,7 @@ from configurator_schemas import (
     SavedConfigurationCreate,
     ValidationResult,
 )
+from configurator_ai import build_interaction_state, resolve_ai_selection
 from vehicle_schemas import BrandSummary, ConfiguratorStatus, ModelSummary, VariantDetail, VariantSummary
 from pricing_engine import calculate_configuration_price, validate_asset_url
 from rules_engine import get_available_options_for_variant, validate_configuration
@@ -26,12 +27,7 @@ from rules_engine import get_available_options_for_variant, validate_configurati
 async def _resolve_optional_user_phone(
     authorization: Optional[str] = Header(None),
 ) -> Optional[str]:
-    """Resolve the application's canonical optional auth dependency lazily.
-
-    server.py imports this router, so importing the canonical dependency at
-    module-import time would create a cycle. Runtime resolution keeps the
-    existing token/session validation in one place.
-    """
+    """Resolve the application's canonical optional auth dependency lazily."""
     from server import optional_user_phone
 
     return await optional_user_phone(authorization)
@@ -39,6 +35,62 @@ async def _resolve_optional_user_phone(
 
 def _utcnow_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def build_saved_configuration_document(
+    request: SavedConfigurationCreate,
+    owner_phone: str,
+    server_price_snapshot: Dict[str, object],
+    server_asset: Optional[Dict[str, object]],
+    config_id: str,
+    share_token: str,
+    now: str,
+) -> Dict[str, object]:
+    """Build a persisted snapshot from server-authoritative values."""
+    configuration = request.configuration.model_dump()
+    stale_reason = None if server_asset else "Published verified configurator asset is unavailable"
+    estimated_on_road = int(server_price_snapshot.get("estimated_on_road", 0))
+    return {
+        "config_id": config_id,
+        "owner_phone": owner_phone,
+        "share_token": share_token,
+        "configuration": configuration,
+        "city": request.city,
+        "price_snapshot": estimated_on_road,
+        "price_breakdown": server_price_snapshot,
+        "asset_id": server_asset.get("asset_id") if server_asset else None,
+        "asset_version": server_asset.get("version") if server_asset else None,
+        "stale": bool(stale_reason),
+        "stale_reason": stale_reason,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
+async def resolve_saved_configuration_asset(
+    db: AsyncIOMotorDatabase,
+    variant_id: str,
+    requested_asset_id: Optional[str],
+) -> Optional[Dict[str, object]]:
+    """Resolve the published verified asset assigned to a variant for persistence."""
+    asset_id = requested_asset_id
+    if not asset_id:
+        variant = await db.variants.find_one(
+            {"variant_id": variant_id},
+            {"_id": 0, "configurator_asset_id": 1},
+        )
+        asset_id = variant.get("configurator_asset_id") if variant else None
+    if not asset_id:
+        return None
+    return await db.configurator_assets.find_one(
+        {
+            "asset_id": asset_id,
+            "variant_id": variant_id,
+            "published": True,
+            "validation_passed": True,
+        },
+        {"_id": 0, "asset_id": 1, "version": 1},
+    )
 
 
 def make_configurator_router(
@@ -179,6 +231,7 @@ def make_configurator_router(
                 "supported_interactions": asset.get("supported_interactions", []),
                 "paint_material_names": asset.get("paint_material_names", []),
                 "wheel_mesh_names": asset.get("wheel_mesh_names", {}),
+                "option_mesh_names": asset.get("option_mesh_names", {}),
             },
         }
 
@@ -224,27 +277,46 @@ def make_configurator_router(
         request: SavedConfigurationCreate,
         auth_phone: Optional[str] = Depends(auth_dependency),
     ):
-        """Persist a configuration and require authenticated ownership."""
+        """Persist only a server-validated, server-priced configuration."""
         if not auth_phone:
             raise HTTPException(status_code=401, detail="Authentication required")
+
+        validation = await validate_configuration(
+            ConfigurationValidationRequest(configuration=request.configuration.purchasable), db
+        )
+        if not validation.valid:
+            raise HTTPException(
+                status_code=422,
+                detail={"message": "Invalid configuration", "errors": validation.errors},
+            )
+
+        price_request = ConfigurationPriceRequest(
+            configuration=request.configuration.purchasable,
+            city=request.city,
+        )
+        try:
+            server_price = await calculate_configuration_price(price_request, db)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+
+        server_asset = await resolve_saved_configuration_asset(
+            db,
+            request.configuration.purchasable.variant_id,
+            request.asset_id,
+        )
 
         config_id = str(uuid.uuid4())
         share_token = uuid.uuid4().hex
         now = _utcnow_iso()
-        doc = {
-            "config_id": config_id,
-            "owner_phone": auth_phone,
-            "share_token": share_token,
-            "configuration": request.configuration.model_dump(),
-            "city": request.city,
-            "price_snapshot": request.price_snapshot,
-            "asset_id": request.asset_id,
-            "asset_version": request.asset_version,
-            "stale": False,
-            "stale_reason": None,
-            "created_at": now,
-            "updated_at": now,
-        }
+        doc = build_saved_configuration_document(
+            request=request,
+            owner_phone=auth_phone,
+            server_price_snapshot=server_price.model_dump(mode="json"),
+            server_asset=server_asset,
+            config_id=config_id,
+            share_token=share_token,
+            now=now,
+        )
         await db.configurations.insert_one(doc)
         doc.pop("_id", None)
         return doc
@@ -270,16 +342,66 @@ def make_configurator_router(
 
     @router.post("/configurator/ai", response_model=AIConfiguratorResponse)
     async def ai_configurator(intent: AIConfiguratorIntent):
+        """Resolve natural-language intent through the catalog, rules engine and price engine."""
+        try:
+            configuration, explanation, unavailable = await resolve_ai_selection(intent, db)
+        except ValueError as exc:
+            return AIConfiguratorResponse(
+                configuration=None,
+                price=None,
+                explanation=str(exc),
+                unavailable_options=[],
+                valid=False,
+            )
+
+        validation = await validate_configuration(
+            ConfigurationValidationRequest(configuration=configuration), db
+        )
+        if not validation.valid:
+            return AIConfiguratorResponse(
+                configuration=None,
+                price=None,
+                explanation="AI selection was rejected by the configurator rules engine: " + "; ".join(validation.errors),
+                unavailable_options=unavailable,
+                valid=False,
+            )
+
+        try:
+            price = await calculate_configuration_price(
+                ConfigurationPriceRequest(configuration=configuration), db
+            )
+        except ValueError as exc:
+            return AIConfiguratorResponse(
+                configuration=None,
+                price=None,
+                explanation=str(exc),
+                unavailable_options=unavailable,
+                valid=False,
+            )
+
+        if intent.max_budget is not None and price.estimated_on_road > intent.max_budget:
+            explanation = (
+                f"The best resolved configuration is estimated at ₹{price.estimated_on_road:,}, "
+                f"which exceeds the requested ₹{intent.max_budget:,} budget."
+            )
+            return AIConfiguratorResponse(
+                configuration=None,
+                price=price,
+                explanation=explanation,
+                unavailable_options=unavailable,
+                valid=False,
+            )
+
+        configuration_state = {
+            "purchasable": configuration.model_dump(),
+            "interaction": build_interaction_state(intent).model_dump(),
+        }
         return AIConfiguratorResponse(
-            configuration=None,
-            price=None,
-            explanation=(
-                "AI configuration is a Phase 3 feature. The contract is defined and validated. "
-                "When implemented, the AI will select only from backend-provided options "
-                "and validate through the rules engine."
-            ),
-            unavailable_options=[],
-            valid=False,
+            configuration=configuration_state,
+            price=price,
+            explanation=explanation,
+            unavailable_options=unavailable,
+            valid=True,
         )
 
     @router.post("/configurator/assets/validate-url")
@@ -296,6 +418,7 @@ def _public_configuration_response(doc: Dict[str, object]) -> Dict[str, object]:
         "configuration",
         "city",
         "price_snapshot",
+        "price_breakdown",
         "asset_id",
         "asset_version",
         "stale",

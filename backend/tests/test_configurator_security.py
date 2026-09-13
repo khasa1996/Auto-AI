@@ -2,10 +2,13 @@
 
 from typing import Any, Dict, Optional
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+import configurator_routes
 from configurator_routes import make_configurator_router
+from configurator_schemas import ConfigurationPriceResponse, ValidationResult
 
 
 class FakeResult:
@@ -50,9 +53,44 @@ class FakeConfigurations:
         return None
 
 
+class FakeCollection:
+    def __init__(self, responses: list[Optional[Dict[str, Any]]]) -> None:
+        self.responses = iter(responses)
+
+    async def find_one(
+        self,
+        query: Dict[str, Any],
+        projection: Optional[Dict[str, int]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        return next(self.responses)
+
+
 class FakeDatabase:
     def __init__(self) -> None:
         self.configurations = FakeConfigurations()
+        self.variants = FakeCollection([None])
+        self.configurator_assets = FakeCollection([None])
+
+
+@pytest.fixture(autouse=True)
+def isolate_server_authoritative_dependencies(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep security tests independent from the production pricing/catalog database."""
+
+    async def fake_validate_configuration(*_: Any, **__: Any) -> ValidationResult:
+        return ValidationResult(valid=True)
+
+    async def fake_calculate_configuration_price(*_: Any, **__: Any) -> ConfigurationPriceResponse:
+        return ConfigurationPriceResponse(
+            variant_id="test-variant",
+            city="Delhi",
+            base_ex_showroom=900_000,
+            estimated_on_road=1_000_000,
+            effective_date="2026-09-11",
+            source="security-test",
+        )
+
+    monkeypatch.setattr(configurator_routes, "validate_configuration", fake_validate_configuration)
+    monkeypatch.setattr(configurator_routes, "calculate_configuration_price", fake_calculate_configuration_price)
 
 
 def _payload() -> Dict[str, Any]:
@@ -62,7 +100,7 @@ def _payload() -> Dict[str, Any]:
             "interaction": {},
         },
         "city": "Delhi",
-        "price_snapshot": 1_000_000,
+        "price_snapshot": 1,
     }
 
 
@@ -75,7 +113,7 @@ def _client(db: FakeDatabase, phone: Optional[str]) -> TestClient:
     return TestClient(app)
 
 
-def test_authenticated_save_persists_owner() -> None:
+def test_authenticated_save_persists_owner_and_server_price() -> None:
     db = FakeDatabase()
     client = _client(db, "+919876543210")
 
@@ -86,6 +124,10 @@ def test_authenticated_save_persists_owner() -> None:
     assert body["owner_phone"] == "+919876543210"
     assert body["share_token"]
     assert body["config_id"]
+    assert body["price_snapshot"] == 1_000_000
+    assert body["price_breakdown"]["estimated_on_road"] == 1_000_000
+    assert body["price_breakdown"]["base_ex_showroom"] == 900_000
+    assert body["price_snapshot"] != _payload()["price_snapshot"]
 
 
 def test_anonymous_save_is_rejected() -> None:
@@ -145,6 +187,8 @@ def test_share_token_is_public_but_sanitized() -> None:
     assert body["config_id"] == saved["config_id"]
     assert "owner_phone" not in body
     assert "share_token" not in body
+    assert body["price_snapshot"] == 1_000_000
+    assert body["price_breakdown"]["estimated_on_road"] == 1_000_000
 
 
 def test_unknown_configuration_returns_not_found() -> None:

@@ -1,0 +1,148 @@
+"""Premium configurator conversion, history and comparison routes."""
+
+from __future__ import annotations
+
+import uuid
+from datetime import datetime, timezone
+from typing import Any, Awaitable, Callable, Dict, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from motor.motor_asyncio import AsyncIOMotorDatabase
+
+from configurator_conversion import ConversionIntent, calculate_emi
+from configurator_premium import ConfiguredLeadPayload, compare_purchasable_configurations
+from configurator_schemas import ConfigurationPriceRequest, ConfigurationValidationRequest, PurchasableConfiguration
+from pricing_engine import calculate_configuration_price
+from rules_engine import validate_configuration
+
+OptionalUserPhone = Optional[Callable[..., Awaitable[Optional[str]]]]
+
+
+def _utcnow_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def build_history_item(doc: Dict[str, Any]) -> Dict[str, Any]:
+    """Expose saved configuration history without ownership secrets."""
+    fields = ("config_id", "configuration", "city", "price_snapshot", "asset_id", "asset_version", "stale", "stale_reason", "created_at", "updated_at")
+    return {key: doc[key] for key in fields if key in doc}
+
+
+def build_conversion_document(payload: ConfiguredLeadPayload, owner_phone: str, server_price: int, now: str) -> Dict[str, Any]:
+    """Build a conversion lead from validated configuration data."""
+    purchasable = payload.configuration.get("purchasable", {})
+    if purchasable.get("variant_id") != payload.variant_id:
+        raise ValueError("configuration variant does not match conversion variant")
+    return {
+        "lead_id": str(uuid.uuid4()),
+        "owner_phone": owner_phone,
+        "source": payload.source,
+        "variant_id": payload.variant_id,
+        "configuration": payload.configuration,
+        "city": payload.city,
+        "estimated_on_road": server_price,
+        "price_effective_date": payload.price_effective_date,
+        "status": "NEW",
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
+def build_conversion_response(document: Dict[str, Any], intent: ConversionIntent, server_price: int) -> Dict[str, Any]:
+    """Return a conversion handoff without exposing ownership data."""
+    response = {
+        "lead_id": document["lead_id"],
+        "variant_id": document["variant_id"],
+        "estimated_on_road": server_price,
+        "finance": {"requested": intent.finance_required},
+        "insurance": {"requested": intent.insurance_required},
+        "dealer": {
+            "action": intent.dealer_action.value,
+            "preferred_dealer_id": intent.preferred_dealer_id,
+        },
+        "status": document["status"],
+    }
+    if intent.finance_required:
+        principal = max(0, server_price - (intent.down_payment or 0))
+        response["finance"].update({
+            "principal": principal,
+            "down_payment": intent.down_payment,
+            "tenure_months": intent.tenure_months,
+            "annual_rate": intent.annual_rate,
+            "estimated_emi": calculate_emi(principal, intent.annual_rate or 0, intent.tenure_months or 12),
+        })
+    return response
+
+
+def mount_premium_configurator_routes(app, db: AsyncIOMotorDatabase, auth_dependency: OptionalUserPhone = None) -> None:
+    """Mount authenticated premium configurator workflows."""
+    if auth_dependency is None:
+        from configurator_routes import _resolve_optional_user_phone
+        auth_dependency = _resolve_optional_user_phone
+
+    router = APIRouter(prefix="/api/v1/configurator", tags=["configurator-premium"])
+
+    @router.get("/history")
+    async def history(limit: int = Query(20, ge=1, le=100), auth_phone: Optional[str] = Depends(auth_dependency)):
+        if not auth_phone:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        docs = await db.configurations.find({"owner_phone": auth_phone}, {"_id": 0}).sort("updated_at", -1).to_list(limit)
+        return {"items": [build_history_item(doc) for doc in docs]}
+
+    @router.post("/compare")
+    async def compare(payload: Dict[str, Dict[str, Any]], auth_phone: Optional[str] = Depends(auth_dependency)):
+        if not auth_phone:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        left = payload.get("left")
+        right = payload.get("right")
+        if not isinstance(left, dict) or not isinstance(right, dict):
+            raise HTTPException(status_code=422, detail="left and right configurations are required")
+        return compare_purchasable_configurations(left, right)
+
+    @router.post("/conversion-lead")
+    async def conversion_lead(payload: ConfiguredLeadPayload, auth_phone: Optional[str] = Depends(auth_dependency)):
+        if not auth_phone:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        try:
+            purchasable = PurchasableConfiguration.model_validate(payload.configuration.get("purchasable", {}))
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        if purchasable.variant_id != payload.variant_id:
+            raise HTTPException(status_code=422, detail="configuration variant does not match conversion variant")
+        validation = await validate_configuration(ConfigurationValidationRequest(configuration=purchasable), db)
+        if not validation.valid:
+            raise HTTPException(status_code=422, detail={"message": "Invalid configuration", "errors": validation.errors})
+        try:
+            price = await calculate_configuration_price(ConfigurationPriceRequest(configuration=purchasable, city=payload.city), db)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        document = build_conversion_document(payload, auth_phone, price.estimated_on_road, _utcnow_iso())
+        await db.configurator_conversion_leads.insert_one(document)
+        document.pop("_id", None)
+        document.pop("owner_phone", None)
+        return document
+
+    @router.post("/conversion-handoff")
+    async def conversion_handoff(payload: ConfiguredLeadPayload, intent: ConversionIntent, auth_phone: Optional[str] = Depends(auth_dependency)):
+        """Validate a configuration and create finance, insurance and dealer handoff intent."""
+        if not auth_phone:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        try:
+            purchasable = PurchasableConfiguration.model_validate(payload.configuration.get("purchasable", {}))
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        if purchasable.variant_id != payload.variant_id:
+            raise HTTPException(status_code=422, detail="configuration variant does not match conversion variant")
+        validation = await validate_configuration(ConfigurationValidationRequest(configuration=purchasable), db)
+        if not validation.valid:
+            raise HTTPException(status_code=422, detail={"message": "Invalid configuration", "errors": validation.errors})
+        try:
+            price = await calculate_configuration_price(ConfigurationPriceRequest(configuration=purchasable, city=payload.city), db)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        document = build_conversion_document(payload, auth_phone, price.estimated_on_road, _utcnow_iso())
+        document["conversion_intent"] = intent.model_dump(mode="json")
+        await db.configurator_conversion_leads.insert_one(document)
+        return build_conversion_response(document, intent, price.estimated_on_road)
+
+    app.include_router(router)
