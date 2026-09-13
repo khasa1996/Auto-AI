@@ -155,7 +155,7 @@ def test_rollback_restores_reviewed_revision_and_preserves_current(client):
     assert payload["version"] == "1.0.0"
     assert db.configurator_assets.document["storage_key"].endswith("legacy.glb")
     assert len(db.configurator_asset_versions.documents) == 2
-    assert any(item["snapshot_type"] == "ROLLBACK_SOURCE" for item in db.configurator_asset_versions.documents)
+    assert db.configurator_asset_versions.documents[-1]["snapshot_type"] == "ROLLBACK_SOURCE"
 
 
 def test_rollback_rejects_unreviewed_revision(client):
