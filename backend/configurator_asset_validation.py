@@ -30,11 +30,21 @@ _MAX_TRIANGLES = 1_500_000
 _MAX_TEXTURE_MEMORY_BYTES = 256 * 1024 * 1024
 
 
-def validate_asset_manifest(asset: ConfiguratorAssetCreate, mesh_names: Iterable[str]) -> Dict[str, Any]:
-    """Validate metadata and exact capability mappings before publication."""
+def validate_asset_manifest(
+    asset: ConfiguratorAssetCreate,
+    mesh_names: Iterable[str],
+    *,
+    material_names: Iterable[str] = (),
+    animation_names: Iterable[str] = (),
+    camera_names: Iterable[str] = (),
+) -> Dict[str, Any]:
+    """Validate metadata and exact capability mappings against inspected GLTF names."""
     errors: List[str] = []
     warnings: List[str] = []
     available_meshes = {str(name) for name in mesh_names if str(name).strip()}
+    available_materials = {str(name) for name in material_names if str(name).strip()}
+    available_animations = {str(name) for name in animation_names if str(name).strip()}
+    available_cameras = {str(name) for name in camera_names if str(name).strip()}
 
     if not asset.is_publishable():
         errors.append("Asset is not publishable: provenance, validation, admin review, license and publisher are all required")
@@ -43,27 +53,37 @@ def validate_asset_manifest(asset: ConfiguratorAssetCreate, mesh_names: Iterable
 
     if not asset.paint_material_names:
         errors.append("Production asset must declare at least one paint material binding")
-    elif any(name not in available_meshes for name in asset.paint_material_names):
-        missing = [name for name in asset.paint_material_names if name not in available_meshes]
-        errors.append("Paint material bindings reference missing nodes: " + ", ".join(missing))
+    elif not available_materials:
+        errors.append("Paint material bindings cannot be verified without inspected material names")
+    else:
+        missing = [name for name in asset.paint_material_names if name not in available_materials]
+        if missing:
+            errors.append("Paint material bindings reference missing materials: " + ", ".join(missing))
 
     if not asset.interior_material_names:
         errors.append("Production asset must declare at least one interior material binding")
-    elif any(name not in available_meshes for name in asset.interior_material_names):
-        missing = [name for name in asset.interior_material_names if name not in available_meshes]
-        errors.append("Interior material bindings reference missing nodes: " + ", ".join(missing))
+    elif not available_materials:
+        errors.append("Interior material bindings cannot be verified without inspected material names")
+    else:
+        missing = [name for name in asset.interior_material_names if name not in available_materials]
+        if missing:
+            errors.append("Interior material bindings reference missing materials: " + ", ".join(missing))
 
     if not asset.camera_preset_names:
         errors.append("Production asset must declare camera presets")
+    elif not available_cameras:
+        errors.append("Camera presets cannot be verified without inspected camera names")
     else:
+        missing_cameras = [name for name in asset.camera_preset_names if name not in available_cameras]
+        if missing_cameras:
+            errors.append("Camera presets reference missing cameras: " + ", ".join(missing_cameras))
         if "camera_exterior" in asset.supported_interactions and not any(
             "exterior" in name.lower() or name.lower() in {"front", "rear", "side"}
             for name in asset.camera_preset_names
         ):
             errors.append("Exterior camera capability requires at least one exterior camera preset")
         if "camera_interior" in asset.supported_interactions and not any(
-            "interior" in name.lower()
-            for name in asset.camera_preset_names
+            "interior" in name.lower() for name in asset.camera_preset_names
         ):
             errors.append("Interior camera capability requires an interior camera preset")
 
@@ -76,14 +96,17 @@ def validate_asset_manifest(asset: ConfiguratorAssetCreate, mesh_names: Iterable
         if not mapping or not mapping.get("open") or not mapping.get("close"):
             errors.append(f"Interaction '{interaction}' requires both open and close animation mappings")
             continue
+        if not available_animations:
+            errors.append(f"Interaction '{interaction}' cannot be verified without inspected animation names")
+            continue
         missing_animations = [
             animation_name
             for animation_name in (mapping["open"], mapping["close"])
-            if animation_name not in available_meshes
+            if animation_name not in available_animations
         ]
         if missing_animations:
             errors.append(
-                f"Interaction '{interaction}' references missing animation mappings: "
+                f"Interaction '{interaction}' references missing animations: "
                 + ", ".join(missing_animations)
             )
 
