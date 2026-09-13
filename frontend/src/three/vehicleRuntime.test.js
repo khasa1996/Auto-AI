@@ -15,6 +15,7 @@ test('builds a runtime state from verified manifest capabilities', () => {
     interiorMaterialNames: ['Leather'],
     wheelMeshNames: { sport: 'WheelSport' },
     optionMeshNames: { roof_black: ['RoofBlack'] },
+    interactionAnimationNames: {},
   });
 });
 
