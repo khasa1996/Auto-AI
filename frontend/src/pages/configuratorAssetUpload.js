@@ -14,10 +14,9 @@ export function getUploadProgressLabel(progress) {
   return `Uploading ${Math.round(progress)}%`;
 }
 
-export async function uploadConfiguratorAsset({ api, apiBaseUrl, adminToken, assetId, file, onProgress }) {
+export async function uploadConfiguratorAsset({ api, assetId, file, onProgress }) {
   const validationError = validateConfiguratorAssetFile(file);
   if (validationError) throw new Error(validationError);
-  if (!adminToken) throw new Error("Admin authentication is required.");
 
   const { data: session } = await api.post("/v1/admin/configurator/assets/upload-url", {
     asset_id: assetId,
