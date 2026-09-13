@@ -1,7 +1,8 @@
 /**
  * VehicleModel — GLB/GLTF loader with semantic material and animation systems.
  *
- * Visual changes use only mappings declared by the verified asset runtime state.
+ * Visual changes use only mappings declared by the verified asset runtime state
+ * and confirmed against the nodes/materials actually present in the loaded model.
  */
 
 import { useEffect, useMemo, useRef } from 'react';
@@ -49,10 +50,32 @@ function normalizeWheelMappings(wheelMeshNames) {
   );
 }
 
+function inspectScene(scene) {
+  const materialNames = new Set();
+  const meshNames = new Set();
+  scene?.traverse((node) => {
+    if (node.name) meshNames.add(node.name);
+    if (!node.isMesh) return;
+    const materials = Array.isArray(node.material) ? node.material : [node.material];
+    materials.forEach((material) => {
+      if (material?.name) materialNames.add(material.name);
+    });
+  });
+  return {
+    materialNames: [...materialNames],
+    meshNames: [...meshNames],
+  };
+}
+
 function LoadedVehicle({ url, paintColorHex, runtime, purchasable, interaction }) {
   const { scene, animations } = useGLTF(url);
   const groupRef = useRef();
   const previousInteractionRef = useRef(null);
+  const inspectedScene = useMemo(() => inspectScene(scene), [scene]);
+  const resolvedRuntime = useMemo(
+    () => buildVehicleRuntimeState(runtime, inspectedScene),
+    [inspectedScene, runtime],
+  );
   const clonedScene = useMemo(() => {
     const clone = scene.clone(true);
     clone.traverse((node) => {
@@ -65,20 +88,20 @@ function LoadedVehicle({ url, paintColorHex, runtime, purchasable, interaction }
   }, [scene]);
   const { play } = useVehicleAnimations(animations, groupRef);
 
-  useEffect(() => applyPaintColor(clonedScene, paintColorHex, runtime.paintMaterialNames), [clonedScene, paintColorHex, runtime.paintMaterialNames]);
+  useEffect(() => applyPaintColor(clonedScene, paintColorHex, resolvedRuntime.paintMaterialNames), [clonedScene, paintColorHex, resolvedRuntime.paintMaterialNames]);
   useEffect(() => {
-    applyMeshMappings(clonedScene, [purchasable.wheelId], normalizeWheelMappings(runtime.wheelMeshNames));
-    applyMeshMappings(clonedScene, [purchasable.interiorId, purchasable.roofId, ...(purchasable.accessoryIds || [])], runtime.optionMeshNames);
-  }, [clonedScene, purchasable, runtime.wheelMeshNames, runtime.optionMeshNames]);
+    applyMeshMappings(clonedScene, [purchasable.wheelId], normalizeWheelMappings(resolvedRuntime.wheelMeshNames));
+    applyMeshMappings(clonedScene, [purchasable.interiorId, purchasable.roofId, ...(purchasable.accessoryIds || [])], resolvedRuntime.optionMeshNames);
+  }, [clonedScene, purchasable, resolvedRuntime.wheelMeshNames, resolvedRuntime.optionMeshNames]);
 
   useEffect(() => {
     const previous = previousInteractionRef.current;
     previousInteractionRef.current = interaction;
     if (!previous) return;
-    const supported = new Set(runtime.supportedInteractions);
+    const supported = new Set(resolvedRuntime.supportedInteractions);
     const playToggle = (capability, current, before, group, openKey, closeKey, openFallback, closeFallback) => {
       if (!supported.has(capability) || current === before) return;
-      play(resolveAnimationName(runtime.interactionAnimationNames, group, current ? openKey : closeKey, current ? openFallback : closeFallback));
+      play(resolveAnimationName(resolvedRuntime.interactionAnimationNames, group, current ? openKey : closeKey, current ? openFallback : closeFallback));
     };
     playToggle('doors', interaction.doors.frontLeft, previous.doors.frontLeft, 'doors', 'front_left_open', 'front_left_close', ANIMATION_NAMES.DOOR_FL_OPEN, ANIMATION_NAMES.DOOR_FL_CLOSE);
     playToggle('doors', interaction.doors.frontRight, previous.doors.frontRight, 'doors', 'front_right_open', 'front_right_close', ANIMATION_NAMES.DOOR_FR_OPEN, ANIMATION_NAMES.DOOR_FR_CLOSE);
@@ -88,7 +111,7 @@ function LoadedVehicle({ url, paintColorHex, runtime, purchasable, interaction }
     playToggle('boot', interaction.bootOpen, previous.bootOpen, 'boot', 'open', 'close', ANIMATION_NAMES.BOOT_OPEN, ANIMATION_NAMES.BOOT_CLOSE);
     playToggle('frunk', interaction.frunkOpen, previous.frunkOpen, 'frunk', 'open', 'close', ANIMATION_NAMES.FRUNK_OPEN, ANIMATION_NAMES.FRUNK_CLOSE);
     playToggle('sunroof', interaction.sunroofOpen, previous.sunroofOpen, 'sunroof', 'open', 'close', ANIMATION_NAMES.SUNROOF_OPEN, ANIMATION_NAMES.SUNROOF_CLOSE);
-  }, [interaction, play, runtime]);
+  }, [interaction, play, resolvedRuntime]);
 
   useEffect(() => () => {
     clonedScene.traverse((node) => {
