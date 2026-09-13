@@ -6,6 +6,7 @@
  */
 
 import { create } from 'zustand';
+import { getVerifiedRuntimeCapabilities, getVerifiedMappings, isRuntimeAssetUsable } from '../components/configurator/assetRuntimeCapabilities';
 
 const defaultPurchasable = {
   variantId: null,
@@ -47,9 +48,11 @@ const defaultAsset = {
   lodLevel: null,
   supportedInteractions: [],
   paintMaterialNames: [],
+  interiorMaterialNames: [],
   wheelMeshNames: {},
   optionMeshNames: {},
   interactionAnimationNames: {},
+  cameraPresetNames: [],
   configuratorStatus: 'COMING_SOON',
   loadedAt: null,
 };
@@ -146,7 +149,22 @@ export const useConfiguratorStore = create((set, get) => ({
   setShowroomPaused(paused) {
     set((s) => ({ showroom: { ...s.showroom, paused } }));
   },
-  setAsset(assetData) { set({ asset: { ...defaultAsset, ...assetData, loadedAt: new Date().toISOString() } }); },
+  setAsset(assetData) {
+    const capabilities = getVerifiedRuntimeCapabilities(assetData);
+    const mappings = getVerifiedMappings(assetData);
+    const usable = isRuntimeAssetUsable(assetData);
+    set({
+      asset: {
+        ...defaultAsset,
+        ...assetData,
+        ...capabilities,
+        ...mappings,
+        available: usable,
+        configuratorStatus: usable ? assetData.configuratorStatus : 'UNAVAILABLE',
+        loadedAt: new Date().toISOString(),
+      },
+    });
+  },
   setAssetUnavailable(status = 'COMING_SOON') { set({ asset: { ...defaultAsset, configuratorStatus: status } }); },
   setPriceLoading() { set({ price: { ...get().price, loading: true, error: null } }); },
   setPriceResult(data) { set({ price: { loading: false, error: null, data, lastFetchedFor: JSON.stringify(get().purchasable) } }); },
