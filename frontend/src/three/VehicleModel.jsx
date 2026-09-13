@@ -19,8 +19,7 @@ function applyPaintColor(scene, colorHex, paintMaterialNames) {
     if (!node.isMesh) return;
     const materials = Array.isArray(node.material) ? node.material : [node.material];
     materials.forEach((material) => {
-      if (!material) return;
-      if (targetNames.has((material.name || '').toLowerCase())) {
+      if (material && targetNames.has((material.name || '').toLowerCase())) {
         material.color.copy(color);
         material.needsUpdate = true;
       }
@@ -33,19 +32,14 @@ function applyMeshMappings(scene, selectedIds, mappings) {
   const selected = new Set((selectedIds || []).filter(Boolean));
   const mappedNames = new Set(Object.values(mappings).flat().filter(Boolean));
   if (!mappedNames.size) return;
-
   scene.traverse((node) => {
-    if (!mappedNames.has(node.name)) return;
-    node.visible = false;
+    if (mappedNames.has(node.name)) node.visible = false;
   });
-
   selected.forEach((optionId) => {
     const names = Array.isArray(mappings[optionId]) ? mappings[optionId] : [mappings[optionId]];
-    names.filter(Boolean).forEach((name) => {
-      scene.traverse((node) => {
-        if (node.name === name) node.visible = true;
-      });
-    });
+    names.filter(Boolean).forEach((name) => scene.traverse((node) => {
+      if (node.name === name) node.visible = true;
+    }));
   });
 }
 
@@ -69,14 +63,12 @@ function LoadedVehicle({ url, paintColorHex, runtime, purchasable, interaction }
     });
     return clone;
   }, [scene]);
-
   const { play } = useVehicleAnimations(animations, groupRef);
 
   useEffect(() => applyPaintColor(clonedScene, paintColorHex, runtime.paintMaterialNames), [clonedScene, paintColorHex, runtime.paintMaterialNames]);
-
   useEffect(() => {
     applyMeshMappings(clonedScene, [purchasable.wheelId], normalizeWheelMappings(runtime.wheelMeshNames));
-    applyMeshMappings(clonedScene, [purchasable.interiorId, purchasable.roofId, ...purchasable.accessoryIds], runtime.optionMeshNames);
+    applyMeshMappings(clonedScene, [purchasable.interiorId, purchasable.roofId, ...(purchasable.accessoryIds || [])], runtime.optionMeshNames);
   }, [clonedScene, purchasable, runtime.wheelMeshNames, runtime.optionMeshNames]);
 
   useEffect(() => {
@@ -86,13 +78,11 @@ function LoadedVehicle({ url, paintColorHex, runtime, purchasable, interaction }
     const supported = new Set(runtime.supportedInteractions);
     const playToggle = (capability, current, before, group, openKey, closeKey, openFallback, closeFallback) => {
       if (!supported.has(capability) || current === before) return;
-      const key = current ? openKey : closeKey;
-      const fallback = current ? openFallback : closeFallback;
-      play(resolveAnimationName(runtime.interactionAnimationNames, group, key, fallback));
+      play(resolveAnimationName(runtime.interactionAnimationNames, group, current ? openKey : closeKey, current ? openFallback : closeFallback));
     };
     playToggle('doors', interaction.doors.frontLeft, previous.doors.frontLeft, 'doors', 'front_left_open', 'front_left_close', ANIMATION_NAMES.DOOR_FL_OPEN, ANIMATION_NAMES.DOOR_FL_CLOSE);
     playToggle('doors', interaction.doors.frontRight, previous.doors.frontRight, 'doors', 'front_right_open', 'front_right_close', ANIMATION_NAMES.DOOR_FR_OPEN, ANIMATION_NAMES.DOOR_FR_CLOSE);
-    playToggle('doors', interaction.doors.rearLeft, previous.doors.rearLeft, 'doors', 'front_left_open', 'front_left_close', ANIMATION_NAMES.DOOR_RL_OPEN, ANIMATION_NAMES.DOOR_RL_CLOSE);
+    playToggle('doors', interaction.doors.rearLeft, previous.doors.rearLeft, 'doors', 'rear_left_open', 'rear_left_close', ANIMATION_NAMES.DOOR_RL_OPEN, ANIMATION_NAMES.DOOR_RL_CLOSE);
     playToggle('doors', interaction.doors.rearRight, previous.doors.rearRight, 'doors', 'rear_right_open', 'rear_right_close', ANIMATION_NAMES.DOOR_RR_OPEN, ANIMATION_NAMES.DOOR_RR_CLOSE);
     playToggle('hood', interaction.hoodOpen, previous.hoodOpen, 'hood', 'open', 'close', ANIMATION_NAMES.HOOD_OPEN, ANIMATION_NAMES.HOOD_CLOSE);
     playToggle('boot', interaction.bootOpen, previous.bootOpen, 'boot', 'open', 'close', ANIMATION_NAMES.BOOT_OPEN, ANIMATION_NAMES.BOOT_CLOSE);
@@ -111,13 +101,24 @@ function LoadedVehicle({ url, paintColorHex, runtime, purchasable, interaction }
   return <primitive ref={groupRef} object={clonedScene} />;
 }
 
-export default function VehicleModel({ asset, purchasable, interaction }) {
+export default function VehicleModel({ url, paintColorHex, paintMaterialNames = [], wheelMeshNames = {}, optionMeshNames = {}, interactionAnimationNames = {}, purchasable, interaction, supportedInteractions = [] }) {
+  const asset = useMemo(() => ({
+    available: true,
+    url,
+    version: 'runtime-props',
+    paintColorHex,
+    paintMaterialNames,
+    wheelMeshNames,
+    optionMeshNames,
+    interactionAnimationNames,
+    supportedInteractions,
+  }), [url, paintColorHex, paintMaterialNames, wheelMeshNames, optionMeshNames, interactionAnimationNames, supportedInteractions]);
   const runtime = useMemo(() => buildVehicleRuntimeState(asset), [asset]);
 
   if (!isRuntimeAssetUsable(asset)) {
-    console.error('[VehicleModel] Rejected unavailable or invalid runtime asset.', asset);
+    console.error('[VehicleModel] Rejected unavailable or invalid runtime asset.', url);
     return null;
   }
 
-  return <LoadedVehicle url={asset.url} paintColorHex={asset.paintColorHex} runtime={runtime} purchasable={purchasable} interaction={interaction} />;
+  return <LoadedVehicle url={url} paintColorHex={paintColorHex} runtime={runtime} purchasable={purchasable} interaction={interaction} />;
 }
