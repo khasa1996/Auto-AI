@@ -31,6 +31,24 @@ def snapshot_asset(asset: dict, *, revision_id: str, snapshot_type: str, created
     return snapshot
 
 
+async def snapshot_before_upload(db: AsyncIOMotorDatabase, asset: dict) -> Optional[str]:
+    """Snapshot the currently verified binary before a new upload replaces it."""
+    if not asset.get("storage_key") or not asset.get("checksum_sha256") or not asset.get("validation_passed"):
+        return None
+
+    now = datetime.now(timezone.utc).isoformat()
+    revision_id = f"rev-{uuid4().hex}"
+    await db.configurator_asset_versions.insert_one(
+        snapshot_asset(
+            asset,
+            revision_id=revision_id,
+            snapshot_type="UPLOAD_SOURCE",
+            created_at=now,
+        )
+    )
+    return revision_id
+
+
 def _public_revision(revision: dict) -> dict:
     """Return revision metadata without duplicating the large inspection payload."""
     return {
@@ -59,20 +77,8 @@ def make_asset_version_router(db: AsyncIOMotorDatabase) -> APIRouter:
         current = await db.configurator_assets.find_one({"asset_id": asset_id}, {"_id": 0})
         if not current:
             raise HTTPException(status_code=404, detail="Asset not found")
-        if not current.get("storage_key") or not current.get("checksum_sha256"):
-            return {"asset_id": asset_id, "revision_id": None, "snapshotted": False}
-
-        now = datetime.now(timezone.utc).isoformat()
-        revision_id = f"rev-{uuid4().hex}"
-        await db.configurator_asset_versions.insert_one(
-            snapshot_asset(
-                current,
-                revision_id=revision_id,
-                snapshot_type="UPLOAD_SOURCE",
-                created_at=now,
-            )
-        )
-        return {"asset_id": asset_id, "revision_id": revision_id, "snapshotted": True}
+        revision_id = await snapshot_before_upload(db, current)
+        return {"asset_id": asset_id, "revision_id": revision_id, "snapshotted": revision_id is not None}
 
     @router.get("/assets/{asset_id}/versions")
     async def list_asset_versions(asset_id: str, _: str = Depends(_require_admin)):
