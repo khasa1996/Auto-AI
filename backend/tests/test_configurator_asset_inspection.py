@@ -14,7 +14,7 @@ def make_glb(gltf):
     return b"glTF" + struct.pack("<II", 2, total_length) + struct.pack("<II", len(json_bytes), 0x4E4F534A) + json_bytes
 
 
-def test_inspection_extracts_mesh_material_animation_and_camera_names():
+def test_inspection_extracts_mesh_material_animation_camera_and_pbr_names():
     payload = make_glb(
         {
             "asset": {"version": "2.0"},
@@ -24,7 +24,10 @@ def test_inspection_extracts_mesh_material_animation_and_camera_names():
                 {"name": "Wheel_FR", "mesh": 0},
             ],
             "meshes": [{"name": "WheelMesh"}],
-            "materials": [{"name": "BODY_PAINT"}, {"name": "INTERIOR"}],
+            "materials": [
+                {"name": "BODY_PAINT", "pbrMetallicRoughness": {"metallicFactor": 0.0, "roughnessFactor": 0.35}},
+                {"name": "INTERIOR"},
+            ],
             "animations": [{"name": "OpenDoors"}, {"name": "OpenSunroof"}],
             "cameras": [{"name": "front"}, {"name": "interior"}],
         }
@@ -37,6 +40,7 @@ def test_inspection_extracts_mesh_material_animation_and_camera_names():
     assert result["mesh_names"] == ["WheelMesh"]
     assert result["node_names"] == ["Body", "Wheel_FL", "Wheel_FR"]
     assert result["material_names"] == ["BODY_PAINT", "INTERIOR"]
+    assert result["pbr_material_names"] == ["BODY_PAINT"]
     assert result["animation_names"] == ["OpenDoors", "OpenSunroof"]
     assert result["camera_names"] == ["front", "interior"]
 
