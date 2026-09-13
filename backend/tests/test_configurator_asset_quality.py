@@ -1,4 +1,4 @@
-from configurator_asset_validation import validate_asset_quality
+from configurator_asset_validation import validate_asset_manifest, validate_asset_quality
 from configurator_schemas import AssetLODLevel, AssetProvenance, ConfiguratorAssetCreate
 
 
@@ -35,3 +35,51 @@ def test_asset_quality_accepts_mobile_safe_budget():
     result = validate_asset_quality(make_asset(), triangle_count=250_000, texture_memory_bytes=64 * 1024 * 1024)
 
     assert result["valid"] is True
+
+
+def test_asset_manifest_requires_complete_material_camera_and_interaction_mappings():
+    asset = make_asset(
+        supported_interactions=["doors", "camera_interior", "camera_exterior", "hood"],
+        paint_material_names=[],
+        interaction_animation_names={"doors": {"open": "DoorOpen"}},
+    )
+
+    result = validate_asset_manifest(asset, ["DoorFL", "DoorFR"])
+
+    assert result["valid"] is False
+    assert any("paint" in error.lower() for error in result["errors"])
+    assert any("camera" in error.lower() for error in result["errors"])
+    assert any("hood" in error.lower() for error in result["errors"])
+
+
+def test_asset_manifest_accepts_complete_production_capability_manifest():
+    asset = make_asset(
+        supported_interactions=["doors", "hood", "camera_exterior", "camera_interior"],
+        paint_material_names=["BodyPaint"],
+        wheel_mesh_names={"wheel-1": "WheelFL", "wheel-2": "WheelFR"},
+        option_mesh_names={"sunroof-1": ["SunroofGlass"]},
+        interaction_animation_names={
+            "doors": {"open": "DoorOpen", "close": "DoorClose"},
+            "hood": {"open": "HoodOpen", "close": "HoodClose"},
+        },
+    )
+
+    result = validate_asset_manifest(
+        asset,
+        ["BodyPaint", "WheelFL", "WheelFR", "SunroofGlass", "DoorOpen", "DoorClose", "HoodOpen", "HoodClose"],
+    )
+
+    assert result["valid"] is True
+
+
+def test_asset_manifest_rejects_interaction_without_required_animation_mapping():
+    asset = make_asset(
+        supported_interactions=["hood"],
+        paint_material_names=["BodyPaint"],
+        interaction_animation_names={},
+    )
+
+    result = validate_asset_manifest(asset, ["BodyPaint"])
+
+    assert result["valid"] is False
+    assert any("hood" in error.lower() and "animation" in error.lower() for error in result["errors"])
