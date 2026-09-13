@@ -59,7 +59,7 @@ function collectTextures(meshes) {
 }
 
 export function estimateTextureMemoryBytes(textures) {
-  return collectTextures(textures).reduce((total, texture) => {
+  return (textures || []).reduce((total, texture) => {
     const dimensions = getTextureDimensions(texture);
     if (!dimensions) return total;
     return total + Math.ceil(dimensions.width * dimensions.height * 4 * MIPMAP_OVERHEAD);
@@ -68,11 +68,7 @@ export function estimateTextureMemoryBytes(textures) {
 
 export function inspectTextureBudget(meshes, maxBytes) {
   const textures = collectTextures(meshes);
-  const estimatedBytes = textures.reduce((total, texture) => {
-    const dimensions = getTextureDimensions(texture);
-    if (!dimensions) return total;
-    return total + Math.ceil(dimensions.width * dimensions.height * 4 * MIPMAP_OVERHEAD);
-  }, 0);
+  const estimatedBytes = estimateTextureMemoryBytes(textures);
 
   return {
     estimatedBytes,
