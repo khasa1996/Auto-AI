@@ -2,10 +2,10 @@
  * ConfiguratorViewer — React Three Fiber scene for the verified 3D configurator.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Bounds, ContactShadows, Environment } from '@react-three/drei';
-import { Maximize2, Minimize2, Share2, Camera, Info, RotateCw } from 'lucide-react';
+import { Maximize2, Minimize2, Share2, Camera, Info, RotateCw, Play, Pause } from 'lucide-react';
 
 import VehicleModel from '../../three/VehicleModel';
 import { AssetSuspense, AssetUnavailable } from '../../three/AssetLoader';
@@ -15,8 +15,11 @@ import { useConfiguratorStore } from '../../state/configuratorStore';
 import { configuratorApi } from '../../services/configuratorApi';
 import { normalizeHotspots } from './premiumShowroom';
 import { buildConfiguratorShareCard } from './shareCard';
+import { buildCinematicSequence, getNextCinematicPreset } from './cinematicShowroom';
 
-function ConfiguratorScene({ modelUrl, paintColorHex, paintMaterialNames, wheelMeshNames, optionMeshNames, interactionAnimationNames, purchasable, interaction, supportedInteractions, sceneRef }) {
+const CINEMATIC_INTERVAL_MS = 4200;
+
+function ConfiguratorScene({ modelUrl, paintColorHex, paintMaterialNames, wheelMeshNames, optionMeshNames, interactionAnimationNames, purchasable, interaction, supportedInteractions, sceneRef, onManualInteraction }) {
   const controlsRef = useRef();
   useCameraPreset(interaction.cameraPreset, controlsRef);
   useLightingController(sceneRef, interaction.lighting, supportedInteractions);
@@ -34,7 +37,7 @@ function ConfiguratorScene({ modelUrl, paintColorHex, paintMaterialNames, wheelM
       </AssetSuspense>
     </Bounds>
     <ContactShadows position={[0, -1, 0]} opacity={0.5} scale={14} blur={2.5} far={5} />
-    <ConfiguratorControls autoRotate={interaction.autoRotate} onInteract={() => useConfiguratorStore.getState().pauseAutoRotate()} controlsRef={controlsRef} />
+    <ConfiguratorControls autoRotate={interaction.autoRotate} onInteract={onManualInteraction} controlsRef={controlsRef} />
   </>;
 }
 
@@ -53,10 +56,34 @@ export default function ConfiguratorViewer({ style, options, variant }) {
   const asset = useConfiguratorStore((state) => state.asset);
   const purchasable = useConfiguratorStore((state) => state.purchasable);
   const interaction = useConfiguratorStore((state) => state.interaction);
+  const showroom = useConfiguratorStore((state) => state.showroom);
   const price = useConfiguratorStore((state) => state.price);
   const city = useConfiguratorStore((state) => state.city);
   const isInitialized = useConfiguratorStore((state) => state.isInitialized);
   const setCameraPreset = useConfiguratorStore((state) => state.setCameraPreset);
+  const setShowroomActive = useConfiguratorStore((state) => state.setShowroomActive);
+  const setShowroomPaused = useConfiguratorStore((state) => state.setShowroomPaused);
+
+  const cinematicSequence = useMemo(
+    () => buildCinematicSequence(asset.supportedInteractions),
+    [asset.supportedInteractions],
+  );
+
+  useEffect(() => {
+    if (!showroom.active || !cinematicSequence.length || showroom.paused) return undefined;
+    const timer = window.setInterval(() => {
+      const currentPreset = useConfiguratorStore.getState().interaction.cameraPreset;
+      const nextPreset = getNextCinematicPreset(cinematicSequence, currentPreset);
+      if (nextPreset) useConfiguratorStore.getState().setCameraPreset(nextPreset, { pauseShowroom: false });
+    }, CINEMATIC_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [cinematicSequence, showroom.active, showroom.paused]);
+
+  useEffect(() => {
+    if (showroom.active && !cinematicSequence.length) {
+      setShowroomActive(false);
+    }
+  }, [cinematicSequence.length, setShowroomActive, showroom.active]);
 
   useEffect(() => {
     const handleFullscreenChange = () => setCinematic(document.fullscreenElement === canvasRef.current);
@@ -93,6 +120,24 @@ export default function ConfiguratorViewer({ style, options, variant }) {
     setCinematic((value) => !value);
   };
 
+  const toggleShowroom = () => {
+    if (!cinematicSequence.length) return;
+    if (!showroom.active) {
+      const currentPreset = interaction.cameraPreset;
+      const firstPreset = cinematicSequence.includes(currentPreset) ? currentPreset : cinematicSequence[0];
+      setCameraPreset(firstPreset, { pauseShowroom: false });
+      setShowroomActive(true);
+      setShowroomPaused(false);
+      return;
+    }
+    setShowroomPaused(!showroom.paused);
+  };
+
+  const takeManualControl = () => {
+    setShowroomPaused(true);
+    useConfiguratorStore.getState().pauseAutoRotate();
+  };
+
   const capture = () => {
     const canvas = canvasRef.current?.querySelector('canvas');
     if (!canvas) return;
@@ -120,25 +165,27 @@ export default function ConfiguratorViewer({ style, options, variant }) {
 
   const share = async () => {
     const canvas = canvasRef.current?.querySelector('canvas');
-    if (!canvas) return;
+    if (!canvas || !navigator.share) return;
     const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
-    if (!blob || !navigator.share) return;
+    if (!blob) return;
     const file = new File([blob], 'auto-ai-india-configuration.png', { type: 'image/png' });
     await navigator.share({ title: 'My Auto AI India configuration', files: [file] });
   };
 
   return <div ref={canvasRef} style={style} className={`configurator-viewer${cinematic ? ' cinematic' : ''}`}>
     <Canvas gl={{ preserveDrawingBuffer: true }} camera={{ position: [5, 2.5, 5], fov: 35 }}>
-      <ConfiguratorScene modelUrl={asset.url} paintColorHex={asset.paintColorHex} paintMaterialNames={asset.paintMaterialNames} wheelMeshNames={asset.wheelMeshNames} optionMeshNames={asset.optionMeshNames} interactionAnimationNames={asset.interactionAnimationNames} purchasable={purchasable} interaction={interaction} supportedInteractions={asset.supportedInteractions} sceneRef={sceneRef} />
+      <ConfiguratorScene modelUrl={asset.url} paintColorHex={asset.paintColorHex} paintMaterialNames={asset.paintMaterialNames} wheelMeshNames={asset.wheelMeshNames} optionMeshNames={asset.optionMeshNames} interactionAnimationNames={asset.interactionAnimationNames} purchasable={purchasable} interaction={interaction} supportedInteractions={asset.supportedInteractions} sceneRef={sceneRef} onManualInteraction={takeManualControl} />
     </Canvas>
     <div className="configurator-viewer-controls">
+      <button type="button" onClick={toggleShowroom} disabled={!cinematicSequence.length} aria-label={!showroom.active || showroom.paused ? 'Play cinematic showroom' : 'Pause cinematic showroom'}>{showroom.active && !showroom.paused ? <Pause /> : <Play />}</button>
       <button type="button" onClick={toggleCinematic} aria-label={cinematic ? 'Exit cinematic mode' : 'Enter cinematic mode'}>{cinematic ? <Minimize2 /> : <Maximize2 />}</button>
-      <button type="button" onClick={() => setCameraPreset('exterior')} aria-label="Reset camera"><RotateCw /></button>
+      <button type="button" onClick={() => { setShowroomPaused(true); setCameraPreset('exterior'); }} aria-label="Reset camera"><RotateCw /></button>
       <button type="button" onClick={capture} aria-label="Capture configuration"><Camera /></button>
       <button type="button" onClick={share} aria-label="Share configuration"><Share2 /></button>
     </div>
+    {showroom.active && <div className="configurator-showroom-status" role="status">{showroom.paused ? 'Manual control' : 'Cinematic showroom'} · {interaction.cameraPreset}</div>}
     {captureState?.status === 'error' && <div role="status">Unable to capture configuration.</div>}
-    {hotspots.map((hotspot) => <button key={hotspot.id} type="button" className="configurator-hotspot" style={{ left: `${hotspot.x}%`, top: `${hotspot.y}%` }} onClick={() => { setSelectedHotspot(hotspot); if (hotspot.cameraPreset) setCameraPreset(hotspot.cameraPreset); }} aria-label={hotspot.label}><Info /></button>)}
+    {hotspots.map((hotspot) => <button key={hotspot.id} type="button" className="configurator-hotspot" style={{ left: `${hotspot.x}%`, top: `${hotspot.y}%` }} onClick={() => { takeManualControl(); setSelectedHotspot(hotspot); if (hotspot.cameraPreset) setCameraPreset(hotspot.cameraPreset); }} aria-label={hotspot.label}><Info /></button>)}
     {selectedHotspot && <aside className="configurator-hotspot-panel"><strong>{selectedHotspot.label}</strong>{selectedHotspot.description && <p>{selectedHotspot.description}</p>}<button type="button" onClick={() => setSelectedHotspot(null)}>Close</button></aside>}
     {!asset.available && <AssetUnavailable />}
   </div>;
