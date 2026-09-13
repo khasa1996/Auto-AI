@@ -47,7 +47,8 @@ function cleanStringList(value) {
 function cleanStringMap(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   return Object.fromEntries(
-    Object.entries(value).filter(([key, mappedName]) => nonEmptyString(key) && nonEmptyString(mappedName))
+    Object.entries(value)
+      .filter(([key, mappedName]) => nonEmptyString(key) && nonEmptyString(mappedName))
       .map(([key, mappedName]) => [key.trim(), mappedName.trim()]),
   );
 }
@@ -84,12 +85,13 @@ export function getVerifiedRuntimeCapabilities(asset = {}) {
     optionMeshNames: cleanMeshMap(asset.optionMeshNames),
     cameraPresetNames: cleanStringList(asset.cameraPresetNames)
       .filter((preset) => CAMERA_PRESETS.has(preset)),
-    animationNames: cleanStringList(asset.animationNames),
   };
 }
 
 export function filterCameraPresets(presets, declaredPresetNames) {
-  const declared = new Set(cleanStringList(declaredPresetNames).filter((preset) => CAMERA_PRESETS.has(preset)));
+  const declared = new Set(
+    cleanStringList(declaredPresetNames).filter((preset) => CAMERA_PRESETS.has(preset)),
+  );
   if (!Array.isArray(presets)) return [];
   return presets.filter((preset) => declared.has(preset));
 }
@@ -107,7 +109,10 @@ export function getVerifiedMappings(asset = {}, inspectedAsset = {}) {
   );
   const optionMeshNames = Object.fromEntries(
     Object.entries(cleanMeshMap(asset.optionMeshNames))
-      .map(([optionId, names]) => [optionId, names.filter((name) => meshNames.size === 0 || meshNames.has(name))])
+      .map(([optionId, names]) => [
+        optionId,
+        names.filter((name) => meshNames.size === 0 || meshNames.has(name)),
+      ])
       .filter(([, names]) => names.length > 0),
   );
 
