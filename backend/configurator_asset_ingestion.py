@@ -59,7 +59,9 @@ def build_verified_asset_metadata(asset: ConfiguratorAssetCreate, inspected: Dic
     mesh_names = inspected.get("mesh_names", [])
     node_names = inspected.get("node_names", [])
     material_names = inspected.get("material_names", [])
+    pbr_material_names = inspected.get("pbr_material_names", [])
     animation_names = inspected.get("animation_names", [])
+    camera_names = inspected.get("camera_names", [])
 
     if inspected.get("format") != "glb":
         errors.append("Only GLB assets can be verified by binary ingestion")
@@ -68,11 +70,17 @@ def build_verified_asset_metadata(asset: ConfiguratorAssetCreate, inspected: Dic
     mapped_meshes = [*asset.wheel_mesh_names.values(), *(mesh for meshes in asset.option_mesh_names.values() for mesh in meshes)]
     missing_meshes = _missing(mapped_meshes, available_geometry_names)
     missing_materials = _missing(asset.paint_material_names, material_names)
+    missing_pbr_materials = _missing(asset.paint_material_names, pbr_material_names)
+    missing_cameras = _missing(asset.camera_preset_names, camera_names)
 
     if missing_meshes:
         errors.append("Manifest references missing meshes: " + ", ".join(missing_meshes))
     if missing_materials:
         errors.append("Manifest references missing paint materials: " + ", ".join(missing_materials))
+    if missing_pbr_materials:
+        errors.append("Manifest references paint materials without GLTF PBR metallic-roughness support: " + ", ".join(missing_pbr_materials))
+    if missing_cameras:
+        errors.append("Manifest references missing cameras: " + ", ".join(missing_cameras))
 
     normalized_animation_names = {str(name).lower(): str(name) for name in animation_names}
     missing_animations: List[str] = []
@@ -108,6 +116,8 @@ def build_verified_asset_metadata(asset: ConfiguratorAssetCreate, inspected: Dic
         "errors": errors,
         "missing_meshes": missing_meshes,
         "missing_materials": missing_materials,
+        "missing_pbr_materials": missing_pbr_materials,
+        "missing_cameras": missing_cameras,
         "missing_animations": sorted(missing_animations),
         "missing_animation_names": sorted(set(missing_animation_names)),
         "missing_lighting_materials": sorted(set(missing_lighting_materials)),
@@ -116,5 +126,6 @@ def build_verified_asset_metadata(asset: ConfiguratorAssetCreate, inspected: Dic
             "node_count": inspected.get("node_count", len(node_names)),
             "material_count": inspected.get("material_count", len(material_names)),
             "animation_count": inspected.get("animation_count", len(animation_names)),
+            "camera_count": inspected.get("camera_count", len(camera_names)),
         },
     }
