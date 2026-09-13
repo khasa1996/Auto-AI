@@ -14,6 +14,28 @@ export function getUploadProgressLabel(progress) {
   return `Uploading ${Math.round(progress)}%`;
 }
 
+function putToObjectStorage(uploadUrl, file, contentType, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", uploadUrl);
+    xhr.setRequestHeader("Content-Type", contentType || "model/gltf-binary");
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress?.((event.loaded / event.total) * 100);
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress?.(100);
+        resolve();
+        return;
+      }
+      reject(new Error(`Object storage upload failed (${xhr.status}).`));
+    };
+    xhr.onerror = () => reject(new Error("Object storage upload failed."));
+    xhr.onabort = () => reject(new Error("Object storage upload was cancelled."));
+    xhr.send(file);
+  });
+}
+
 export async function uploadConfiguratorAsset({ api, assetId, file, onProgress }) {
   const validationError = validateConfiguratorAssetFile(file);
   if (validationError) throw new Error(validationError);
@@ -23,13 +45,7 @@ export async function uploadConfiguratorAsset({ api, assetId, file, onProgress }
     filename: file.name,
   });
 
-  const response = await fetch(session.upload_url, {
-    method: "PUT",
-    headers: { "Content-Type": session.content_type || "model/gltf-binary" },
-    body: file,
-  });
-  if (!response.ok) throw new Error(`Object storage upload failed (${response.status}).`);
-  onProgress?.(100);
+  await putToObjectStorage(session.upload_url, file, session.content_type, onProgress);
 
   const { data: finalized } = await api.post("/v1/admin/configurator/assets/finalize-upload", {
     asset_id: assetId,
