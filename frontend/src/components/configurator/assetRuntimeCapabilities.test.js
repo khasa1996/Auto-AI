@@ -20,7 +20,6 @@ test('exposes only capabilities declared by the verified asset manifest', () => 
     wheelMeshNames: { sport: 'WheelSport' },
     optionMeshNames: { roof_black: ['RoofBlack'] },
     cameraPresetNames: ['exterior', 'interior'],
-    animationNames: ['door_open'],
   })).toEqual({
     supportedInteractions: ['camera_exterior', 'doors'],
     paintMaterialNames: ['BodyPaint'],
@@ -28,7 +27,6 @@ test('exposes only capabilities declared by the verified asset manifest', () => 
     wheelMeshNames: { sport: 'WheelSport' },
     optionMeshNames: { roof_black: ['RoofBlack'] },
     cameraPresetNames: ['exterior', 'interior'],
-    animationNames: ['door_open'],
   });
 });
 
