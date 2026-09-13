@@ -69,6 +69,8 @@ class ConfiguratorAssetCreate(BaseModel):
     publisher: Optional[str] = Field(None, max_length=200)
     supported_interactions: List[str] = Field(default_factory=list)
     paint_material_names: List[str] = Field(default_factory=list)
+    interior_material_names: List[str] = Field(default_factory=list)
+    camera_preset_names: List[str] = Field(default_factory=list)
     wheel_mesh_names: Dict[str, str] = Field(default_factory=dict)
     option_mesh_names: Dict[str, List[str]] = Field(default_factory=dict)
     interaction_animation_names: Dict[str, Dict[str, str]] = Field(default_factory=dict)
