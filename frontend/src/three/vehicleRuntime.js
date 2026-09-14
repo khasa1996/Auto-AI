@@ -116,3 +116,82 @@ export function resolveRuntimeMeshSelection(nodeIndex, mappings, selectedId) {
     nodes,
   };
 }
+
+function getSceneMaterialNames(scene) {
+  const names = new Set();
+  if (!scene || typeof scene.traverse !== 'function') return names;
+  scene.traverse((node) => {
+    if (!node?.isMesh) return;
+    const materials = Array.isArray(node.material) ? node.material : [node.material];
+    materials.forEach((material) => {
+      if (typeof material?.name === 'string' && material.name.trim()) names.add(material.name.trim());
+    });
+  });
+  return names;
+}
+
+function getSceneNodeNames(scene) {
+  const names = new Set();
+  if (!scene || typeof scene.traverse !== 'function') return names;
+  scene.traverse((node) => {
+    if (typeof node?.name === 'string' && node.name.trim()) names.add(node.name.trim());
+  });
+  return names;
+}
+
+function collectMappingNames(mappings) {
+  if (!mappings || typeof mappings !== 'object' || Array.isArray(mappings)) return [];
+  return Object.values(mappings)
+    .flatMap((value) => (Array.isArray(value) ? value : [value]))
+    .filter((name) => typeof name === 'string' && name.trim())
+    .map((name) => name.trim());
+}
+
+function collectAnimationNames(animationMappings) {
+  if (!animationMappings || typeof animationMappings !== 'object' || Array.isArray(animationMappings)) return [];
+  return Object.values(animationMappings)
+    .filter((mapping) => mapping && typeof mapping === 'object' && !Array.isArray(mapping))
+    .flatMap((mapping) => Object.values(mapping))
+    .filter((name) => typeof name === 'string' && name.trim())
+    .map((name) => name.trim());
+}
+
+export function validateLoadedRuntimeScene(manifest = {}, scene, animations = []) {
+  const errors = [];
+  const materialNames = getSceneMaterialNames(scene);
+  const nodeNames = getSceneNodeNames(scene);
+  const animationNames = new Set(
+    (Array.isArray(animations) ? animations : [])
+      .map((clip) => clip?.name)
+      .filter((name) => typeof name === 'string' && name.trim())
+      .map((name) => name.trim()),
+  );
+
+  const requiredMaterials = [
+    ...(Array.isArray(manifest.paintMaterialNames) ? manifest.paintMaterialNames : []),
+    ...(Array.isArray(manifest.interiorMaterialNames) ? manifest.interiorMaterialNames : []),
+  ];
+  requiredMaterials.forEach((name) => {
+    if (typeof name === 'string' && name.trim() && !materialNames.has(name.trim())) {
+      errors.push(`Missing manifest material: ${name.trim()}`);
+    }
+  });
+
+  const requiredNodes = [
+    ...collectMappingNames(manifest.wheelMeshNames),
+    ...collectMappingNames(manifest.optionMeshNames),
+  ];
+  requiredNodes.forEach((name) => {
+    if (!nodeNames.has(name)) errors.push(`Missing manifest mesh: ${name}`);
+  });
+
+  collectAnimationNames(manifest.interactionAnimationNames).forEach((name) => {
+    if (!animationNames.has(name)) errors.push(`Missing manifest animation: ${name}`);
+  });
+
+  return { valid: errors.length === 0, errors };
+}
+
+export function canRenderLoadedRuntime(manifest = {}, scene, animations = []) {
+  return validateLoadedRuntimeScene(manifest, scene, animations).valid;
+}
