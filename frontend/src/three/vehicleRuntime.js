@@ -100,3 +100,18 @@ export function resolveRuntimeMeshNodes(nodeIndex, mappings, selectedId) {
     .map((name) => nodeIndex.get(name))
     .filter(Boolean);
 }
+
+export function resolveRuntimeMeshSelection(nodeIndex, mappings, selectedId) {
+  if (!(nodeIndex instanceof Map) || !mappings || typeof mappings !== 'object' || !selectedId) {
+    return { matched: false, nodes: [] };
+  }
+
+  const hasConfiguredSelection = Object.prototype.hasOwnProperty.call(mappings, selectedId);
+  if (!hasConfiguredSelection) return { matched: false, nodes: [] };
+
+  const nodes = resolveRuntimeMeshNodes(nodeIndex, mappings, selectedId);
+  return {
+    matched: nodes.length > 0,
+    nodes,
+  };
+}
