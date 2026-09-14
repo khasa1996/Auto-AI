@@ -3,6 +3,7 @@ import {
   CAMERA_TRANSITION_DURATION_MS,
   easeCameraTransition,
   getCameraTransitionDuration,
+  resolveCameraPreset,
 } from './CameraPresets';
 
 describe('camera transitions', () => {
@@ -35,5 +36,17 @@ describe('camera transitions', () => {
     expect(getCameraTransitionDuration()).toBe(CAMERA_TRANSITION_DURATION_MS);
     expect(getCameraTransitionDuration(false)).toBe(650);
     expect(getCameraTransitionDuration(true)).toBe(0);
+  });
+
+  test('resolves only camera presets declared by the verified runtime manifest', () => {
+    expect(resolveCameraPreset('exterior', ['exterior', 'rear'])).toEqual({
+      position: [4.5, 1.6, 5.5],
+      target: [0, 0.3, 0],
+    });
+    expect(resolveCameraPreset('interior', ['exterior', 'rear'])).toBeNull();
+  });
+
+  test('does not treat an empty verified camera declaration as all presets', () => {
+    expect(resolveCameraPreset('exterior', [])).toBeNull();
   });
 });
