@@ -17,10 +17,11 @@ import { normalizeHotspots } from './premiumShowroom';
 import { buildConfiguratorShareCard } from './shareCard';
 import { buildCinematicSequence, getNextCinematicPreset } from './cinematicShowroom';
 import { getSupportedInteractionControls } from './interactionControls';
+import { getConfiguratorRenderProfile } from '../../three/configuratorPerformance';
 
 const CINEMATIC_INTERVAL_MS = 4200;
 
-function ConfiguratorScene({ asset, purchasable, interaction, sceneRef, onManualInteraction }) {
+function ConfiguratorScene({ asset, purchasable, interaction, sceneRef, onManualInteraction, renderProfile }) {
   const controlsRef = useRef();
   useCameraPreset(interaction.cameraPreset, controlsRef, asset.cameraPresetNames);
   useLightingController(sceneRef, interaction.lighting, asset.supportedInteractions);
@@ -37,7 +38,7 @@ function ConfiguratorScene({ asset, purchasable, interaction, sceneRef, onManual
         </group>
       </AssetSuspense>
     </Bounds>
-    <ContactShadows position={[0, -1, 0]} opacity={0.5} scale={14} blur={2.5} far={5} />
+    {renderProfile.contactShadows && <ContactShadows position={[0, -1, 0]} opacity={0.5} scale={14} blur={2.5} far={5} />}
     <ConfiguratorControls autoRotate={interaction.autoRotate} onInteract={onManualInteraction} controlsRef={controlsRef} />
   </>;
 }
@@ -102,6 +103,13 @@ export default function ConfiguratorViewer({ style, options, variant }) {
   const setCameraPreset = useConfiguratorStore((state) => state.setCameraPreset);
   const setShowroomActive = useConfiguratorStore((state) => state.setShowroomActive);
   const setShowroomPaused = useConfiguratorStore((state) => state.setShowroomPaused);
+  const renderProfile = useMemo(() => {
+    const reducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    return getConfiguratorRenderProfile({
+      devicePixelRatio: typeof window !== 'undefined' ? window.devicePixelRatio : 1,
+      reducedMotion,
+    });
+  }, []);
 
   const cinematicSequence = useMemo(
     () => buildCinematicSequence(asset.supportedInteractions, asset.cameraPresetNames),
@@ -206,8 +214,8 @@ export default function ConfiguratorViewer({ style, options, variant }) {
   };
 
   return <div ref={canvasRef} style={style} className={`configurator-viewer${cinematic ? ' cinematic' : ''}`}>
-    <Canvas gl={{ preserveDrawingBuffer: true }} camera={{ position: [5, 2.5, 5], fov: 35 }}>
-      <ConfiguratorScene asset={asset} purchasable={purchasable} interaction={interaction} sceneRef={sceneRef} onManualInteraction={takeManualControl} />
+    <Canvas dpr={renderProfile.dpr} gl={{ preserveDrawingBuffer: true, powerPreference: 'high-performance' }} camera={{ position: [5, 2.5, 5], fov: 35 }}>
+      <ConfiguratorScene asset={asset} purchasable={purchasable} interaction={interaction} sceneRef={sceneRef} onManualInteraction={takeManualControl} renderProfile={renderProfile} />
     </Canvas>
     <div className="configurator-viewer-controls">
       <button type="button" onClick={toggleShowroom} disabled={!cinematicSequence.length} aria-label={!showroom.active || showroom.paused ? 'Play cinematic showroom' : 'Pause cinematic showroom'}>{showroom.active && !showroom.paused ? <Pause /> : <Play />}</button>
