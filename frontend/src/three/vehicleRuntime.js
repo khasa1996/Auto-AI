@@ -42,6 +42,7 @@ export function buildVehicleRuntimeState(asset = {}) {
 
 export function resolveRuntimeAsset(asset = {}) {
   if (!isRuntimeAssetUsable(asset)) return null;
+  if (asset.version === 'runtime-props') return null;
 
   const runtime = buildVehicleRuntimeState(asset);
   return {
