@@ -10,7 +10,7 @@ import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { ANIMATION_NAMES, useVehicleAnimations } from './AnimationController';
 import { collectOwnedMaterialResources, disposeOwnedMaterialResources, markRuntimeOwnedMaterials } from './runtimeLifecycle';
-import { canRenderLoadedRuntime, resolveRuntimeAsset, buildRuntimeNodeIndex, buildRuntimeMaterialIndex, resolveRuntimeMeshSelection } from './vehicleRuntime';
+import { applyRuntimeMeshVisibility, canRenderLoadedRuntime, resolveRuntimeAsset, buildRuntimeNodeIndex, buildRuntimeMaterialIndex } from './vehicleRuntime';
 
 function applyPaintColor(materialIndex, colorHex, paintMaterialNames) {
   if (!(materialIndex instanceof Map) || !colorHex || !paintMaterialNames?.length) return;
@@ -21,16 +21,6 @@ function applyPaintColor(materialIndex, colorHex, paintMaterialNames) {
     const materials = materialIndex.get(name.trim().toLowerCase()) || [];
     materials.forEach((material) => { material.color.copy(color); material.needsUpdate = true; });
   });
-}
-
-function applyMeshMappings(nodeIndex, selectedIds, mappings) {
-  if (!(nodeIndex instanceof Map) || !mappings || typeof mappings !== 'object') return;
-  const mappedNames = new Set(Object.values(mappings).flatMap((value) => (Array.isArray(value) ? value : [value])).filter((name) => typeof name === 'string' && name.length > 0));
-  if (!mappedNames.size) return;
-  const selections = (selectedIds || []).filter(Boolean).map((selectedId) => resolveRuntimeMeshSelection(nodeIndex, mappings, selectedId)).filter(({ matched }) => matched);
-  if (!selections.length) return;
-  mappedNames.forEach((name) => { const node = nodeIndex.get(name); if (node) node.visible = false; });
-  selections.forEach(({ nodes }) => nodes.forEach((node) => { node.visible = true; }));
 }
 
 function normalizeWheelMappings(wheelMeshNames) {
@@ -66,8 +56,12 @@ function LoadedVehicle({ asset, runtime, purchasable, interaction }) {
 
   useEffect(() => applyPaintColor(runtimeMaterialIndex, asset.paintColorHex, runtime.paintMaterialNames), [asset.paintColorHex, runtime.paintMaterialNames, runtimeMaterialIndex]);
   useEffect(() => {
-    applyMeshMappings(runtimeNodeIndex, [purchasable.wheelId], normalizeWheelMappings(runtime.wheelMeshNames));
-    applyMeshMappings(runtimeNodeIndex, [purchasable.interiorId, purchasable.roofId, ...(purchasable.accessoryIds || [])], runtime.optionMeshNames);
+    applyRuntimeMeshVisibility(runtimeNodeIndex, [purchasable.wheelId], normalizeWheelMappings(runtime.wheelMeshNames));
+    applyRuntimeMeshVisibility(
+      runtimeNodeIndex,
+      [purchasable.interiorId, purchasable.roofId, ...(purchasable.accessoryIds || [])],
+      runtime.optionMeshNames,
+    );
   }, [purchasable, runtime.optionMeshNames, runtime.wheelMeshNames, runtimeNodeIndex]);
 
   useEffect(() => {
@@ -88,9 +82,9 @@ function LoadedVehicle({ asset, runtime, purchasable, interaction }) {
     playToggle('doors', interaction.doors.rearLeft, previous.doors.rearLeft, 'doors', 'rear_left_open', 'rear_left_close', ANIMATION_NAMES.DOOR_RL_OPEN, ANIMATION_NAMES.DOOR_RL_CLOSE);
     playToggle('doors', interaction.doors.rearRight, previous.doors.rearRight, 'doors', 'rear_right_open', 'rear_right_close', ANIMATION_NAMES.DOOR_RR_OPEN, ANIMATION_NAMES.DOOR_RR_CLOSE);
     playToggle('hood', interaction.hoodOpen, previous.hoodOpen, 'hood', 'open', 'close', ANIMATION_NAMES.HOOD_OPEN, ANIMATION_NAMES.HOOD_CLOSE);
-    playToggle('boot', interaction.bootOpen, previous.bootOpen, 'boot', 'open', 'close', ANIMATION_NAMES.BOOT_OPEN, ANIMATION_NAMES.BOOT_CLOSE);
-    playToggle('frunk', interaction.frunkOpen, previous.frunkOpen, 'frunk', 'open', 'close', ANIMATION_NAMES.FRUNK_OPEN, ANIMATION_NAMES.FRUNK_CLOSE);
-    playToggle('sunroof', interaction.sunroofOpen, previous.sunroofOpen, 'sunroof', 'open', 'close', ANIMATION_NAMES.SUNROOF_OPEN, ANIMATION_NAMES.SUNROOF_CLOSE);
+    playToggle('boot', interaction.bootOpen, previous.interaction?.bootOpen, 'boot', 'open', 'close', ANIMATION_NAMES.BOOT_OPEN, ANIMATION_NAMES.BOOT_CLOSE);
+    playToggle('frunk', interaction.frunkOpen, previous.interaction?.frunkOpen, 'frunk', 'open', 'close', ANIMATION_NAMES.FRUNK_OPEN, ANIMATION_NAMES.FRUNK_CLOSE);
+    playToggle('sunroof', interaction.sunroofOpen, previous.interaction?.sunroofOpen, 'sunroof', 'open', 'close', ANIMATION_NAMES.SUNROOF_OPEN, ANIMATION_NAMES.SUNROOF_CLOSE);
   }, [interaction, play, runtime, verifiedAnimationMappings]);
 
   useEffect(() => () => disposeOwnedMaterialResources(ownedMaterials), [ownedMaterials]);
