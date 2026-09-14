@@ -14,7 +14,13 @@ import { buildRuntimeNodeIndex, buildVehicleRuntimeState, resolveRuntimeMeshNode
 function applyPaintColor(scene, colorHex, paintMaterialNames) {
   if (!scene || !colorHex || !paintMaterialNames?.length) return;
   const targetNames = new Set(paintMaterialNames.map((name) => name.toLowerCase()));
-  const color = new THREE.Color(colorHex);
+  let color;
+  try {
+    color = new THREE.Color(colorHex);
+  } catch {
+    return;
+  }
+  if (!Number.isFinite(color.r) || !Number.isFinite(color.g) || !Number.isFinite(color.b)) return;
   scene.traverse((node) => {
     if (!node.isMesh) return;
     const materials = Array.isArray(node.material) ? node.material : [node.material];
@@ -67,7 +73,7 @@ function LoadedVehicle({ url, paintColorHex, runtime, purchasable, interaction }
     return clone;
   }, [scene]);
   const runtimeNodeIndex = useMemo(() => buildRuntimeNodeIndex(clonedScene), [clonedScene]);
-  const { play } = useVehicleAnimations(animations, groupRef);
+  const { play, verifiedAnimationMappings } = useVehicleAnimations(animations, groupRef, runtime.interactionAnimationNames);
 
   useEffect(() => applyPaintColor(clonedScene, paintColorHex, runtime.paintMaterialNames), [clonedScene, paintColorHex, runtime.paintMaterialNames]);
   useEffect(() => {
@@ -82,7 +88,11 @@ function LoadedVehicle({ url, paintColorHex, runtime, purchasable, interaction }
     const supported = new Set(runtime.supportedInteractions);
     const playToggle = (capability, current, before, group, openKey, closeKey, openFallback, closeFallback) => {
       if (!supported.has(capability) || current === before) return;
-      play(resolveAnimationName(runtime.interactionAnimationNames, group, current ? openKey : closeKey, current ? openFallback : closeFallback));
+      const mapping = verifiedAnimationMappings?.[group];
+      const requestedKey = current ? openKey : closeKey;
+      const fallback = current ? openFallback : closeFallback;
+      const animationName = mapping?.[requestedKey] || (mapping ? null : fallback);
+      if (animationName) play(resolveAnimationName({ [group]: { [requestedKey]: animationName } }, group, requestedKey, fallback));
     };
     playToggle('doors', interaction.doors.frontLeft, previous.doors.frontLeft, 'doors', 'front_left_open', 'front_left_close', ANIMATION_NAMES.DOOR_FL_OPEN, ANIMATION_NAMES.DOOR_FL_CLOSE);
     playToggle('doors', interaction.doors.frontRight, previous.doors.frontRight, 'doors', 'front_right_open', 'front_right_close', ANIMATION_NAMES.DOOR_FR_OPEN, ANIMATION_NAMES.DOOR_FR_CLOSE);
@@ -91,8 +101,8 @@ function LoadedVehicle({ url, paintColorHex, runtime, purchasable, interaction }
     playToggle('hood', interaction.hoodOpen, previous.hoodOpen, 'hood', 'open', 'close', ANIMATION_NAMES.HOOD_OPEN, ANIMATION_NAMES.HOOD_CLOSE);
     playToggle('boot', interaction.bootOpen, previous.bootOpen, 'boot', 'open', 'close', ANIMATION_NAMES.BOOT_OPEN, ANIMATION_NAMES.BOOT_CLOSE);
     playToggle('frunk', interaction.frunkOpen, previous.frunkOpen, 'frunk', 'open', 'close', ANIMATION_NAMES.FRUNK_OPEN, ANIMATION_NAMES.FRUNK_CLOSE);
-    playToggle('sunroof', interaction.sunroofOpen, previous.sunroofOpen, 'sunroof', 'open', 'close', ANIMATION_NAMES.SUNROOF_OPEN, ANIMATION_NAMES.SUNROOF_CLOSE);
-  }, [interaction, play, runtime]);
+    playToggle('sunroof', interaction.sunroofOpen, previousInteractionRef.current?.sunroofOpen, 'sunroof', 'open', 'close', ANIMATION_NAMES.SUNROOF_OPEN, ANIMATION_NAMES.SUNROOF_CLOSE);
+  }, [interaction, play, runtime, verifiedAnimationMappings]);
 
   useEffect(() => () => {
     clonedScene.traverse((node) => {
