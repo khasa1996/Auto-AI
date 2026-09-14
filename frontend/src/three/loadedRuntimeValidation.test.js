@@ -43,8 +43,18 @@ test('rejects a loaded GLB when a manifest-declared runtime resource is missing'
   ]));
 });
 
-test('does not fail for an asset with no optional runtime mappings', () => {
-  expect(validateLoadedRuntimeScene({}, { traverse() {} }, [])).toEqual({ valid: true, errors: [] });
+test('does not fail for an asset with no optional runtime mappings when a renderable mesh exists', () => {
+  const scene = {
+    traverse(callback) {
+      callback({ name: 'VehicleBody', isMesh: true, material: { name: 'Body' } });
+    },
+  };
+
+  expect(validateLoadedRuntimeScene({}, scene, [])).toEqual({ valid: true, errors: [] });
+});
+
+test('does not render an empty loaded scene even when the manifest has no optional mappings', () => {
+  expect(canRenderLoadedRuntime({}, { traverse() {} }, [])).toBe(false);
 });
 
 test('does not render a loaded GLB when its verified manifest resources are missing', () => {
