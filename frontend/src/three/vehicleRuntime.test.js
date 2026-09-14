@@ -1,4 +1,4 @@
-import { buildVehicleRuntimeState, buildRuntimeNodeIndex, resolveRuntimeMeshNodes } from './vehicleRuntime';
+import { buildVehicleRuntimeState, buildRuntimeNodeIndex, resolveRuntimeAsset, resolveRuntimeMeshNodes } from './vehicleRuntime';
 
 test('builds a runtime state from verified manifest capabilities', () => {
   expect(buildVehicleRuntimeState({
@@ -52,4 +52,38 @@ test('indexes scene nodes once and resolves only manifest-declared mesh selectio
   expect(resolveRuntimeMeshNodes(index, { sport: 'WheelSport' }, 'unknown')).toEqual([]);
   expect(resolveRuntimeMeshNodes(index, { roof_black: ['RoofBlack'] }, 'roof_black')).toEqual([blackRoof]);
   expect(resolveRuntimeMeshNodes(index, { secret: ['SecretNode'] }, 'secret')).toEqual([undeclared]);
+});
+
+test('uses the verified manifest as the runtime asset contract', () => {
+  const asset = resolveRuntimeAsset({
+    available: true,
+    url: 'https://cdn.example.com/demo-car.glb?token=abc',
+    version: '2026-09-14',
+    supportedInteractions: ['doors', 'bogus'],
+    cameraPresetNames: ['exterior', 'bogus'],
+    paintMaterialNames: ['BodyPaint'],
+    wheelMeshNames: { sport: 'WheelSport' },
+    optionMeshNames: { roof_black: ['RoofBlack'] },
+    interactionAnimationNames: {
+      doors: { front_left_open: 'DoorFL_Open', rear_left_open: 'MissingClip' },
+    },
+  });
+
+  expect(asset).toMatchObject({
+    url: 'https://cdn.example.com/demo-car.glb?token=abc',
+    version: '2026-09-14',
+    supportedInteractions: ['doors'],
+    cameraPresetNames: ['exterior'],
+    paintMaterialNames: ['BodyPaint'],
+    wheelMeshNames: { sport: 'WheelSport' },
+    optionMeshNames: { roof_black: ['RoofBlack'] },
+  });
+  expect(asset.interactionAnimationNames).toEqual({
+    doors: { front_left_open: 'DoorFL_Open' },
+  });
+});
+
+test('rejects a runtime asset without a verified URL and version', () => {
+  expect(resolveRuntimeAsset({ available: true, url: 'https://cdn.example.com/car.png', version: '1' })).toBeNull();
+  expect(resolveRuntimeAsset({ available: true, url: 'https://cdn.example.com/car.glb', version: '' })).toBeNull();
 });
