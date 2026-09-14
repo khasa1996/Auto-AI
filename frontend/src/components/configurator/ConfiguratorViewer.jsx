@@ -20,10 +20,10 @@ import { getSupportedInteractionControls } from './interactionControls';
 
 const CINEMATIC_INTERVAL_MS = 4200;
 
-function ConfiguratorScene({ modelUrl, paintColorHex, paintMaterialNames, wheelMeshNames, optionMeshNames, interactionAnimationNames, purchasable, interaction, supportedInteractions, cameraPresetNames, sceneRef, onManualInteraction }) {
+function ConfiguratorScene({ asset, purchasable, interaction, sceneRef, onManualInteraction }) {
   const controlsRef = useRef();
-  useCameraPreset(interaction.cameraPreset, controlsRef, cameraPresetNames);
-  useLightingController(sceneRef, interaction.lighting, supportedInteractions);
+  useCameraPreset(interaction.cameraPreset, controlsRef, asset.cameraPresetNames);
+  useLightingController(sceneRef, interaction.lighting, asset.supportedInteractions);
   return <>
     <color attach="background" args={['#060606']} />
     <ambientLight intensity={0.6} />
@@ -33,7 +33,7 @@ function ConfiguratorScene({ modelUrl, paintColorHex, paintMaterialNames, wheelM
     <Bounds fit clip observe margin={1.3}>
       <AssetSuspense>
         <group ref={sceneRef} position={[0, -0.5, 0]}>
-          <VehicleModel url={modelUrl} paintColorHex={paintColorHex} paintMaterialNames={paintMaterialNames} wheelMeshNames={wheelMeshNames} optionMeshNames={optionMeshNames} interactionAnimationNames={interactionAnimationNames} purchasable={purchasable} interaction={interaction} supportedInteractions={supportedInteractions} />
+          <VehicleModel asset={asset} purchasable={purchasable} interaction={interaction} />
         </group>
       </AssetSuspense>
     </Bounds>
@@ -207,7 +207,7 @@ export default function ConfiguratorViewer({ style, options, variant }) {
 
   return <div ref={canvasRef} style={style} className={`configurator-viewer${cinematic ? ' cinematic' : ''}`}>
     <Canvas gl={{ preserveDrawingBuffer: true }} camera={{ position: [5, 2.5, 5], fov: 35 }}>
-      <ConfiguratorScene modelUrl={asset.url} paintColorHex={asset.paintColorHex} paintMaterialNames={asset.paintMaterialNames} wheelMeshNames={asset.wheelMeshNames} optionMeshNames={asset.optionMeshNames} interactionAnimationNames={asset.interactionAnimationNames} purchasable={purchasable} interaction={interaction} supportedInteractions={asset.supportedInteractions} cameraPresetNames={asset.cameraPresetNames} sceneRef={sceneRef} onManualInteraction={takeManualControl} />
+      <ConfiguratorScene asset={asset} purchasable={purchasable} interaction={interaction} sceneRef={sceneRef} onManualInteraction={takeManualControl} />
     </Canvas>
     <div className="configurator-viewer-controls">
       <button type="button" onClick={toggleShowroom} disabled={!cinematicSequence.length} aria-label={!showroom.active || showroom.paused ? 'Play cinematic showroom' : 'Pause cinematic showroom'}>{showroom.active && !showroom.paused ? <Pause /> : <Play />}</button>
