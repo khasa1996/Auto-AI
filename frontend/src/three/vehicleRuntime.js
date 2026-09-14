@@ -63,6 +63,32 @@ export function buildRuntimeNodeIndex(scene) {
   return index;
 }
 
+export function buildRuntimeMaterialIndex(scene, allowedMaterialNames = []) {
+  const index = new Map();
+  if (!scene || typeof scene.traverse !== 'function') return index;
+
+  const allowed = new Set(
+    allowedMaterialNames
+      .filter((name) => typeof name === 'string' && name.trim().length > 0)
+      .map((name) => name.trim().toLowerCase()),
+  );
+  if (!allowed.size) return index;
+
+  scene.traverse((node) => {
+    if (!node?.isMesh) return;
+    const materials = Array.isArray(node.material) ? node.material : [node.material];
+    materials.forEach((material) => {
+      const name = typeof material?.name === 'string' ? material.name.trim().toLowerCase() : '';
+      if (!name || !allowed.has(name)) return;
+      const existing = index.get(name) || [];
+      existing.push(material);
+      index.set(name, existing);
+    });
+  });
+
+  return index;
+}
+
 export function resolveRuntimeMeshNodes(nodeIndex, mappings, selectedId) {
   if (!(nodeIndex instanceof Map) || !mappings || typeof mappings !== 'object' || !selectedId) return [];
 
