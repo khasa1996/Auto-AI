@@ -6,12 +6,15 @@ test('builds a runtime state from verified manifest capabilities', () => {
     cameraPresetNames: ['exterior', 'rear'],
     paintMaterialNames: ['BodyPaint'],
     interiorMaterialNames: ['Leather'],
+    interiorMaterialMappings: { leather_black: ['Leather'] },
     wheelMeshNames: { sport: 'WheelSport' },
     optionMeshNames: { roof_black: ['RoofBlack'] },
   })).toEqual({
     supportedInteractions: ['doors'],
     cameraPresetNames: ['exterior', 'rear'],
     paintMaterialNames: ['BodyPaint'],
+    interiorMaterialNames: ['Leather'],
+    interiorMaterialMappings: { leather_black: ['Leather'] },
     wheelMeshNames: { sport: 'WheelSport' },
     optionMeshNames: { roof_black: ['RoofBlack'] },
   });
@@ -61,6 +64,8 @@ test('uses the verified manifest as the runtime asset contract', () => {
     supportedInteractions: ['doors', 'bogus'],
     cameraPresetNames: ['exterior', 'bogus'],
     paintMaterialNames: ['BodyPaint'],
+    interiorMaterialNames: ['Leather'],
+    interiorMaterialMappings: { leather_black: ['Leather'] },
     wheelMeshNames: { sport: 'WheelSport' },
     optionMeshNames: { roof_black: ['RoofBlack'] },
     interactionAnimationNames: {
@@ -74,6 +79,8 @@ test('uses the verified manifest as the runtime asset contract', () => {
     supportedInteractions: ['doors'],
     cameraPresetNames: ['exterior'],
     paintMaterialNames: ['BodyPaint'],
+    interiorMaterialNames: ['Leather'],
+    interiorMaterialMappings: { leather_black: ['Leather'] },
     wheelMeshNames: { sport: 'WheelSport' },
     optionMeshNames: { roof_black: ['RoofBlack'] },
   });
