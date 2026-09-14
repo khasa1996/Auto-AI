@@ -210,7 +210,7 @@ def make_configurator_router(
         if not asset_id:
             return {"variant_id": variant_id, "available": False, "message": "3D asset not assigned"}
         asset = await db.configurator_assets.find_one(
-            {"asset_id": asset_id, "published": True, "validation_passed": True},
+            {"asset_id": asset_id, "variant_id": variant_id, "published": True, "validation_passed": True},
             {"_id": 0},
         )
         if not asset:
