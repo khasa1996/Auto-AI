@@ -9,55 +9,32 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { ANIMATION_NAMES, useVehicleAnimations } from './AnimationController';
+import { collectOwnedMaterialResources, disposeOwnedMaterialResources, markRuntimeOwnedMaterials } from './runtimeLifecycle';
 import { resolveRuntimeAsset, buildRuntimeNodeIndex, buildRuntimeMaterialIndex, resolveRuntimeMeshNodes, resolveRuntimeMeshSelection } from './vehicleRuntime';
 
 function applyPaintColor(materialIndex, colorHex, paintMaterialNames) {
   if (!(materialIndex instanceof Map) || !colorHex || !paintMaterialNames?.length) return;
   let color;
-  try {
-    color = new THREE.Color(colorHex);
-  } catch {
-    return;
-  }
+  try { color = new THREE.Color(colorHex); } catch { return; }
   if (!Number.isFinite(color.r) || !Number.isFinite(color.g) || !Number.isFinite(color.b)) return;
   paintMaterialNames.forEach((name) => {
     const materials = materialIndex.get(name.trim().toLowerCase()) || [];
-    materials.forEach((material) => {
-      material.color.copy(color);
-      material.needsUpdate = true;
-    });
+    materials.forEach((material) => { material.color.copy(color); material.needsUpdate = true; });
   });
 }
 
 function applyMeshMappings(nodeIndex, selectedIds, mappings) {
   if (!(nodeIndex instanceof Map) || !mappings || typeof mappings !== 'object') return;
-  const mappedNames = new Set(Object.values(mappings).flatMap((value) => (
-    Array.isArray(value) ? value : [value]
-  )).filter((name) => typeof name === 'string' && name.length > 0));
+  const mappedNames = new Set(Object.values(mappings).flatMap((value) => (Array.isArray(value) ? value : [value])).filter((name) => typeof name === 'string' && name.length > 0));
   if (!mappedNames.size) return;
-
-  const selections = (selectedIds || [])
-    .filter(Boolean)
-    .map((selectedId) => resolveRuntimeMeshSelection(nodeIndex, mappings, selectedId))
-    .filter(({ matched }) => matched);
+  const selections = (selectedIds || []).filter(Boolean).map((selectedId) => resolveRuntimeMeshSelection(nodeIndex, mappings, selectedId)).filter(({ matched }) => matched);
   if (!selections.length) return;
-
-  mappedNames.forEach((name) => {
-    const node = nodeIndex.get(name);
-    if (node) node.visible = false;
-  });
-
-  selections.forEach(({ nodes }) => {
-    nodes.forEach((node) => {
-      node.visible = true;
-    });
-  });
+  mappedNames.forEach((name) => { const node = nodeIndex.get(name); if (node) node.visible = false; });
+  selections.forEach(({ nodes }) => nodes.forEach((node) => { node.visible = true; }));
 }
 
 function normalizeWheelMappings(wheelMeshNames) {
-  return Object.fromEntries(
-    Object.entries(wheelMeshNames || {}).map(([optionId, meshName]) => [optionId, [meshName]]),
-  );
+  return Object.fromEntries(Object.entries(wheelMeshNames || {}).map(([optionId, meshName]) => [optionId, [meshName]]));
 }
 
 function LoadedVehicle({ asset, runtime, purchasable, interaction }) {
@@ -66,19 +43,24 @@ function LoadedVehicle({ asset, runtime, purchasable, interaction }) {
   const previousInteractionRef = useRef(null);
   const clonedScene = useMemo(() => {
     const clone = scene.clone(true);
+    const meshes = [];
     clone.traverse((node) => {
       if (!node.isMesh) return;
       node.material = Array.isArray(node.material)
         ? node.material.map((material) => material.clone())
         : node.material.clone();
+      meshes.push(node);
     });
+    markRuntimeOwnedMaterials(meshes);
     return clone;
   }, [scene]);
+  const ownedMaterials = useMemo(() => {
+    const meshes = [];
+    clonedScene.traverse((node) => { if (node.isMesh) meshes.push(node); });
+    return collectOwnedMaterialResources(meshes);
+  }, [clonedScene]);
   const runtimeNodeIndex = useMemo(() => buildRuntimeNodeIndex(clonedScene), [clonedScene]);
-  const runtimeMaterialIndex = useMemo(
-    () => buildRuntimeMaterialIndex(clonedScene, runtime.paintMaterialNames),
-    [clonedScene, runtime.paintMaterialNames],
-  );
+  const runtimeMaterialIndex = useMemo(() => buildRuntimeMaterialIndex(clonedScene, runtime.paintMaterialNames), [clonedScene, runtime.paintMaterialNames]);
   const { play, verifiedAnimationMappings } = useVehicleAnimations(animations, groupRef, runtime.interactionAnimationNames);
 
   useEffect(() => applyPaintColor(runtimeMaterialIndex, asset.paintColorHex, runtime.paintMaterialNames), [asset.paintColorHex, runtime.paintMaterialNames, runtimeMaterialIndex]);
@@ -103,31 +85,23 @@ function LoadedVehicle({ asset, runtime, purchasable, interaction }) {
     playToggle('doors', interaction.doors.frontLeft, previous.doors.frontLeft, 'doors', 'front_left_open', 'front_left_close', ANIMATION_NAMES.DOOR_FL_OPEN, ANIMATION_NAMES.DOOR_FL_CLOSE);
     playToggle('doors', interaction.doors.frontRight, previous.doors.frontRight, 'doors', 'front_right_open', 'front_right_close', ANIMATION_NAMES.DOOR_FR_OPEN, ANIMATION_NAMES.DOOR_FR_CLOSE);
     playToggle('doors', interaction.doors.rearLeft, previous.doors.rearLeft, 'doors', 'rear_left_open', 'rear_left_close', ANIMATION_NAMES.DOOR_RL_OPEN, ANIMATION_NAMES.DOOR_RL_CLOSE);
-    playToggle('doors', interaction.doors.rearRight, previous.doors.rearRight, 'doors', 'rear_right_open', 'rear_right_close', ANIMATION_NAMES.DOOR_RR_OPEN, ANIMATION_NAMES.DOOR_RR_CLOSE);
+    playToggle('doors', interaction.doors.rearRight, previous.doors.rearRight, 'doors', 'rear_right_open', 'close', ANIMATION_NAMES.DOOR_RR_OPEN, ANIMATION_NAMES.DOOR_RR_CLOSE);
     playToggle('hood', interaction.hoodOpen, previous.hoodOpen, 'hood', 'open', 'close', ANIMATION_NAMES.HOOD_OPEN, ANIMATION_NAMES.HOOD_CLOSE);
     playToggle('boot', interaction.bootOpen, previous.bootOpen, 'boot', 'open', 'close', ANIMATION_NAMES.BOOT_OPEN, ANIMATION_NAMES.BOOT_CLOSE);
     playToggle('frunk', interaction.frunkOpen, previous.frunkOpen, 'frunk', 'open', 'close', ANIMATION_NAMES.FRUNK_OPEN, ANIMATION_NAMES.FRUNK_CLOSE);
     playToggle('sunroof', interaction.sunroofOpen, previous.sunroofOpen, 'sunroof', 'open', 'close', ANIMATION_NAMES.SUNROOF_OPEN, ANIMATION_NAMES.SUNROOF_CLOSE);
   }, [interaction, play, runtime, verifiedAnimationMappings]);
 
-  useEffect(() => () => {
-    clonedScene.traverse((node) => {
-      if (!node.isMesh) return;
-      const materials = Array.isArray(node.material) ? node.material : [node.material];
-      materials.forEach((material) => material?.dispose());
-    });
-  }, [clonedScene]);
+  useEffect(() => () => disposeOwnedMaterialResources(ownedMaterials), [ownedMaterials]);
 
   return <primitive ref={groupRef} object={clonedScene} />;
 }
 
 export default function VehicleModel({ asset, purchasable, interaction }) {
   const runtimeAsset = useMemo(() => resolveRuntimeAsset(asset), [asset]);
-
   if (!runtimeAsset) {
     console.error('[VehicleModel] Rejected unavailable or invalid verified runtime asset.');
     return null;
   }
-
   return <LoadedVehicle asset={runtimeAsset} runtime={runtimeAsset} purchasable={purchasable} interaction={interaction} />;
 }
