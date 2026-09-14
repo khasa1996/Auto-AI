@@ -39,3 +39,28 @@ export function buildVehicleRuntimeState(asset = {}) {
     ),
   };
 }
+
+export function buildRuntimeNodeIndex(scene) {
+  const index = new Map();
+  if (!scene || typeof scene.traverse !== 'function') return index;
+
+  scene.traverse((node) => {
+    if (node && typeof node.name === 'string' && node.name.length > 0 && !index.has(node.name)) {
+      index.set(node.name, node);
+    }
+  });
+
+  return index;
+}
+
+export function resolveRuntimeMeshNodes(nodeIndex, mappings, selectedId) {
+  if (!(nodeIndex instanceof Map) || !mappings || typeof mappings !== 'object' || !selectedId) return [];
+
+  const configured = mappings[selectedId];
+  const names = Array.isArray(configured) ? configured : [configured];
+
+  return names
+    .filter((name) => typeof name === 'string' && name.length > 0)
+    .map((name) => nodeIndex.get(name))
+    .filter(Boolean);
+}
