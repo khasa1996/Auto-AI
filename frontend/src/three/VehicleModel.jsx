@@ -9,11 +9,10 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { ANIMATION_NAMES, useVehicleAnimations } from './AnimationController';
-import { resolveRuntimeAsset, buildRuntimeNodeIndex, resolveRuntimeMeshNodes } from './vehicleRuntime';
+import { resolveRuntimeAsset, buildRuntimeNodeIndex, buildRuntimeMaterialIndex, resolveRuntimeMeshNodes } from './vehicleRuntime';
 
-function applyPaintColor(scene, colorHex, paintMaterialNames) {
-  if (!scene || !colorHex || !paintMaterialNames?.length) return;
-  const targetNames = new Set(paintMaterialNames.map((name) => name.toLowerCase()));
+function applyPaintColor(materialIndex, colorHex, paintMaterialNames) {
+  if (!(materialIndex instanceof Map) || !colorHex || !paintMaterialNames?.length) return;
   let color;
   try {
     color = new THREE.Color(colorHex);
@@ -21,14 +20,11 @@ function applyPaintColor(scene, colorHex, paintMaterialNames) {
     return;
   }
   if (!Number.isFinite(color.r) || !Number.isFinite(color.g) || !Number.isFinite(color.b)) return;
-  scene.traverse((node) => {
-    if (!node.isMesh) return;
-    const materials = Array.isArray(node.material) ? node.material : [node.material];
+  paintMaterialNames.forEach((name) => {
+    const materials = materialIndex.get(name.trim().toLowerCase()) || [];
     materials.forEach((material) => {
-      if (material && targetNames.has((material.name || '').toLowerCase())) {
-        material.color.copy(color);
-        material.needsUpdate = true;
-      }
+      material.color.copy(color);
+      material.needsUpdate = true;
     });
   });
 }
@@ -73,9 +69,13 @@ function LoadedVehicle({ asset, runtime, purchasable, interaction }) {
     return clone;
   }, [scene]);
   const runtimeNodeIndex = useMemo(() => buildRuntimeNodeIndex(clonedScene), [clonedScene]);
+  const runtimeMaterialIndex = useMemo(
+    () => buildRuntimeMaterialIndex(clonedScene, runtime.paintMaterialNames),
+    [clonedScene, runtime.paintMaterialNames],
+  );
   const { play, verifiedAnimationMappings } = useVehicleAnimations(animations, groupRef, runtime.interactionAnimationNames);
 
-  useEffect(() => applyPaintColor(clonedScene, asset.paintColorHex, runtime.paintMaterialNames), [asset.paintColorHex, clonedScene, runtime.paintMaterialNames]);
+  useEffect(() => applyPaintColor(runtimeMaterialIndex, asset.paintColorHex, runtime.paintMaterialNames), [asset.paintColorHex, runtime.paintMaterialNames, runtimeMaterialIndex]);
   useEffect(() => {
     applyMeshMappings(runtimeNodeIndex, [purchasable.wheelId], normalizeWheelMappings(runtime.wheelMeshNames));
     applyMeshMappings(runtimeNodeIndex, [purchasable.interiorId, purchasable.roofId, ...(purchasable.accessoryIds || [])], runtime.optionMeshNames);
