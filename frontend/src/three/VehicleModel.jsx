@@ -10,7 +10,7 @@ import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { ANIMATION_NAMES, useVehicleAnimations } from './AnimationController';
 import { collectOwnedMaterialResources, disposeOwnedMaterialResources, markRuntimeOwnedMaterials } from './runtimeLifecycle';
-import { resolveRuntimeAsset, buildRuntimeNodeIndex, buildRuntimeMaterialIndex, resolveRuntimeMeshSelection } from './vehicleRuntime';
+import { canRenderLoadedRuntime, resolveRuntimeAsset, buildRuntimeNodeIndex, buildRuntimeMaterialIndex, resolveRuntimeMeshSelection } from './vehicleRuntime';
 
 function applyPaintColor(materialIndex, colorHex, paintMaterialNames) {
   if (!(materialIndex instanceof Map) || !colorHex || !paintMaterialNames?.length) return;
@@ -61,6 +61,7 @@ function LoadedVehicle({ asset, runtime, purchasable, interaction }) {
   }, [clonedScene]);
   const runtimeNodeIndex = useMemo(() => buildRuntimeNodeIndex(clonedScene), [clonedScene]);
   const runtimeMaterialIndex = useMemo(() => buildRuntimeMaterialIndex(clonedScene, runtime.paintMaterialNames), [clonedScene, runtime.paintMaterialNames]);
+  const loadedRuntimeValid = useMemo(() => canRenderLoadedRuntime(runtime, clonedScene, animations), [runtime, clonedScene, animations]);
   const { play, verifiedAnimationMappings } = useVehicleAnimations(animations, groupRef, runtime.interactionAnimationNames);
 
   useEffect(() => applyPaintColor(runtimeMaterialIndex, asset.paintColorHex, runtime.paintMaterialNames), [asset.paintColorHex, runtime.paintMaterialNames, runtimeMaterialIndex]);
@@ -93,6 +94,11 @@ function LoadedVehicle({ asset, runtime, purchasable, interaction }) {
   }, [interaction, play, runtime, verifiedAnimationMappings]);
 
   useEffect(() => () => disposeOwnedMaterialResources(ownedMaterials), [ownedMaterials]);
+
+  if (!loadedRuntimeValid) {
+    console.error('[VehicleModel] Loaded GLB does not satisfy its verified runtime manifest.');
+    return null;
+  }
 
   return <primitive ref={groupRef} object={clonedScene} />;
 }
