@@ -86,6 +86,7 @@ export function getVerifiedRuntimeCapabilities(asset = {}) {
       .filter((interaction) => VERIFIED_INTERACTIONS.has(interaction)),
     paintMaterialNames: cleanStringList(asset.paintMaterialNames),
     interiorMaterialNames: cleanStringList(asset.interiorMaterialNames),
+    interiorMaterialMappings: cleanMeshMap(asset.interiorMaterialMappings),
     wheelMeshNames: cleanStringMap(asset.wheelMeshNames),
     optionMeshNames: cleanMeshMap(asset.optionMeshNames),
     cameraPresetNames: cleanStringList(asset.cameraPresetNames)
@@ -108,6 +109,14 @@ export function getVerifiedMappings(asset = {}, inspectedAsset = {}) {
     .filter((name) => materialNames.size === 0 || materialNames.has(name));
   const interiorMaterialNames = cleanStringList(asset.interiorMaterialNames)
     .filter((name) => materialNames.size === 0 || materialNames.has(name));
+  const interiorMaterialMappings = Object.fromEntries(
+    Object.entries(cleanMeshMap(asset.interiorMaterialMappings))
+      .map(([interiorId, names]) => [
+        interiorId,
+        names.filter((name) => materialNames.size === 0 || materialNames.has(name)),
+      ])
+      .filter(([, names]) => names.length > 0),
+  );
   const wheelMeshNames = Object.fromEntries(
     Object.entries(cleanStringMap(asset.wheelMeshNames))
       .filter(([, meshName]) => meshNames.size === 0 || meshNames.has(meshName)),
@@ -121,5 +130,5 @@ export function getVerifiedMappings(asset = {}, inspectedAsset = {}) {
       .filter(([, names]) => names.length > 0),
   );
 
-  return { paintMaterialNames, interiorMaterialNames, wheelMeshNames, optionMeshNames };
+  return { paintMaterialNames, interiorMaterialNames, interiorMaterialMappings, wheelMeshNames, optionMeshNames };
 }
