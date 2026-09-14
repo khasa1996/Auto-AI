@@ -40,3 +40,10 @@ def test_manifest_rejects_unknown_interaction():
     result = validate_asset_manifest(make_asset(supported_interactions=["teleport"]), ["wheel-a", "roof-a"])
     assert result["valid"] is False
     assert any("unsupported interaction" in error.lower() for error in result["errors"])
+
+
+def test_manifest_rejects_missing_interior_material_mapping():
+    asset = make_asset(interior_material_mappings={"leather-black": ["Leather"]})
+    result = validate_asset_manifest(asset, ["wheel-a", "roof-a"], ["BodyPaint"])
+    assert result["valid"] is False
+    assert any("interior material mapping" in error.lower() for error in result["errors"])

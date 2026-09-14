@@ -37,12 +37,19 @@ export function getCameraTransitionDuration(reducedMotion = false) {
   return reducedMotion ? 0 : CAMERA_TRANSITION_DURATION_MS;
 }
 
-export function useCameraPreset(preset, controlsRef) {
+export function resolveCameraPreset(preset, allowedPresetNames) {
+  if (!preset || !CAMERA_PRESETS[preset]) return null;
+  if (!Array.isArray(allowedPresetNames) || !allowedPresetNames.includes(preset)) return null;
+  return CAMERA_PRESETS[preset];
+}
+
+export function useCameraPreset(preset, controlsRef, allowedPresetNames) {
   const { camera } = useThree();
 
   useEffect(() => {
-    if (!preset || !CAMERA_PRESETS[preset]) return undefined;
-    const { position, target } = CAMERA_PRESETS[preset];
+    const resolvedPreset = resolveCameraPreset(preset, allowedPresetNames);
+    if (!resolvedPreset) return undefined;
+    const { position, target } = resolvedPreset;
     const targetPos = new THREE.Vector3(...position);
     const targetLook = new THREE.Vector3(...target);
     const startPos = camera.position.clone();
@@ -75,7 +82,7 @@ export function useCameraPreset(preset, controlsRef) {
 
     frameId = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(frameId);
-  }, [camera, controlsRef, preset]);
+  }, [allowedPresetNames, camera, controlsRef, preset]);
 }
 
 export function ConfiguratorControls({ autoRotate, onInteract, controlsRef }) {

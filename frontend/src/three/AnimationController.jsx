@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAnimations } from '@react-three/drei';
+import { filterAvailableAnimationMappings } from './animationRuntime';
 
 export const ANIMATION_NAMES = {
   DOOR_FL_OPEN: 'Door_FL_Open',
@@ -33,12 +34,16 @@ export function resolveAnimationName(animationMappings, group, key, fallbackName
   return typeof mapped === 'string' && mapped.trim() ? mapped : fallbackName;
 }
 
-export function useVehicleAnimations(clips, ref) {
+export function useVehicleAnimations(clips, ref, animationMappings = {}) {
   const { actions, mixer } = useAnimations(clips, ref);
   const playingRef = useRef(new Set());
   const listenersRef = useRef(new Map());
 
   const availableAnimations = useMemo(() => new Set(Object.keys(actions)), [actions]);
+  const verifiedAnimationMappings = useMemo(
+    () => filterAvailableAnimationMappings(animationMappings, [...availableAnimations]),
+    [animationMappings, availableAnimations],
+  );
 
   const play = useCallback((animationName) => {
     const action = actions[animationName];
@@ -69,7 +74,7 @@ export function useVehicleAnimations(clips, ref) {
     };
   }, [mixer]);
 
-  return { play, availableAnimations };
+  return { play, availableAnimations, verifiedAnimationMappings };
 }
 
 const THREE_LoopOnce = 2200;
