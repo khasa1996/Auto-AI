@@ -230,12 +230,8 @@ def make_configurator_router(
                 "lod_level": asset["lod_level"],
                 "supported_interactions": asset.get("supported_interactions", []),
                 "paint_material_names": asset.get("paint_material_names", []),
-                "interior_material_names": asset.get("interior_material_names", []),
-                "interior_material_mappings": asset.get("interior_material_mappings", {}),
                 "wheel_mesh_names": asset.get("wheel_mesh_names", {}),
                 "option_mesh_names": asset.get("option_mesh_names", {}),
-                "camera_preset_names": asset.get("camera_preset_names", []),
-                "interaction_animation_names": asset.get("interaction_animation_names", {}),
             },
         }
 
@@ -252,75 +248,193 @@ def make_configurator_router(
     @router.get("/configurator/{variant_id}/rules")
     async def get_configurator_rules(variant_id: str):
         rules = await db.configurator_rules.find(
-            {"variant_id": variant_id, "active": True},
+            {"active": True, "$or": [{"variant_id": variant_id}, {"variant_id": None}]},
             {"_id": 0},
-        ).sort([("priority", -1), ("rule_id", 1)]).to_list(500)
+        ).to_list(200)
         return {"variant_id": variant_id, "rules": rules}
 
     @router.post("/configurator/validate", response_model=ValidationResult)
-    async def validate_configurator_configuration(request: ConfigurationValidationRequest):
-        result = await validate_configuration(request, db)
-        return result
+    async def validate_config(request: ConfigurationValidationRequest):
+        return await validate_configuration(request, db)
 
     @router.post("/configurator/price", response_model=ConfigurationPriceResponse)
-    async def price_configurator_configuration(request: ConfigurationPriceRequest):
-        return await calculate_configuration_price(request, db)
-
-    @router.post("/configurator/ai", response_model=AIConfiguratorResponse)
-    async def ai_configurator(request: AIConfiguratorIntent):
-        return await resolve_ai_selection(request, db)
-
-    @router.post("/configurator/interactions")
-    async def configurator_interactions(request: Dict[str, object]):
-        variant_id = str(request.get("variant_id") or "")
-        if not variant_id:
-            raise HTTPException(status_code=422, detail="variant_id is required")
-        return await build_interaction_state(variant_id, request.get("interaction", {}), db)
+    async def calculate_price(request: ConfigurationPriceRequest):
+        validation = await validate_configuration(
+            ConfigurationValidationRequest(configuration=request.configuration), db
+        )
+        if not validation.valid:
+            raise HTTPException(
+                status_code=422,
+                detail={"message": "Invalid configuration", "errors": validation.errors},
+            )
+        try:
+            return await calculate_configuration_price(request, db)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
 
     @router.post("/configurator/configurations")
-    async def save_configuration(request: SavedConfigurationCreate, phone: Optional[str] = Depends(auth_dependency)):
-        if not phone:
+    async def save_configuration(
+        request: SavedConfigurationCreate,
+        auth_phone: Optional[str] = Depends(auth_dependency),
+    ):
+        """Persist only a server-validated, server-priced configuration."""
+        if not auth_phone:
             raise HTTPException(status_code=401, detail="Authentication required")
-        server_asset = await resolve_saved_configuration_asset(db, request.configuration.variant_id, request.asset_id)
-        server_price_snapshot = await calculate_configuration_price(request.configuration, db)
+
+        validation = await validate_configuration(
+            ConfigurationValidationRequest(configuration=request.configuration.purchasable), db
+        )
+        if not validation.valid:
+            raise HTTPException(
+                status_code=422,
+                detail={"message": "Invalid configuration", "errors": validation.errors},
+            )
+
+        price_request = ConfigurationPriceRequest(
+            configuration=request.configuration.purchasable,
+            city=request.city,
+        )
+        try:
+            server_price = await calculate_configuration_price(price_request, db)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+
+        server_asset = await resolve_saved_configuration_asset(
+            db,
+            request.configuration.purchasable.variant_id,
+            request.asset_id,
+        )
+
         config_id = str(uuid.uuid4())
         share_token = uuid.uuid4().hex
         now = _utcnow_iso()
-        document = build_saved_configuration_document(
-            request,
-            phone,
-            server_price_snapshot.model_dump(),
-            server_asset,
-            config_id,
-            share_token,
-            now,
+        doc = build_saved_configuration_document(
+            request=request,
+            owner_phone=auth_phone,
+            server_price_snapshot=server_price.model_dump(mode="json"),
+            server_asset=server_asset,
+            config_id=config_id,
+            share_token=share_token,
+            now=now,
         )
-        await db.configurations.insert_one(document)
-        return {"config_id": config_id, "share_token": share_token, "stale": document["stale"]}
+        await db.configurations.insert_one(doc)
+        doc.pop("_id", None)
+        return doc
 
     @router.get("/configurator/configurations/{config_id}")
-    async def get_saved_configuration(config_id: str, phone: Optional[str] = Depends(auth_dependency)):
-        if not phone:
-            raise HTTPException(status_code=401, detail="Authentication required")
-        document = await db.configurations.find_one({"config_id": config_id, "owner_phone": phone}, {"_id": 0})
-        if not document:
-            raise HTTPException(status_code=404, detail="Configuration not found")
-        return document
+    async def get_configuration(
+        config_id: str,
+        auth_phone: Optional[str] = Depends(auth_dependency),
+    ):
+        """Load a private configuration by owner or a public share token."""
+        shared_doc = await db.configurations.find_one({"share_token": config_id}, {"_id": 0})
+        if shared_doc:
+            return _public_configuration_response(shared_doc)
 
-    @router.get("/configurator/share/{share_token}")
-    async def get_shared_configuration(share_token: str):
-        document = await db.configurations.find_one({"share_token": share_token}, {"_id": 0, "owner_phone": 0})
-        if not document:
-            raise HTTPException(status_code=404, detail="Shared configuration not found")
-        return document
+        doc = await db.configurations.find_one({"config_id": config_id}, {"_id": 0})
+        if not doc:
+            raise HTTPException(status_code=404, detail="Configuration not found")
+        if not auth_phone:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if doc.get("owner_phone") != auth_phone:
+            raise HTTPException(status_code=403, detail="Configuration access denied")
+        return doc
+
+    @router.post("/configurator/ai", response_model=AIConfiguratorResponse)
+    async def ai_configurator(intent: AIConfiguratorIntent):
+        """Resolve natural-language intent through the catalog, rules engine and price engine."""
+        try:
+            configuration, explanation, unavailable = await resolve_ai_selection(intent, db)
+        except ValueError as exc:
+            return AIConfiguratorResponse(
+                configuration=None,
+                price=None,
+                explanation=str(exc),
+                unavailable_options=[],
+                valid=False,
+            )
+
+        validation = await validate_configuration(
+            ConfigurationValidationRequest(configuration=configuration), db
+        )
+        if not validation.valid:
+            return AIConfiguratorResponse(
+                configuration=None,
+                price=None,
+                explanation="AI selection was rejected by the configurator rules engine: " + "; ".join(validation.errors),
+                unavailable_options=unavailable,
+                valid=False,
+            )
+
+        try:
+            price = await calculate_configuration_price(
+                ConfigurationPriceRequest(configuration=configuration), db
+            )
+        except ValueError as exc:
+            return AIConfiguratorResponse(
+                configuration=None,
+                price=None,
+                explanation=str(exc),
+                unavailable_options=unavailable,
+                valid=False,
+            )
+
+        if intent.max_budget is not None and price.estimated_on_road > intent.max_budget:
+            explanation = (
+                f"The best resolved configuration is estimated at ₹{price.estimated_on_road:,}, "
+                f"which exceeds the requested ₹{intent.max_budget:,} budget."
+            )
+            return AIConfiguratorResponse(
+                configuration=None,
+                price=price,
+                explanation=explanation,
+                unavailable_options=unavailable,
+                valid=False,
+            )
+
+        configuration_state = {
+            "purchasable": configuration.model_dump(),
+            "interaction": build_interaction_state(intent).model_dump(),
+        }
+        return AIConfiguratorResponse(
+            configuration=configuration_state,
+            price=price,
+            explanation=explanation,
+            unavailable_options=unavailable,
+            valid=True,
+        )
+
+    @router.post("/configurator/assets/validate-url")
+    async def validate_asset_url_endpoint(payload: Dict[str, str]):
+        return await validate_asset_url(payload.get("url", ""))
 
     return router
 
 
+def _public_configuration_response(doc: Dict[str, object]) -> Dict[str, object]:
+    """Return only fields intentionally exposed through a share link."""
+    public_fields = (
+        "config_id",
+        "configuration",
+        "city",
+        "price_snapshot",
+        "price_breakdown",
+        "asset_id",
+        "asset_version",
+        "stale",
+        "stale_reason",
+        "created_at",
+        "updated_at",
+    )
+    return {key: doc[key] for key in public_fields if key in doc}
+
+
 def _status_message(status: ConfiguratorStatus) -> str:
     messages = {
-        ConfiguratorStatus.AVAILABLE: "3D Configurator Ready",
+        ConfiguratorStatus.AVAILABLE: "3D Configurator Available",
         ConfiguratorStatus.COMING_SOON: "3D Configurator Coming Soon",
-        ConfiguratorStatus.UNAVAILABLE: "3D Configurator Temporarily Unavailable",
+        ConfiguratorStatus.UNAVAILABLE: "3D Configurator Unavailable",
+        ConfiguratorStatus.UNDER_REVIEW: "3D Configurator Under Review",
+        ConfiguratorStatus.DISABLED: "3D Configurator Disabled",
     }
-    return messages.get(status, "3D Configurator Coming Soon")
+    return messages.get(status, "3D Configurator Status Unknown")
