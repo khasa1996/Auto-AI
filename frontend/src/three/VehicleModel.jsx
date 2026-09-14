@@ -1,15 +1,15 @@
 /**
  * VehicleModel — GLB/GLTF loader with semantic material and animation systems.
  *
- * Visual changes use only mappings declared by the verified asset runtime state.
+ * The viewer receives the complete verified asset manifest. No synthetic runtime
+ * asset is created here, so the runtime cannot silently bypass asset validation.
  */
 
 import { useEffect, useMemo, useRef } from 'react';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
-import { ANIMATION_NAMES, resolveAnimationName, useVehicleAnimations } from './AnimationController';
-import { isRuntimeAssetUsable } from '../components/configurator/assetRuntimeCapabilities';
-import { buildRuntimeNodeIndex, buildVehicleRuntimeState, resolveRuntimeMeshNodes } from './vehicleRuntime';
+import { ANIMATION_NAMES, useVehicleAnimations } from './AnimationController';
+import { resolveRuntimeAsset, buildRuntimeNodeIndex, resolveRuntimeMeshNodes } from './vehicleRuntime';
 
 function applyPaintColor(scene, colorHex, paintMaterialNames) {
   if (!scene || !colorHex || !paintMaterialNames?.length) return;
@@ -58,8 +58,8 @@ function normalizeWheelMappings(wheelMeshNames) {
   );
 }
 
-function LoadedVehicle({ url, paintColorHex, runtime, purchasable, interaction }) {
-  const { scene, animations } = useGLTF(url);
+function LoadedVehicle({ asset, runtime, purchasable, interaction }) {
+  const { scene, animations } = useGLTF(asset.url);
   const groupRef = useRef();
   const previousInteractionRef = useRef(null);
   const clonedScene = useMemo(() => {
@@ -75,11 +75,11 @@ function LoadedVehicle({ url, paintColorHex, runtime, purchasable, interaction }
   const runtimeNodeIndex = useMemo(() => buildRuntimeNodeIndex(clonedScene), [clonedScene]);
   const { play, verifiedAnimationMappings } = useVehicleAnimations(animations, groupRef, runtime.interactionAnimationNames);
 
-  useEffect(() => applyPaintColor(clonedScene, paintColorHex, runtime.paintMaterialNames), [clonedScene, paintColorHex, runtime.paintMaterialNames]);
+  useEffect(() => applyPaintColor(clonedScene, asset.paintColorHex, runtime.paintMaterialNames), [asset.paintColorHex, clonedScene, runtime.paintMaterialNames]);
   useEffect(() => {
     applyMeshMappings(runtimeNodeIndex, [purchasable.wheelId], normalizeWheelMappings(runtime.wheelMeshNames));
     applyMeshMappings(runtimeNodeIndex, [purchasable.interiorId, purchasable.roofId, ...(purchasable.accessoryIds || [])], runtime.optionMeshNames);
-  }, [runtimeNodeIndex, purchasable, runtime.wheelMeshNames, runtime.optionMeshNames]);
+  }, [purchasable, runtime.optionMeshNames, runtime.wheelMeshNames, runtimeNodeIndex]);
 
   useEffect(() => {
     const previous = previousInteractionRef.current;
@@ -92,7 +92,7 @@ function LoadedVehicle({ url, paintColorHex, runtime, purchasable, interaction }
       const requestedKey = current ? openKey : closeKey;
       const fallback = current ? openFallback : closeFallback;
       const animationName = mapping?.[requestedKey] || (mapping ? null : fallback);
-      if (animationName) play(resolveAnimationName({ [group]: { [requestedKey]: animationName } }, group, requestedKey, fallback));
+      if (animationName) play(animationName);
     };
     playToggle('doors', interaction.doors.frontLeft, previous.doors.frontLeft, 'doors', 'front_left_open', 'front_left_close', ANIMATION_NAMES.DOOR_FL_OPEN, ANIMATION_NAMES.DOOR_FL_CLOSE);
     playToggle('doors', interaction.doors.frontRight, previous.doors.frontRight, 'doors', 'front_right_open', 'front_right_close', ANIMATION_NAMES.DOOR_FR_OPEN, ANIMATION_NAMES.DOOR_FR_CLOSE);
@@ -115,24 +115,17 @@ function LoadedVehicle({ url, paintColorHex, runtime, purchasable, interaction }
   return <primitive ref={groupRef} object={clonedScene} />;
 }
 
-export default function VehicleModel({ url, paintColorHex, paintMaterialNames = [], wheelMeshNames = {}, optionMeshNames = {}, interactionAnimationNames = {}, purchasable, interaction, supportedInteractions = [] }) {
-  const asset = useMemo(() => ({
-    available: true,
-    url,
-    version: 'runtime-props',
-    paintColorHex,
-    paintMaterialNames,
-    wheelMeshNames,
-    optionMeshNames,
-    interactionAnimationNames,
-    supportedInteractions,
-  }), [url, paintColorHex, paintMaterialNames, wheelMeshNames, optionMeshNames, interactionAnimationNames, supportedInteractions]);
-  const runtime = useMemo(() => buildVehicleRuntimeState(asset), [asset]);
+export default function VehicleModel({ asset, purchasable, interaction }) {
+  const runtimeAsset = useMemo(() => resolveRuntimeAsset(asset), [asset]);
+  const runtime = useMemo(
+    () => (runtimeAsset ? resolveRuntimeAsset(runtimeAsset) : null),
+    [runtimeAsset],
+  );
 
-  if (!isRuntimeAssetUsable(asset)) {
-    console.error('[VehicleModel] Rejected unavailable or invalid runtime asset.', url);
+  if (!runtimeAsset || !runtime) {
+    console.error('[VehicleModel] Rejected unavailable or invalid verified runtime asset.');
     return null;
   }
 
-  return <LoadedVehicle url={url} paintColorHex={paintColorHex} runtime={runtime} purchasable={purchasable} interaction={interaction} />;
+  return <LoadedVehicle asset={runtimeAsset} runtime={runtime} purchasable={purchasable} interaction={interaction} />;
 }
