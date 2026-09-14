@@ -230,8 +230,12 @@ def make_configurator_router(
                 "lod_level": asset["lod_level"],
                 "supported_interactions": asset.get("supported_interactions", []),
                 "paint_material_names": asset.get("paint_material_names", []),
+                "interior_material_names": asset.get("interior_material_names", []),
+                "interior_material_mappings": asset.get("interior_material_mappings", {}),
                 "wheel_mesh_names": asset.get("wheel_mesh_names", {}),
                 "option_mesh_names": asset.get("option_mesh_names", {}),
+                "camera_preset_names": asset.get("camera_preset_names", []),
+                "interaction_animation_names": asset.get("interaction_animation_names", {}),
             },
         }
 
