@@ -117,15 +117,11 @@ function LoadedVehicle({ asset, runtime, purchasable, interaction }) {
 
 export default function VehicleModel({ asset, purchasable, interaction }) {
   const runtimeAsset = useMemo(() => resolveRuntimeAsset(asset), [asset]);
-  const runtime = useMemo(
-    () => (runtimeAsset ? resolveRuntimeAsset(runtimeAsset) : null),
-    [runtimeAsset],
-  );
 
-  if (!runtimeAsset || !runtime) {
+  if (!runtimeAsset) {
     console.error('[VehicleModel] Rejected unavailable or invalid verified runtime asset.');
     return null;
   }
 
-  return <LoadedVehicle asset={runtimeAsset} runtime={runtime} purchasable={purchasable} interaction={interaction} />;
+  return <LoadedVehicle asset={runtimeAsset} runtime={runtimeAsset} purchasable={purchasable} interaction={interaction} />;
 }
