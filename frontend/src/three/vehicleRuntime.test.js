@@ -1,4 +1,4 @@
-import { buildVehicleRuntimeState, buildRuntimeNodeIndex, buildRuntimeMaterialIndex, resolveRuntimeAsset, resolveRuntimeMeshNodes } from './vehicleRuntime';
+import { buildVehicleRuntimeState, buildRuntimeNodeIndex, buildRuntimeMaterialIndex, resolveRuntimeAsset, resolveRuntimeMeshNodes, resolveRuntimeMeshSelection } from './vehicleRuntime';
 
 test('builds a runtime state from verified manifest capabilities', () => {
   expect(buildVehicleRuntimeState({
@@ -54,6 +54,25 @@ test('indexes scene nodes once and resolves only manifest-declared mesh selectio
   expect(resolveRuntimeMeshNodes(index, { sport: 'WheelSport' }, 'unknown')).toEqual([]);
   expect(resolveRuntimeMeshNodes(index, { roof_black: ['RoofBlack'] }, 'roof_black')).toEqual([blackRoof]);
   expect(resolveRuntimeMeshNodes(index, { secret: ['SecretNode'] }, 'secret')).toEqual([undeclared]);
+});
+
+test('does not treat an invalid or missing mesh selection as a valid mapped group', () => {
+  const index = new Map([
+    ['WheelSport', { name: 'WheelSport' }],
+  ]);
+
+  expect(resolveRuntimeMeshSelection(index, { sport: 'WheelSport' }, 'unknown')).toEqual({
+    matched: false,
+    nodes: [],
+  });
+  expect(resolveRuntimeMeshSelection(index, { missing: 'WheelMissing' }, 'missing')).toEqual({
+    matched: false,
+    nodes: [],
+  });
+  expect(resolveRuntimeMeshSelection(index, { sport: 'WheelSport' }, 'sport')).toEqual({
+    matched: true,
+    nodes: [{ name: 'WheelSport' }],
+  });
 });
 
 test('uses the verified manifest as the runtime asset contract', () => {
