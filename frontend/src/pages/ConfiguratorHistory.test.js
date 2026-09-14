@@ -1,3 +1,7 @@
+jest.mock('react-router-dom', () => ({
+  Link: ({ children }) => children,
+}));
+
 import { formatHistoryDate, getHistoryLabel } from './ConfiguratorHistory';
 
 test('formats saved configuration with semantic field labels', () => {
