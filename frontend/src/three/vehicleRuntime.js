@@ -164,6 +164,15 @@ function getSceneNodeNames(scene) {
   return names;
 }
 
+function hasRenderableMesh(scene) {
+  if (!scene || typeof scene.traverse !== 'function') return false;
+  let found = false;
+  scene.traverse((node) => {
+    if (node?.isMesh) found = true;
+  });
+  return found;
+}
+
 function collectMappingNames(mappings) {
   if (!mappings || typeof mappings !== 'object' || Array.isArray(mappings)) return [];
   return Object.values(mappings)
@@ -183,6 +192,8 @@ function collectAnimationNames(animationMappings) {
 
 export function validateLoadedRuntimeScene(manifest = {}, scene, animations = []) {
   const errors = [];
+  if (!hasRenderableMesh(scene)) errors.push('Loaded GLB contains no renderable mesh.');
+
   const materialNames = getSceneMaterialNames(scene);
   const nodeNames = getSceneNodeNames(scene);
   const animationNames = new Set(
