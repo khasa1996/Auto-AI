@@ -1,4 +1,4 @@
-import { getVerifiedRuntimeCapabilities } from '../components/configurator/assetRuntimeCapabilities';
+import { getVerifiedRuntimeCapabilities, isRuntimeAssetUsable } from '../components/configurator/assetRuntimeCapabilities';
 
 function cleanAnimationMap(value, supportedInteractions) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
@@ -37,6 +37,16 @@ export function buildVehicleRuntimeState(asset = {}) {
       asset.interactionAnimationNames,
       capabilities.supportedInteractions,
     ),
+  };
+}
+
+export function resolveRuntimeAsset(asset = {}) {
+  if (!isRuntimeAssetUsable(asset)) return null;
+
+  const runtime = buildVehicleRuntimeState(asset);
+  return {
+    ...asset,
+    ...runtime,
   };
 }
 
