@@ -12,12 +12,14 @@ from vehicle_schemas import ConfiguratorStatus
 class FakeCollection:
     def __init__(self, documents: list[Optional[Dict[str, Any]]]) -> None:
         self.documents = iter(documents)
+        self.queries: list[Dict[str, Any]] = []
 
     async def find_one(
         self,
         query: Dict[str, Any],
         projection: Optional[Dict[str, int]] = None,
     ) -> Optional[Dict[str, Any]]:
+        self.queries.append(query)
         return next(self.documents)
 
 
@@ -32,6 +34,7 @@ class FakeDatabase:
         self.configurator_assets = FakeCollection([
             {
                 "asset_id": "asset-1",
+                "variant_id": "variant-1",
                 "url": "https://cdn.example.com/model.glb",
                 "format": "glb",
                 "version": "v1",
@@ -42,7 +45,7 @@ class FakeDatabase:
                 "paint_material_names": ["BodyPaint"],
                 "interior_material_names": ["SeatLeather"],
                 "interior_material_mappings": {"black": ["SeatLeather"]},
-                "wheel_mesh_names": {"alloy": ["Wheel" ]},
+                "wheel_mesh_names": {"alloy": ["Wheel"]},
                 "option_mesh_names": {"roof": {"sunroof": ["Sunroof"]}},
                 "camera_preset_names": ["exterior", "interior"],
                 "interaction_animation_names": {"doors": "door-open"},
@@ -52,7 +55,8 @@ class FakeDatabase:
 
 def test_asset_route_returns_complete_runtime_manifest() -> None:
     app = FastAPI()
-    app.include_router(make_configurator_router(FakeDatabase()))
+    database = FakeDatabase()
+    app.include_router(make_configurator_router(database))
     client = TestClient(app)
 
     response = client.get("/api/v1/configurator/variant-1/asset")
@@ -63,3 +67,4 @@ def test_asset_route_returns_complete_runtime_manifest() -> None:
     assert asset["interior_material_mappings"] == {"black": ["SeatLeather"]}
     assert asset["camera_preset_names"] == ["exterior", "interior"]
     assert asset["interaction_animation_names"] == {"doors": "door-open"}
+    assert database.configurator_assets.queries[-1]["variant_id"] == "variant-1"
