@@ -9,7 +9,7 @@ import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { ANIMATION_NAMES, resolveAnimationName, useVehicleAnimations } from './AnimationController';
 import { isRuntimeAssetUsable } from '../components/configurator/assetRuntimeCapabilities';
-import { buildVehicleRuntimeState } from './vehicleRuntime';
+import { buildRuntimeNodeIndex, buildVehicleRuntimeState, resolveRuntimeMeshNodes } from './vehicleRuntime';
 
 function applyPaintColor(scene, colorHex, paintMaterialNames) {
   if (!scene || !colorHex || !paintMaterialNames?.length) return;
@@ -27,19 +27,22 @@ function applyPaintColor(scene, colorHex, paintMaterialNames) {
   });
 }
 
-function applyMeshMappings(scene, selectedIds, mappings) {
-  if (!scene || !mappings || typeof mappings !== 'object') return;
-  const selected = new Set((selectedIds || []).filter(Boolean));
-  const mappedNames = new Set(Object.values(mappings).flat().filter(Boolean));
+function applyMeshMappings(nodeIndex, selectedIds, mappings) {
+  if (!(nodeIndex instanceof Map) || !mappings || typeof mappings !== 'object') return;
+  const mappedNames = new Set(Object.values(mappings).flatMap((value) => (
+    Array.isArray(value) ? value : [value]
+  )).filter((name) => typeof name === 'string' && name.length > 0));
   if (!mappedNames.size) return;
-  scene.traverse((node) => {
-    if (mappedNames.has(node.name)) node.visible = false;
+
+  mappedNames.forEach((name) => {
+    const node = nodeIndex.get(name);
+    if (node) node.visible = false;
   });
-  selected.forEach((optionId) => {
-    const names = Array.isArray(mappings[optionId]) ? mappings[optionId] : [mappings[optionId]];
-    names.filter(Boolean).forEach((name) => scene.traverse((node) => {
-      if (node.name === name) node.visible = true;
-    }));
+
+  (selectedIds || []).filter(Boolean).forEach((optionId) => {
+    resolveRuntimeMeshNodes(nodeIndex, mappings, optionId).forEach((node) => {
+      node.visible = true;
+    });
   });
 }
 
@@ -63,13 +66,14 @@ function LoadedVehicle({ url, paintColorHex, runtime, purchasable, interaction }
     });
     return clone;
   }, [scene]);
+  const runtimeNodeIndex = useMemo(() => buildRuntimeNodeIndex(clonedScene), [clonedScene]);
   const { play } = useVehicleAnimations(animations, groupRef);
 
   useEffect(() => applyPaintColor(clonedScene, paintColorHex, runtime.paintMaterialNames), [clonedScene, paintColorHex, runtime.paintMaterialNames]);
   useEffect(() => {
-    applyMeshMappings(clonedScene, [purchasable.wheelId], normalizeWheelMappings(runtime.wheelMeshNames));
-    applyMeshMappings(clonedScene, [purchasable.interiorId, purchasable.roofId, ...(purchasable.accessoryIds || [])], runtime.optionMeshNames);
-  }, [clonedScene, purchasable, runtime.wheelMeshNames, runtime.optionMeshNames]);
+    applyMeshMappings(runtimeNodeIndex, [purchasable.wheelId], normalizeWheelMappings(runtime.wheelMeshNames));
+    applyMeshMappings(runtimeNodeIndex, [purchasable.interiorId, purchasable.roofId, ...(purchasable.accessoryIds || [])], runtime.optionMeshNames);
+  }, [runtimeNodeIndex, purchasable, runtime.wheelMeshNames, runtime.optionMeshNames]);
 
   useEffect(() => {
     const previous = previousInteractionRef.current;
@@ -82,7 +86,7 @@ function LoadedVehicle({ url, paintColorHex, runtime, purchasable, interaction }
     };
     playToggle('doors', interaction.doors.frontLeft, previous.doors.frontLeft, 'doors', 'front_left_open', 'front_left_close', ANIMATION_NAMES.DOOR_FL_OPEN, ANIMATION_NAMES.DOOR_FL_CLOSE);
     playToggle('doors', interaction.doors.frontRight, previous.doors.frontRight, 'doors', 'front_right_open', 'front_right_close', ANIMATION_NAMES.DOOR_FR_OPEN, ANIMATION_NAMES.DOOR_FR_CLOSE);
-    playToggle('doors', interaction.doors.rearLeft, previous.doors.rearLeft, 'doors', 'rear_left_open', 'rear_left_close', ANIMATION_NAMES.DOOR_RL_OPEN, ANIMATION_NAMES.DOOR_RL_CLOSE);
+    playToggle('doors', interaction.doors.rearLeft, previous.doors.rearLeft, 'doors', 'front_left_open', 'front_left_close', ANIMATION_NAMES.DOOR_RL_OPEN, ANIMATION_NAMES.DOOR_RL_CLOSE);
     playToggle('doors', interaction.doors.rearRight, previous.doors.rearRight, 'doors', 'rear_right_open', 'rear_right_close', ANIMATION_NAMES.DOOR_RR_OPEN, ANIMATION_NAMES.DOOR_RR_CLOSE);
     playToggle('hood', interaction.hoodOpen, previous.hoodOpen, 'hood', 'open', 'close', ANIMATION_NAMES.HOOD_OPEN, ANIMATION_NAMES.HOOD_CLOSE);
     playToggle('boot', interaction.bootOpen, previous.bootOpen, 'boot', 'open', 'close', ANIMATION_NAMES.BOOT_OPEN, ANIMATION_NAMES.BOOT_CLOSE);
