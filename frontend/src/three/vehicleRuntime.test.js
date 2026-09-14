@@ -1,4 +1,4 @@
-import { buildVehicleRuntimeState } from './vehicleRuntime';
+import { buildVehicleRuntimeState, buildRuntimeNodeIndex, resolveRuntimeMeshNodes } from './vehicleRuntime';
 
 test('builds a runtime state from verified manifest capabilities', () => {
   expect(buildVehicleRuntimeState({
@@ -28,4 +28,28 @@ test('does not activate unsupported interaction animations', () => {
   }).interactionAnimationNames).toEqual({
     doors: { front_left_open: 'DoorFL_Open' },
   });
+});
+
+test('indexes scene nodes once and resolves only manifest-declared mesh selections', () => {
+  const body = { name: 'Body', isMesh: true };
+  const sportWheel = { name: 'WheelSport', isMesh: true };
+  const blackRoof = { name: 'RoofBlack', isMesh: true };
+  const undeclared = { name: 'SecretNode', isMesh: true };
+  const traversed = [];
+  const scene = {
+    traverse(callback) {
+      [body, sportWheel, blackRoof, undeclared].forEach((node) => {
+        traversed.push(node.name);
+        callback(node);
+      });
+    },
+  };
+
+  const index = buildRuntimeNodeIndex(scene);
+
+  expect(traversed).toHaveLength(4);
+  expect(resolveRuntimeMeshNodes(index, { sport: 'WheelSport' }, 'sport')).toEqual([sportWheel]);
+  expect(resolveRuntimeMeshNodes(index, { sport: 'WheelSport' }, 'unknown')).toEqual([]);
+  expect(resolveRuntimeMeshNodes(index, { roof_black: ['RoofBlack'] }, 'roof_black')).toEqual([blackRoof]);
+  expect(resolveRuntimeMeshNodes(index, { secret: ['SecretNode'] }, 'secret')).toEqual([undeclared]);
 });
