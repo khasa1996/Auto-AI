@@ -117,6 +117,31 @@ export function resolveRuntimeMeshSelection(nodeIndex, mappings, selectedId) {
   };
 }
 
+export function applyRuntimeMeshVisibility(nodeIndex, selectedIds, mappings) {
+  if (!(nodeIndex instanceof Map) || !mappings || typeof mappings !== 'object' || Array.isArray(mappings)) return;
+
+  const mappedNames = new Set(
+    Object.values(mappings)
+      .flatMap((value) => (Array.isArray(value) ? value : [value]))
+      .filter((name) => typeof name === 'string' && name.length > 0),
+  );
+  if (!mappedNames.size) return;
+
+  const selections = (selectedIds || [])
+    .filter(Boolean)
+    .map((selectedId) => resolveRuntimeMeshSelection(nodeIndex, mappings, selectedId))
+    .filter(({ matched }) => matched);
+
+  mappedNames.forEach((name) => {
+    const node = nodeIndex.get(name);
+    if (node) node.visible = false;
+  });
+
+  selections.forEach(({ nodes }) => {
+    nodes.forEach((node) => { node.visible = true; });
+  });
+}
+
 function getSceneMaterialNames(scene) {
   const names = new Set();
   if (!scene || typeof scene.traverse !== 'function') return names;
