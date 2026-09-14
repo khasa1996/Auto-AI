@@ -22,6 +22,7 @@ test('exposes only capabilities declared by the verified asset manifest', () => 
     supportedInteractions: ['camera_exterior', 'doors', 'bogus'],
     paintMaterialNames: ['BodyPaint'],
     interiorMaterialNames: ['SeatLeather'],
+    interiorMaterialMappings: { leather_black: ['SeatLeather'], fake: ['UnknownMaterial'] },
     wheelMeshNames: { sport: 'WheelSport' },
     optionMeshNames: { roof_black: ['RoofBlack'] },
     cameraPresetNames: ['exterior', 'interior'],
@@ -29,6 +30,7 @@ test('exposes only capabilities declared by the verified asset manifest', () => 
     supportedInteractions: ['camera_exterior', 'doors'],
     paintMaterialNames: ['BodyPaint'],
     interiorMaterialNames: ['SeatLeather'],
+    interiorMaterialMappings: { leather_black: ['SeatLeather'], fake: ['UnknownMaterial'] },
     wheelMeshNames: { sport: 'WheelSport' },
     optionMeshNames: { roof_black: ['RoofBlack'] },
     cameraPresetNames: ['exterior', 'interior'],
@@ -44,6 +46,7 @@ test('does not expose undeclared material or mesh mappings to the viewer', () =>
   expect(getVerifiedMappings({
     paintMaterialNames: ['BodyPaint'],
     interiorMaterialNames: ['Leather'],
+    interiorMaterialMappings: { leather: ['Leather'], fake: ['UnknownMaterial'] },
     wheelMeshNames: { sport: 'WheelSport', fake: 'WheelFake' },
     optionMeshNames: { roof_black: ['RoofBlack'], fake: ['FakeMesh'] },
   }, {
@@ -52,6 +55,7 @@ test('does not expose undeclared material or mesh mappings to the viewer', () =>
   })).toEqual({
     paintMaterialNames: ['BodyPaint'],
     interiorMaterialNames: ['Leather'],
+    interiorMaterialMappings: { leather: ['Leather'] },
     wheelMeshNames: { sport: 'WheelSport' },
     optionMeshNames: { roof_black: ['RoofBlack'] },
   });
