@@ -9,7 +9,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { ANIMATION_NAMES, useVehicleAnimations } from './AnimationController';
-import { resolveRuntimeAsset, buildRuntimeNodeIndex, buildRuntimeMaterialIndex, resolveRuntimeMeshNodes } from './vehicleRuntime';
+import { resolveRuntimeAsset, buildRuntimeNodeIndex, buildRuntimeMaterialIndex, resolveRuntimeMeshNodes, resolveRuntimeMeshSelection } from './vehicleRuntime';
 
 function applyPaintColor(materialIndex, colorHex, paintMaterialNames) {
   if (!(materialIndex instanceof Map) || !colorHex || !paintMaterialNames?.length) return;
@@ -36,13 +36,19 @@ function applyMeshMappings(nodeIndex, selectedIds, mappings) {
   )).filter((name) => typeof name === 'string' && name.length > 0));
   if (!mappedNames.size) return;
 
+  const selections = (selectedIds || [])
+    .filter(Boolean)
+    .map((selectedId) => resolveRuntimeMeshSelection(nodeIndex, mappings, selectedId))
+    .filter(({ matched }) => matched);
+  if (!selections.length) return;
+
   mappedNames.forEach((name) => {
     const node = nodeIndex.get(name);
     if (node) node.visible = false;
   });
 
-  (selectedIds || []).filter(Boolean).forEach((optionId) => {
-    resolveRuntimeMeshNodes(nodeIndex, mappings, optionId).forEach((node) => {
+  selections.forEach(({ nodes }) => {
+    nodes.forEach((node) => {
       node.visible = true;
     });
   });
