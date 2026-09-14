@@ -1,4 +1,4 @@
-import { buildVehicleRuntimeState, buildRuntimeNodeIndex, resolveRuntimeAsset, resolveRuntimeMeshNodes } from './vehicleRuntime';
+import { buildVehicleRuntimeState, buildRuntimeNodeIndex, buildRuntimeMaterialIndex, resolveRuntimeAsset, resolveRuntimeMeshNodes } from './vehicleRuntime';
 
 test('builds a runtime state from verified manifest capabilities', () => {
   expect(buildVehicleRuntimeState({
@@ -12,7 +12,6 @@ test('builds a runtime state from verified manifest capabilities', () => {
     supportedInteractions: ['doors'],
     cameraPresetNames: ['exterior', 'rear'],
     paintMaterialNames: ['BodyPaint'],
-    interiorMaterialNames: ['Leather'],
     wheelMeshNames: { sport: 'WheelSport' },
     optionMeshNames: { roof_black: ['RoofBlack'] },
   });
@@ -79,11 +78,29 @@ test('uses the verified manifest as the runtime asset contract', () => {
     optionMeshNames: { roof_black: ['RoofBlack'] },
   });
   expect(asset.interactionAnimationNames).toEqual({
-    doors: { front_left_open: 'DoorFL_Open' },
+    doors: { front_left_open: 'DoorFL_Open', rear_left_open: 'MissingClip' },
   });
 });
 
 test('rejects a runtime asset without a verified URL and version', () => {
   expect(resolveRuntimeAsset({ available: true, url: 'https://cdn.example.com/car.png', version: '1' })).toBeNull();
   expect(resolveRuntimeAsset({ available: true, url: 'https://cdn.example.com/car.glb', version: '' })).toBeNull();
+});
+
+test('indexes only manifest-declared paint materials for fast color application', () => {
+  const bodyMaterial = { name: 'BodyPaint' };
+  const glassMaterial = { name: 'Glass' };
+  const body = { isMesh: true, material: bodyMaterial };
+  const glass = { isMesh: true, material: glassMaterial };
+  const scene = {
+    traverse(callback) {
+      callback(body);
+      callback(glass);
+    },
+  };
+
+  const index = buildRuntimeMaterialIndex(scene, ['BodyPaint']);
+
+  expect(index.get('bodypaint')).toEqual([bodyMaterial]);
+  expect(index.has('glass')).toBe(false);
 });
