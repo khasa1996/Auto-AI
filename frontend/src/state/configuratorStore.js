@@ -81,6 +81,22 @@ export function isCameraPresetSupported(supportedInteractions, preset) {
   return required.every((capability) => supportedInteractions.includes(capability));
 }
 
+function normalizeAssetManifest(assetData = {}) {
+  return {
+    ...assetData,
+    lodLevel: assetData.lodLevel ?? assetData.lod_level,
+    configuratorStatus: assetData.configuratorStatus ?? assetData.configurator_status,
+    supportedInteractions: assetData.supportedInteractions ?? assetData.supported_interactions,
+    paintMaterialNames: assetData.paintMaterialNames ?? assetData.paint_material_names,
+    interiorMaterialNames: assetData.interiorMaterialNames ?? assetData.interior_material_names,
+    interiorMaterialMappings: assetData.interiorMaterialMappings ?? assetData.interior_material_mappings,
+    wheelMeshNames: assetData.wheelMeshNames ?? assetData.wheel_mesh_names,
+    optionMeshNames: assetData.optionMeshNames ?? assetData.option_mesh_names,
+    cameraPresetNames: assetData.cameraPresetNames ?? assetData.camera_preset_names,
+    interactionAnimationNames: assetData.interactionAnimationNames ?? assetData.interaction_animation_names,
+  };
+}
+
 export const useConfiguratorStore = create((set, get) => ({
   purchasable: { ...defaultPurchasable },
   interaction: { ...defaultInteraction },
@@ -150,17 +166,18 @@ export const useConfiguratorStore = create((set, get) => ({
     set((s) => ({ showroom: { ...s.showroom, paused } }));
   },
   setAsset(assetData) {
-    const capabilities = getVerifiedRuntimeCapabilities(assetData);
-    const mappings = getVerifiedMappings(assetData);
-    const usable = isRuntimeAssetUsable(assetData);
+    const normalizedAsset = normalizeAssetManifest(assetData);
+    const capabilities = getVerifiedRuntimeCapabilities(normalizedAsset);
+    const mappings = getVerifiedMappings(normalizedAsset);
+    const usable = isRuntimeAssetUsable(normalizedAsset);
     set({
       asset: {
         ...defaultAsset,
-        ...assetData,
+        ...normalizedAsset,
         ...capabilities,
         ...mappings,
         available: usable,
-        configuratorStatus: usable ? assetData.configuratorStatus : 'UNAVAILABLE',
+        configuratorStatus: usable ? normalizedAsset.configuratorStatus : 'UNAVAILABLE',
         loadedAt: new Date().toISOString(),
       },
     });
