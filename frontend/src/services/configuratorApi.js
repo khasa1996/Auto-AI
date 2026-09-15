@@ -5,6 +5,20 @@
 import { api } from "../lib/api";
 
 const V1 = "/v1";
+const READINESS_BLOCKER = 'production readiness could not be verified';
+
+export function gateAssetResponse(assetResponse, readiness) {
+  const blockers = Array.isArray(readiness?.blockers)
+    ? readiness.blockers.filter((item) => typeof item === 'string' && item.trim())
+    : [];
+  if (readiness?.ready === true && blockers.length === 0) return assetResponse;
+  return {
+    available: false,
+    asset: null,
+    status: 'COMING_SOON',
+    readiness_blockers: blockers.length ? blockers : [READINESS_BLOCKER],
+  };
+}
 
 export const configuratorApi = {
   getBrands: (activeOnly = true) => api.get(`${V1}/brands`, { params: { active_only: activeOnly } }),
@@ -14,7 +28,15 @@ export const configuratorApi = {
   getVariant: (variantId) => api.get(`${V1}/variants/${variantId}`),
   getAvailability: (variantId) => api.get(`${V1}/configurator/${variantId}/availability`),
   getReadiness: (variantId) => api.get(`${V1}/configurator/variants/${variantId}/readiness`),
-  getAsset: (variantId) => api.get(`${V1}/configurator/${variantId}/asset`),
+  getAsset: async (variantId) => {
+    const assetResponse = await api.get(`${V1}/configurator/${variantId}/asset`);
+    try {
+      const readinessResponse = await api.get(`${V1}/configurator/variants/${variantId}/readiness`);
+      return { ...assetResponse, data: gateAssetResponse(assetResponse.data, readinessResponse.data) };
+    } catch {
+      return { ...assetResponse, data: gateAssetResponse(assetResponse.data, null) };
+    }
+  },
   getHotspots: (variantId) => api.get(`${V1}/configurator/${variantId}/hotspots`),
   getOptions: (variantId) => api.get(`${V1}/configurator/${variantId}/options`),
   getRules: (variantId) => api.get(`${V1}/configurator/${variantId}/rules`),
