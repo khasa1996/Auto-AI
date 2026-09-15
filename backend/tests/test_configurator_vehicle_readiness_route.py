@@ -54,12 +54,15 @@ class _DB:
         })
 
 
+def _app(db):
+    app = FastAPI()
+    app.include_router(make_vehicle_readiness_router(db))
+    return app
+
+
 @pytest.mark.asyncio
 async def test_vehicle_readiness_route_returns_ready_contract():
-    app = FastAPI()
-    app.include_router(make_vehicle_readiness_router(_DB()))
-
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=_app(_DB())), base_url="http://test") as client:
         response = await client.get("/api/v1/configurator/variants/demo-variant/readiness")
 
     assert response.status_code == 200
@@ -71,12 +74,35 @@ async def test_vehicle_readiness_route_returns_ready_contract():
 async def test_vehicle_readiness_route_blocks_unverified_pricing():
     db = _DB()
     db.variant_pricing.one["verification_status"] = "unverified"
-    app = FastAPI()
-    app.include_router(make_vehicle_readiness_router(db))
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=_app(db)), base_url="http://test") as client:
         response = await client.get("/api/v1/configurator/variants/demo-variant/readiness")
 
     assert response.status_code == 200
     assert response.json()["ready"] is False
     assert "variant pricing verification is not complete" in response.json()["blockers"]
+
+
+@pytest.mark.asyncio
+async def test_vehicle_readiness_route_reports_unpublished_asset_reason():
+    db = _DB()
+    db.configurator_assets.one["published"] = False
+
+    async with AsyncClient(transport=ASGITransport(app=_app(db)), base_url="http://test") as client:
+        response = await client.get("/api/v1/configurator/variants/demo-variant/readiness")
+
+    assert response.status_code == 200
+    assert response.json()["ready"] is False
+    assert "configurator asset is not published" in response.json()["blockers"]
+
+
+@pytest.mark.asyncio
+async def test_vehicle_readiness_route_returns_404_for_unknown_variant():
+    db = _DB()
+    db.variants.one = None
+
+    async with AsyncClient(transport=ASGITransport(app=_app(db)), base_url="http://test") as client:
+        response = await client.get("/api/v1/configurator/variants/missing/readiness")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Vehicle variant not found"
