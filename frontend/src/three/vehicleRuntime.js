@@ -142,6 +142,46 @@ export function applyRuntimeMeshVisibility(nodeIndex, selectedIds, mappings) {
   });
 }
 
+export function applyRuntimeInteriorMaterials(materialIndex, interiorMaterialNames, interiorMaterialMappings, selectedInteriorId) {
+  if (!(materialIndex instanceof Map) || !Array.isArray(interiorMaterialNames) || !interiorMaterialMappings || !selectedInteriorId) return;
+
+  const configured = interiorMaterialMappings[selectedInteriorId];
+  if (!Array.isArray(configured) || configured.length === 0) return;
+
+  const selectedNames = new Set(
+    configured
+      .filter((name) => typeof name === 'string' && name.trim())
+      .map((name) => name.trim().toLowerCase()),
+  );
+  if (!selectedNames.size) return;
+
+  const interiorNames = new Set(
+    interiorMaterialNames
+      .filter((name) => typeof name === 'string' && name.trim())
+      .map((name) => name.trim().toLowerCase()),
+  );
+
+  interiorNames.forEach((name) => {
+    const materials = materialIndex.get(name) || [];
+    materials.forEach((material) => {
+      if (!material.userData) material.userData = {};
+      if (!material.userData.__autoAiInteriorBase) {
+        material.userData.__autoAiInteriorBase = {
+          transparent: Boolean(material.transparent),
+          opacity: Number.isFinite(material.opacity) ? material.opacity : 1,
+          depthWrite: material.depthWrite !== false,
+        };
+      }
+      const base = material.userData.__autoAiInteriorBase;
+      const selected = selectedNames.has(name);
+      material.transparent = selected ? base.transparent : true;
+      material.opacity = selected ? base.opacity : 0;
+      material.depthWrite = selected ? base.depthWrite : false;
+      material.needsUpdate = true;
+    });
+  });
+}
+
 function getSceneMaterialNames(scene) {
   const names = new Set();
   if (!scene || typeof scene.traverse !== 'function') return names;
