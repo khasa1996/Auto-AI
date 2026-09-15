@@ -107,6 +107,13 @@ def make_configurator_router(
         query: Dict[str, object] = {"active_in_india": True} if active_only else {}
         return await db.brands.find(query, {"_id": 0}).sort("name", 1).to_list(200)
 
+    @router.get("/brands/{brand_id}")
+    async def get_brand(brand_id: str):
+        doc = await db.brands.find_one({"brand_id": brand_id}, {"_id": 0})
+        if not doc:
+            raise HTTPException(status_code=404, detail="Brand not found")
+        return doc
+
     @router.get("/models", response_model=List[ModelSummary])
     async def list_models(
         brand_id: Optional[str] = Query(None, max_length=60),
@@ -130,13 +137,6 @@ def make_configurator_router(
         doc = await db.models.find_one({"model_id": model_id}, {"_id": 0})
         if not doc:
             raise HTTPException(status_code=404, detail="Model not found")
-        return doc
-
-    @router.get("/brands/{brand_id}")
-    async def get_brand(brand_id: str):
-        doc = await db.brands.find_one({"brand_id": brand_id}, {"_id": 0})
-        if not doc:
-            raise HTTPException(status_code=404, detail="Brand not found")
         return doc
 
     @router.get("/variants", response_model=List[VariantSummary])
