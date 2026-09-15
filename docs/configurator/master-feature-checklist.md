@@ -1,6 +1,6 @@
 # Auto AI India — Master 3D Configurator Feature Checklist
 
-> Scope baseline: consolidated from the approved Auto AI India configurator plan. Status below reflects the current Phase 3 premium foundation and pricing-location work.
+> Scope baseline: consolidated from the approved Auto AI India configurator plan. Status below reflects the current Phase 3 production-hardening foundation.
 
 ## Status legend
 - **BUILT** — implemented and covered by the production architecture.
@@ -18,7 +18,7 @@
 | 4 | Auto-rotate | BUILT | Store and controls are implemented. |
 | 5 | OEM paint/color selection | BUILT | Backend-driven color controls and semantic paint-material application are wired. |
 | 6 | Wheel selection | BUILT | Backend-driven wheel UI and declared wheel mesh switching are wired. |
-| 7 | Interior selection | BUILT | Backend-driven interior UI and declared option mesh mapping are wired. |
+| 7 | Interior selection | BUILT | Backend-driven interior UI and declared interior material mapping are wired. |
 | 8 | Roof selection | BUILT | Backend-driven roof UI and declared option mesh mapping are wired. |
 | 9 | Accessory selection | BUILT | Backend-driven multi-select UI and declared option mesh mapping are wired. |
 | 10 | Availability/compatibility rules | BUILT | Backend rules engine remains authoritative. |
@@ -27,10 +27,10 @@
 | 13 | Configuration summary | BUILT | Vehicle, color, wheels, interior, roof and accessories are summarized from backend option data. |
 | 14 | Save configuration | BUILT | Authenticated save revalidates configuration and persists server-calculated price. |
 | 15 | Share configuration | BUILT | Share-token copy UI and public-token loading are wired. |
-| 16 | Configuration restore/persistence | BUILT | `?config=` restore is wired and revalidated; history is available. |
+| 16 | Configuration restore/persistence | BUILT | `?config=` restore is wired and revalidated; history is available. Saved-configuration asset resolution prefers the variant's current assigned production asset. |
 | 17 | Verified/licensed asset gating | BUILT | Publication contract, provenance rules and availability gating exist. |
 | 18 | Responsive desktop/mobile configurator | BUILT | Desktop remains two-column; mobile uses a sticky, scrollable bottom control sheet with safe-area handling. |
-| 19 | Production tests and gates | BUILT | Contract/regression tests and production smoke gates pass on the latest CI-verified Phase 3 foundation head; newer storage/city commits still require CI verification. |
+| 19 | Production tests and gates | BUILT | Backend Tests, Production Gate, and independence validation are green on current Phase 3 head `77a971636deb6893b5411ea3f95ceed51d732ede`. |
 | 20 | Security/backend authority | BUILT | Pricing, options, rules, save ownership and saved snapshots are backend-controlled. |
 
 ## P1 — Premium V1
@@ -45,12 +45,12 @@
 | 26 | Sunroof open/close | PARTIAL | State and UI are asset-capability gated; real asset animation must be present. |
 | 27 | Lights/DRL/hazard/interior lighting | PARTIAL | Controls are capability-gated; complete asset light animation remains. |
 | 28 | Feature hotspots | BUILT | Backend hotspot manifest, publication gating, API and viewer markers/details are wired. |
-| 29 | Cinematic showroom mode | PARTIAL | Fullscreen presentation mode is wired; guided camera sequence remains. |
+| 29 | Cinematic showroom mode | BUILT | Fullscreen presentation and a capability-gated guided camera sequence are wired, with play/pause and manual-control takeover. |
 | 30 | Configuration screenshot/share card | BUILT | Screenshot capture and branded share-card composition are implemented; QR composition remains. |
 | 31 | EMI/finance handoff | BUILT | Configured conversion-lead backend and saved-configuration finance UI handoff are wired. |
 | 32 | Insurance handoff | BUILT | Insurance assistance selection is included in the validated conversion handoff. |
 | 33 | Dealer availability/enquiry/booking | BUILT | Dealer availability, enquiry, test-drive and booking intents are selectable in conversion handoff. |
-| 34 | City/state pricing selector | PARTIAL | Backend now exposes only verified city/state pricing locations and rejects unverified cities; the UI still needs to replace free text with the authoritative picker. |
+| 34 | City/state pricing selector | BUILT | Authoritative verified pricing locations are loaded from the backend and exposed through the state-grouped UI picker; free-text city entry is not used by the configurator. |
 | 35 | Configuration history / saved cars | BUILT | Authenticated history endpoint and history UI are implemented. |
 | 36 | Compare configurations | BUILT | Two saved configurations can be compared through the backend comparison contract. |
 | 37 | OEM/variant data hierarchy | PARTIAL | Backend models/variants/options exist; scalable data population remains. |
