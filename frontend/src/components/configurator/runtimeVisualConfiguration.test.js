@@ -14,8 +14,10 @@ test('retains only visual selections declared by the verified asset manifest', (
       wheelMeshNames: {
         'wheel-sport': ['WheelSport'],
       },
+      interiorMaterialMappings: {
+        'black-leather': ['LeatherBlack'],
+      },
       optionMeshNames: {
-        'black-leather': ['InteriorBlack'],
         'glass-roof': ['RoofGlass'],
         spoiler: ['Spoiler'],
         'mat-kit': ['MatKit'],
