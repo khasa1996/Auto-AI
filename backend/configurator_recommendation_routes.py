@@ -31,12 +31,47 @@ def _candidate_price(pricing: Dict[str, Any]) -> Optional[int]:
     return None
 
 
+def _infer_preference(raw_request: str, values: tuple[tuple[str, tuple[str, ...]], ...]) -> Optional[str]:
+    normalized = raw_request.lower()
+    for canonical, aliases in values:
+        if any(re.search(rf"\b{re.escape(alias)}\b", normalized) for alias in aliases):
+            return canonical
+    return None
+
+
+def _inferred_request_fields(raw_request: str) -> Dict[str, Optional[str]]:
+    return {
+        "preferred_fuel": _infer_preference(
+            raw_request,
+            (
+                ("diesel", ("diesel",)),
+                ("petrol", ("petrol", "gasoline")),
+                ("electric", ("electric", "ev")),
+                ("hybrid", ("hybrid",)),
+                ("cng", ("cng",)),
+            ),
+        ),
+        "preferred_segment": _infer_preference(
+            raw_request,
+            (
+                ("suv", ("suv",)),
+                ("hatchback", ("hatchback",)),
+                ("sedan", ("sedan",)),
+                ("mpv", ("mpv", "muv")),
+            ),
+        ),
+    }
+
+
 def make_configurator_recommendation_router(db: AsyncIOMotorDatabase) -> APIRouter:
     router = APIRouter(prefix="/api/v1/configurator", tags=["configurator-recommendations"])
 
     @router.post("/recommendations", response_model=AIRecommendationResponse)
     async def recommend_variants(request: AIRecommendationRequest) -> AIRecommendationResponse:
         max_budget = request.max_budget if request.max_budget is not None else _budget_from_text(request.raw_request)
+        inferred = _inferred_request_fields(request.raw_request)
+        preferred_fuel = request.preferred_fuel or inferred["preferred_fuel"]
+        preferred_segment = request.preferred_segment or inferred["preferred_segment"]
         variants = await db.variants.find({"active": True}, {"_id": 0}).to_list(500)
         if not variants:
             return AIRecommendationResponse(recommendations=[], explanation="No active vehicle variants are available for this request.", ai_assisted=False, valid=True)
@@ -58,6 +93,8 @@ def make_configurator_recommendation_router(db: AsyncIOMotorDatabase) -> APIRout
 
         ranking_request = request.model_dump()
         ranking_request["max_budget"] = max_budget
+        ranking_request["preferred_fuel"] = preferred_fuel
+        ranking_request["preferred_segment"] = preferred_segment
         ranked = rank_variant_recommendations(candidates, ranking_request)
         by_id = {str(item.get("variant_id")): item for item in candidates}
         recommendations = []
