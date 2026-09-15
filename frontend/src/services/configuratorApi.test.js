@@ -1,4 +1,4 @@
-import { gateAssetResponse } from './configuratorApi';
+import { gateAssetResponse, syncConfiguratorShareUrl } from './configuratorApi';
 
 describe('gateAssetResponse', () => {
   it('keeps a verified published asset available', () => {
@@ -28,5 +28,27 @@ describe('gateAssetResponse', () => {
       status: 'COMING_SOON',
       readiness_blockers: ['production readiness could not be verified'],
     });
+  });
+});
+
+describe('syncConfiguratorShareUrl', () => {
+  it('adds the opaque share token to the current configurator URL without changing the path', () => {
+    const replaceState = jest.spyOn(window.history, 'replaceState').mockImplementation(() => {});
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { origin: 'https://autoaiindia.com', pathname: '/configurator/variant-1' },
+    });
+
+    syncConfiguratorShareUrl('opaque-token');
+
+    expect(replaceState).toHaveBeenCalledWith({}, '', 'https://autoaiindia.com/configurator/variant-1?config=opaque-token');
+    replaceState.mockRestore();
+  });
+
+  it('does nothing when no share token exists', () => {
+    const replaceState = jest.spyOn(window.history, 'replaceState').mockImplementation(() => {});
+    syncConfiguratorShareUrl('');
+    expect(replaceState).not.toHaveBeenCalled();
+    replaceState.mockRestore();
   });
 });
