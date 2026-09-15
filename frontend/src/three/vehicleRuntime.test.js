@@ -1,4 +1,4 @@
-import { buildVehicleRuntimeState, buildRuntimeNodeIndex, buildRuntimeMaterialIndex, resolveRuntimeAsset, resolveRuntimeMeshNodes, resolveRuntimeMeshSelection } from './vehicleRuntime';
+import { applyRuntimeInteriorMaterials, buildVehicleRuntimeState, buildRuntimeNodeIndex, buildRuntimeMaterialIndex, resolveRuntimeAsset, resolveRuntimeMeshNodes, resolveRuntimeMeshSelection } from './vehicleRuntime';
 
 test('builds a runtime state from verified manifest capabilities', () => {
   expect(buildVehicleRuntimeState({
@@ -130,4 +130,41 @@ test('indexes only manifest-declared paint materials for fast color application'
 
   expect(index.get('bodypaint')).toEqual([bodyMaterial]);
   expect(index.has('glass')).toBe(false);
+});
+
+test('applies only the selected verified interior material mapping', () => {
+  const black = { name: 'LeatherBlack', transparent: false, opacity: 1, depthWrite: true, needsUpdate: false, userData: {} };
+  const beige = { name: 'LeatherBeige', transparent: false, opacity: 1, depthWrite: true, needsUpdate: false, userData: {} };
+  const materialIndex = new Map([
+    ['leatherblack', [black]],
+    ['leatherbeige', [beige]],
+  ]);
+
+  applyRuntimeInteriorMaterials(
+    materialIndex,
+    ['LeatherBlack', 'LeatherBeige'],
+    { black: ['LeatherBlack'], beige: ['LeatherBeige'] },
+    'beige',
+  );
+
+  expect(black.opacity).toBe(0);
+  expect(black.transparent).toBe(true);
+  expect(black.depthWrite).toBe(false);
+  expect(beige.opacity).toBe(1);
+  expect(beige.transparent).toBe(false);
+  expect(beige.depthWrite).toBe(true);
+
+  applyRuntimeInteriorMaterials(
+    materialIndex,
+    ['LeatherBlack', 'LeatherBeige'],
+    { black: ['LeatherBlack'], beige: ['LeatherBeige'] },
+    'black',
+  );
+
+  expect(black.opacity).toBe(1);
+  expect(black.transparent).toBe(false);
+  expect(black.depthWrite).toBe(true);
+  expect(beige.opacity).toBe(0);
+  expect(beige.transparent).toBe(true);
+  expect(beige.depthWrite).toBe(false);
 });
