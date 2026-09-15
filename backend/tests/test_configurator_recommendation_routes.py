@@ -17,6 +17,16 @@ class _Collection:
     def __init__(self, rows=None):
         self.rows = rows or []
 
+    async def find_one(self, query, *_args, **_kwargs):
+        for row in self.rows:
+            if all(row.get(key) == value for key, value in query.items() if key not in {"published", "validation_passed"}):
+                if "published" in query and row.get("published") is not query["published"]:
+                    continue
+                if "validation_passed" in query and row.get("validation_passed") is not query["validation_passed"]:
+                    continue
+                return row
+        return None
+
     def find(self, *_args, **_kwargs):
         return _Cursor(self.rows)
 
@@ -31,6 +41,9 @@ class _DB:
             {"variant_id": "v1", "base_ex_showroom": 1200000, "verification_status": "verified"},
             {"variant_id": "v2", "base_ex_showroom": 1000000, "verification_status": "verified"},
         ])
+        self.configurator_assets = _Collection([
+            {"asset_id": "asset-1", "variant_id": "v1", "version": "1.0.0", "published": True, "validation_passed": True},
+        ])
 
 
 def _app(db):
@@ -42,10 +55,7 @@ def _app(db):
 @pytest.mark.asyncio
 async def test_recommendations_return_bounded_backend_candidates_and_readiness():
     async with AsyncClient(transport=ASGITransport(app=_app(_DB())), base_url="http://test") as client:
-        response = await client.post("/api/v1/configurator/recommendations", json={
-            "raw_request": "I need a diesel SUV under ₹15 lakh",
-            "limit": 5,
-        })
+        response = await client.post("/api/v1/configurator/recommendations", json={"raw_request": "I need a diesel SUV under ₹15 lakh", "limit": 5})
 
     assert response.status_code == 200
     body = response.json()
@@ -63,10 +73,7 @@ async def test_recommendations_never_claim_configurator_ready_for_coming_soon_va
     db.variants.rows[0].pop("configurator_asset_id", None)
 
     async with AsyncClient(transport=ASGITransport(app=_app(db)), base_url="http://test") as client:
-        response = await client.post("/api/v1/configurator/recommendations", json={
-            "raw_request": "SUV under ₹15 lakh",
-            "limit": 5,
-        })
+        response = await client.post("/api/v1/configurator/recommendations", json={"raw_request": "SUV under ₹15 lakh", "limit": 5})
 
     assert response.status_code == 200
     result = {item["variant_id"]: item for item in response.json()["recommendations"]}
