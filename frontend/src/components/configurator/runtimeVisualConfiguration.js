@@ -21,6 +21,7 @@ function normalizeMappedList(value, mappings) {
 
 export function projectVerifiedVisualConfiguration(purchasable = {}, asset = {}) {
   const wheelMappings = asset.wheelMeshNames;
+  const interiorMappings = asset.interiorMaterialMappings;
   const optionMappings = asset.optionMeshNames;
   const wheelId = normalizeId(purchasable.wheelId);
   const interiorId = normalizeId(purchasable.interiorId);
@@ -30,7 +31,7 @@ export function projectVerifiedVisualConfiguration(purchasable = {}, asset = {})
     variantId: normalizeId(purchasable.variantId),
     paintId: normalizeId(purchasable.paintId),
     wheelId: hasMapping(wheelMappings, wheelId) ? wheelId : null,
-    interiorId: hasMapping(optionMappings, interiorId) ? interiorId : null,
+    interiorId: hasMapping(interiorMappings, interiorId) ? interiorId : null,
     roofId: hasMapping(optionMappings, roofId) ? roofId : null,
     accessoryIds: normalizeMappedList(purchasable.accessoryIds, optionMappings),
   };
