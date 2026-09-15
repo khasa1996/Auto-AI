@@ -19,6 +19,7 @@ from configurator_schemas import (
     ValidationResult,
 )
 from configurator_ai import build_interaction_state, resolve_ai_selection
+from configurator_persistence import revalidate_saved_configuration
 from vehicle_schemas import BrandSummary, ConfiguratorStatus, ModelSummary, VariantDetail, VariantSummary
 from pricing_engine import calculate_configuration_price, validate_asset_url
 from rules_engine import get_available_options_for_variant, validate_configuration
@@ -210,7 +211,12 @@ def make_configurator_router(
         if not asset_id:
             return {"variant_id": variant_id, "available": False, "message": "3D asset not assigned"}
         asset = await db.configurator_assets.find_one(
-            {"asset_id": asset_id, "published": True, "validation_passed": True},
+            {
+                "asset_id": asset_id,
+                "variant_id": variant_id,
+                "published": True,
+                "validation_passed": True,
+            },
             {"_id": 0},
         )
         if not asset:
@@ -230,8 +236,12 @@ def make_configurator_router(
                 "lod_level": asset["lod_level"],
                 "supported_interactions": asset.get("supported_interactions", []),
                 "paint_material_names": asset.get("paint_material_names", []),
+                "interior_material_names": asset.get("interior_material_names", []),
+                "interior_material_mappings": asset.get("interior_material_mappings", {}),
                 "wheel_mesh_names": asset.get("wheel_mesh_names", {}),
                 "option_mesh_names": asset.get("option_mesh_names", {}),
+                "camera_preset_names": asset.get("camera_preset_names", []),
+                "interaction_animation_names": asset.get("interaction_animation_names", {}),
             },
         }
 
@@ -338,7 +348,29 @@ def make_configurator_router(
             raise HTTPException(status_code=401, detail="Authentication required")
         if doc.get("owner_phone") != auth_phone:
             raise HTTPException(status_code=403, detail="Configuration access denied")
-        return doc
+
+        async def current_price_resolver(
+            configuration: Dict[str, object],
+            city: Optional[str],
+        ) -> Dict[str, object]:
+            price_request = ConfigurationPriceRequest(configuration=configuration, city=city)
+            price = await calculate_configuration_price(price_request, db)
+            return price.model_dump(mode="json")
+
+        async def current_asset_resolver(
+            variant_id: str,
+            requested_asset_id: Optional[str],
+        ) -> Optional[Dict[str, object]]:
+            return await resolve_saved_configuration_asset(db, variant_id, requested_asset_id)
+
+        try:
+            return await revalidate_saved_configuration(
+                doc,
+                current_price_resolver,
+                current_asset_resolver,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
 
     @router.post("/configurator/ai", response_model=AIConfiguratorResponse)
     async def ai_configurator(intent: AIConfiguratorIntent):

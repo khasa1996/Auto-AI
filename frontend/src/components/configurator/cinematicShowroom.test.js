@@ -24,6 +24,14 @@ test('buildCinematicSequence includes interior only when the asset declares an i
   ]);
 });
 
+test('buildCinematicSequence narrows the sequence to verified camera manifest names', () => {
+  expect(buildCinematicSequence(['camera_exterior'], ['exterior', 'rear'])).toEqual([
+    'exterior',
+    'rear',
+  ]);
+  expect(buildCinematicSequence(['camera_exterior'], [])).toEqual([]);
+});
+
 test('getNextCinematicPreset wraps to the first supported preset', () => {
   const sequence = ['front', 'rear', 'right'];
   expect(getNextCinematicPreset(sequence, 'rear')).toBe('right');

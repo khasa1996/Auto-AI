@@ -52,6 +52,7 @@ jobs:
         working-directory: frontend
 
     env:
+      CI: "true"
       REACT_APP_BACKEND_URL: https://auto-ai-api.onrender.com
 
     steps:
@@ -65,6 +66,9 @@ jobs:
 
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+
+      - name: Frontend unit tests
+        run: npm test -- --watchAll=false --runInBand
 
       - name: Production build
         run: npm run build
