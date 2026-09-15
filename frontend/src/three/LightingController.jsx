@@ -2,16 +2,11 @@
  * LightingController — vehicle lighting system for the 3D configurator.
  *
  * Lighting is a SHOWROOM INTERACTION — it does NOT affect vehicle price.
- *
- * The controller accepts either a scene Object3D or a React ref. Using the ref
- * form prevents the first render from missing the scene because React assigns
- * object refs after render and before effects run.
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 
-/** Semantic material names for lighting surfaces in the vehicle GLB. */
 export const LIGHTING_MATERIAL_NAMES = {
   HEADLIGHT: 'MAT_HEADLIGHT',
   DRL: 'MAT_DRL',
@@ -39,151 +34,104 @@ export function normalizeLightingState(lightingState = {}, supportedInteractions
   };
 }
 
-/**
- * useLightingController — applies lighting state to the 3D scene.
- *
- * @param {THREE.Object3D|React.RefObject} sceneOrRef - Vehicle scene/group or ref
- * @param {object} lightingState - From configurator store interaction.lighting
- * @param {string[]} supportedInteractions - Verified asset capabilities
- */
+export function buildLightingMaterialIndex(scene) {
+  const index = new Map();
+  if (!scene || typeof scene.traverse !== 'function') return index;
+  scene.traverse((node) => {
+    if (!node?.isMesh) return;
+    const materials = Array.isArray(node.material) ? node.material : [node.material];
+    materials.forEach((material) => {
+      const name = typeof material?.name === 'string' ? material.name.trim().toUpperCase() : '';
+      if (!name || !material?.emissive || !Object.values(LIGHTING_MATERIAL_NAMES).includes(name)) return;
+      const bucket = index.get(name) || [];
+      bucket.push(material);
+      index.set(name, bucket);
+    });
+  });
+  return index;
+}
+
+function setMaterialEmissive(materials, on, color = '#ffffff', intensity = 2) {
+  materials.forEach((material) => {
+    material.emissive.set(on ? color : '#000000');
+    material.emissiveIntensity = on ? intensity : 0;
+    material.needsUpdate = true;
+  });
+}
+
 export function useLightingController(sceneOrRef, lightingState, supportedInteractions = []) {
   const headlightRef = useRef(null);
   const taillightRef = useRef(null);
   const indicatorTimerRef = useRef(null);
+  const scene = sceneOrRef?.current ?? sceneOrRef ?? null;
   const normalizedLighting = normalizeLightingState(lightingState, supportedInteractions);
-
-  const getScene = () => sceneOrRef?.current ?? sceneOrRef ?? null;
+  const materialIndex = useMemo(() => buildLightingMaterialIndex(scene), [scene]);
 
   useEffect(() => {
-    const scene = getScene();
-    if (!scene) return undefined;
-
-    const targets = {
-      [LIGHTING_MATERIAL_NAMES.HEADLIGHT]: normalizedLighting.headlights,
-      [LIGHTING_MATERIAL_NAMES.DRL]: normalizedLighting.drl,
-      [LIGHTING_MATERIAL_NAMES.TAILLIGHT]: normalizedLighting.taillights,
-      [LIGHTING_MATERIAL_NAMES.FOG_LIGHT]: normalizedLighting.fog_lights,
-      [LIGHTING_MATERIAL_NAMES.INTERIOR_LIGHT]: normalizedLighting.interior,
-    };
-
-    scene.traverse((node) => {
-      if (!node.isMesh) return;
-      const mats = Array.isArray(node.material) ? node.material : [node.material];
-      mats.forEach((mat) => {
-        if (!mat?.emissive) return;
-        const matName = (mat.name || '').toUpperCase();
-        if (!Object.prototype.hasOwnProperty.call(targets, matName)) return;
-        const on = targets[matName];
-        mat.emissive.set(on ? '#ffffff' : '#000000');
-        mat.emissiveIntensity = on ? 2.0 : 0.0;
-        mat.needsUpdate = true;
-      });
-    });
-
+    if (!materialIndex.size) return undefined;
+    setMaterialEmissive(materialIndex.get(LIGHTING_MATERIAL_NAMES.HEADLIGHT), normalizedLighting.headlights);
+    setMaterialEmissive(materialIndex.get(LIGHTING_MATERIAL_NAMES.DRL), normalizedLighting.drl);
+    setMaterialEmissive(materialIndex.get(LIGHTING_MATERIAL_NAMES.TAILLIGHT), normalizedLighting.taillights);
+    setMaterialEmissive(materialIndex.get(LIGHTING_MATERIAL_NAMES.FOG_LIGHT), normalizedLighting.fog_lights);
+    setMaterialEmissive(materialIndex.get(LIGHTING_MATERIAL_NAMES.INTERIOR_LIGHT), normalizedLighting.interior);
     return undefined;
-  }, [sceneOrRef, normalizedLighting.headlights, normalizedLighting.drl,
-      normalizedLighting.taillights, normalizedLighting.fog_lights, normalizedLighting.interior]);
+  }, [materialIndex, normalizedLighting.headlights, normalizedLighting.drl, normalizedLighting.taillights, normalizedLighting.fog_lights, normalizedLighting.interior]);
 
   useEffect(() => {
-    const scene = getScene();
     if (!scene) return undefined;
-
-    if (normalizedLighting.headlights) {
-      if (!headlightRef.current) {
-        const light = new THREE.PointLight('#ffffee', 3, 8);
-        light.position.set(0, 0.6, 2.5);
-        scene.add(light);
-        headlightRef.current = light;
-      }
-    } else if (headlightRef.current) {
+    if (normalizedLighting.headlights && !headlightRef.current) {
+      const light = new THREE.PointLight('#ffffee', 3, 8);
+      light.position.set(0, 0.6, 2.5);
+      scene.add(light);
+      headlightRef.current = light;
+    } else if (!normalizedLighting.headlights && headlightRef.current) {
       scene.remove(headlightRef.current);
       headlightRef.current = null;
     }
-
     return undefined;
-  }, [sceneOrRef, normalizedLighting.headlights]);
+  }, [scene, normalizedLighting.headlights]);
 
   useEffect(() => {
-    const scene = getScene();
     if (!scene) return undefined;
-
-    if (normalizedLighting.taillights) {
-      if (!taillightRef.current) {
-        const light = new THREE.PointLight('#ff2200', 1.5, 4);
-        light.position.set(0, 0.5, -2.5);
-        scene.add(light);
-        taillightRef.current = light;
-      }
-    } else if (taillightRef.current) {
+    if (normalizedLighting.taillights && !taillightRef.current) {
+      const light = new THREE.PointLight('#ff2200', 1.5, 4);
+      light.position.set(0, 0.5, -2.5);
+      scene.add(light);
+      taillightRef.current = light;
+    } else if (!normalizedLighting.taillights && taillightRef.current) {
       scene.remove(taillightRef.current);
       taillightRef.current = null;
     }
-
     return undefined;
-  }, [sceneOrRef, normalizedLighting.taillights]);
+  }, [scene, normalizedLighting.taillights]);
 
   useEffect(() => {
-    const scene = getScene();
     if (!scene) return undefined;
-
     const leftOn = normalizedLighting.left_indicator || normalizedLighting.hazard;
     const rightOn = normalizedLighting.right_indicator || normalizedLighting.hazard;
-
     clearInterval(indicatorTimerRef.current);
     indicatorTimerRef.current = null;
-
-    _setIndicatorEmissive(scene, 'left', false);
-    _setIndicatorEmissive(scene, 'right', false);
-
+    setMaterialEmissive(materialIndex.get(LIGHTING_MATERIAL_NAMES.LEFT_INDICATOR), false, '#ffaa00', 3);
+    setMaterialEmissive(materialIndex.get(LIGHTING_MATERIAL_NAMES.RIGHT_INDICATOR), false, '#ffaa00', 3);
     if (!leftOn && !rightOn) return undefined;
-
     let blink = false;
     indicatorTimerRef.current = setInterval(() => {
       blink = !blink;
-      if (leftOn) _setIndicatorEmissive(scene, 'left', blink);
-      if (rightOn) _setIndicatorEmissive(scene, 'right', blink);
+      if (leftOn) setMaterialEmissive(materialIndex.get(LIGHTING_MATERIAL_NAMES.LEFT_INDICATOR), blink, '#ffaa00', 3);
+      if (rightOn) setMaterialEmissive(materialIndex.get(LIGHTING_MATERIAL_NAMES.RIGHT_INDICATOR), blink, '#ffaa00', 3);
     }, INDICATOR_BLINK_MS);
-
     return () => {
       clearInterval(indicatorTimerRef.current);
       indicatorTimerRef.current = null;
     };
-  }, [sceneOrRef, normalizedLighting.left_indicator, normalizedLighting.right_indicator, normalizedLighting.hazard]);
+  }, [scene, materialIndex, normalizedLighting.left_indicator, normalizedLighting.right_indicator, normalizedLighting.hazard]);
 
-  useEffect(() => {
-    return () => {
-      clearInterval(indicatorTimerRef.current);
-      indicatorTimerRef.current = null;
-
-      const scene = getScene();
-      if (scene) {
-        if (headlightRef.current) {
-          scene.remove(headlightRef.current);
-          headlightRef.current = null;
-        }
-        if (taillightRef.current) {
-          scene.remove(taillightRef.current);
-          taillightRef.current = null;
-        }
-      }
-    };
-  }, [sceneOrRef]);
-}
-
-function _setIndicatorEmissive(scene, side, on) {
-  const matName = side === 'left'
-    ? LIGHTING_MATERIAL_NAMES.LEFT_INDICATOR.toUpperCase()
-    : LIGHTING_MATERIAL_NAMES.RIGHT_INDICATOR.toUpperCase();
-
-  scene.traverse((node) => {
-    if (!node.isMesh) return;
-    const mats = Array.isArray(node.material) ? node.material : [node.material];
-    mats.forEach((mat) => {
-      if (!mat?.emissive) return;
-      if ((mat.name || '').toUpperCase() !== matName) return;
-      mat.emissive.set(on ? '#ffaa00' : '#000000');
-      mat.emissiveIntensity = on ? 3.0 : 0.0;
-      mat.needsUpdate = true;
-    });
-  });
+  useEffect(() => () => {
+    clearInterval(indicatorTimerRef.current);
+    indicatorTimerRef.current = null;
+    if (scene && headlightRef.current) scene.remove(headlightRef.current);
+    if (scene && taillightRef.current) scene.remove(taillightRef.current);
+    headlightRef.current = null;
+    taillightRef.current = null;
+  }, [scene]);
 }

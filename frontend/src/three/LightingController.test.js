@@ -1,4 +1,4 @@
-import { normalizeLightingState } from './LightingController';
+import { normalizeLightingState, buildLightingMaterialIndex, LIGHTING_MATERIAL_NAMES } from './LightingController';
 
 test('keeps only lighting capabilities declared by the verified asset', () => {
   expect(normalizeLightingState({
@@ -33,4 +33,24 @@ test('rejects malformed capability lists without enabling lighting', () => {
     hazard: false,
     interior: false,
   });
+});
+
+test('indexes only verified lighting material names', () => {
+  const headlight = { name: LIGHTING_MATERIAL_NAMES.HEADLIGHT, emissive: {} };
+  const unknown = { name: 'MAT_UNKNOWN', emissive: {} };
+  const traversed = [];
+  const scene = {
+    traverse(callback) {
+      const nodes = [
+        { isMesh: true, material: headlight },
+        { isMesh: true, material: [unknown] },
+      ];
+      nodes.forEach((node) => { traversed.push(node); callback(node); });
+    },
+  };
+
+  const index = buildLightingMaterialIndex(scene);
+  expect(traversed).toHaveLength(2);
+  expect(index.get(LIGHTING_MATERIAL_NAMES.HEADLIGHT)).toEqual([headlight]);
+  expect(index.has('MAT_UNKNOWN')).toBe(false);
 });

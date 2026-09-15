@@ -25,11 +25,16 @@ _ALLOWED_INTERACTIONS = {
 }
 
 
-def validate_asset_manifest(asset: ConfiguratorAssetCreate, mesh_names: Iterable[str]) -> Dict[str, Any]:
-    """Validate metadata and exact mesh mappings before publication."""
+def validate_asset_manifest(
+    asset: ConfiguratorAssetCreate,
+    mesh_names: Iterable[str],
+    material_names: Iterable[str] = (),
+) -> Dict[str, Any]:
+    """Validate metadata and exact mesh/material mappings before publication."""
     errors: List[str] = []
     warnings: List[str] = []
     available_meshes = {str(name) for name in mesh_names if str(name).strip()}
+    available_materials = {str(name) for name in material_names if str(name).strip()}
 
     if not asset.is_publishable():
         errors.append("Asset is not publishable: provenance, validation, admin review, license and publisher are all required")
@@ -52,7 +57,24 @@ def validate_asset_manifest(asset: ConfiguratorAssetCreate, mesh_names: Iterable
         if missing:
             errors.append(f"Option mapping '{option_id}' references missing meshes: {', '.join(missing)}")
 
-    duplicate_meshes = [mesh for mesh in available_meshes if sum(mesh in values for values in asset.wheel_mesh_names.values()) + sum(mesh in meshes for meshes in asset.option_mesh_names.values()) > 1]
+    for interior_id, mapped_materials in asset.interior_material_mappings.items():
+        if not mapped_materials:
+            errors.append(f"Interior material mapping '{interior_id}' must contain at least one material")
+            continue
+        if not available_materials:
+            warnings.append(f"Interior material mapping '{interior_id}' could not be cross-checked because no inspected material names were supplied")
+            continue
+        missing = [material for material in mapped_materials if material not in available_materials]
+        if missing:
+            errors.append(
+                f"Interior material mapping '{interior_id}' references missing materials: {', '.join(missing)}"
+            )
+
+    duplicate_meshes = [
+        mesh for mesh in available_meshes
+        if sum(mesh in values for values in asset.wheel_mesh_names.values())
+        + sum(mesh in meshes for meshes in asset.option_mesh_names.values()) > 1
+    ]
     if duplicate_meshes:
         warnings.append("Some optional mappings share mesh names; verify that this is intentional")
 

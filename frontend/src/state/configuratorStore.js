@@ -6,6 +6,7 @@
  */
 
 import { create } from 'zustand';
+import { getVerifiedRuntimeCapabilities, getVerifiedMappings, isRuntimeAssetUsable } from '../components/configurator/assetRuntimeCapabilities';
 
 const defaultPurchasable = {
   variantId: null,
@@ -47,9 +48,11 @@ const defaultAsset = {
   lodLevel: null,
   supportedInteractions: [],
   paintMaterialNames: [],
+  interiorMaterialNames: [],
   wheelMeshNames: {},
   optionMeshNames: {},
   interactionAnimationNames: {},
+  cameraPresetNames: [],
   configuratorStatus: 'COMING_SOON',
   loadedAt: null,
 };
@@ -76,6 +79,22 @@ export function isCameraPresetSupported(supportedInteractions, preset) {
   const required = CAMERA_CAPABILITIES[preset];
   if (!required) return false;
   return required.every((capability) => supportedInteractions.includes(capability));
+}
+
+function normalizeAssetManifest(assetData = {}) {
+  return {
+    ...assetData,
+    lodLevel: assetData.lodLevel ?? assetData.lod_level,
+    configuratorStatus: assetData.configuratorStatus ?? assetData.configurator_status,
+    supportedInteractions: assetData.supportedInteractions ?? assetData.supported_interactions,
+    paintMaterialNames: assetData.paintMaterialNames ?? assetData.paint_material_names,
+    interiorMaterialNames: assetData.interiorMaterialNames ?? assetData.interior_material_names,
+    interiorMaterialMappings: assetData.interiorMaterialMappings ?? assetData.interior_material_mappings,
+    wheelMeshNames: assetData.wheelMeshNames ?? assetData.wheel_mesh_names,
+    optionMeshNames: assetData.optionMeshNames ?? assetData.option_mesh_names,
+    cameraPresetNames: assetData.cameraPresetNames ?? assetData.camera_preset_names,
+    interactionAnimationNames: assetData.interactionAnimationNames ?? assetData.interaction_animation_names,
+  };
 }
 
 export const useConfiguratorStore = create((set, get) => ({
@@ -146,7 +165,23 @@ export const useConfiguratorStore = create((set, get) => ({
   setShowroomPaused(paused) {
     set((s) => ({ showroom: { ...s.showroom, paused } }));
   },
-  setAsset(assetData) { set({ asset: { ...defaultAsset, ...assetData, loadedAt: new Date().toISOString() } }); },
+  setAsset(assetData) {
+    const normalizedAsset = normalizeAssetManifest(assetData);
+    const capabilities = getVerifiedRuntimeCapabilities(normalizedAsset);
+    const mappings = getVerifiedMappings(normalizedAsset);
+    const usable = isRuntimeAssetUsable(normalizedAsset);
+    set({
+      asset: {
+        ...defaultAsset,
+        ...normalizedAsset,
+        ...capabilities,
+        ...mappings,
+        available: usable,
+        configuratorStatus: usable ? normalizedAsset.configuratorStatus : 'UNAVAILABLE',
+        loadedAt: new Date().toISOString(),
+      },
+    });
+  },
   setAssetUnavailable(status = 'COMING_SOON') { set({ asset: { ...defaultAsset, configuratorStatus: status } }); },
   setPriceLoading() { set({ price: { ...get().price, loading: true, error: null } }); },
   setPriceResult(data) { set({ price: { loading: false, error: null, data, lastFetchedFor: JSON.stringify(get().purchasable) } }); },
