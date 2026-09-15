@@ -13,6 +13,7 @@ export const configuratorApi = {
   getVariants: (params = {}) => api.get(`${V1}/variants`, { params }),
   getVariant: (variantId) => api.get(`${V1}/variants/${variantId}`),
   getAvailability: (variantId) => api.get(`${V1}/configurator/${variantId}/availability`),
+  getReadiness: (variantId) => api.get(`${V1}/configurator/variants/${variantId}/readiness`),
   getAsset: (variantId) => api.get(`${V1}/configurator/${variantId}/asset`),
   getHotspots: (variantId) => api.get(`${V1}/configurator/${variantId}/hotspots`),
   getOptions: (variantId) => api.get(`${V1}/configurator/${variantId}/options`),
