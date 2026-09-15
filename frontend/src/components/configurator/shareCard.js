@@ -15,6 +15,23 @@ export function buildShareCardData({ vehicleName, variantName, color, wheels, in
   };
 }
 
+export function normalizeShareCardRequest(sourceOrRequest, legacyRequest) {
+  if (legacyRequest && typeof legacyRequest === "object") {
+    return {
+      sourceCanvas: sourceOrRequest,
+      vehicleName: legacyRequest.vehicleName,
+      variantName: legacyRequest.variantName || legacyRequest.variant,
+      color: legacyRequest.color,
+      wheels: legacyRequest.wheels,
+      interior: legacyRequest.interior,
+      roof: legacyRequest.roof,
+      price: legacyRequest.price,
+      city: legacyRequest.city,
+    };
+  }
+  return sourceOrRequest || {};
+}
+
 function wrapLines(ctx, value, maxWidth, maxLines = 2) {
   const words = text(value).split(/\s+/);
   const lines = [];
@@ -32,17 +49,20 @@ function wrapLines(ctx, value, maxWidth, maxLines = 2) {
   return lines;
 }
 
-export async function buildConfiguratorShareCard({
-  sourceCanvas,
-  vehicleName,
-  variantName,
-  color,
-  wheels,
-  interior,
-  roof,
-  price,
-  city,
-}) {
+export async function buildConfiguratorShareCard(sourceOrRequest, legacyRequest) {
+  const request = normalizeShareCardRequest(sourceOrRequest, legacyRequest);
+  const {
+    sourceCanvas,
+    vehicleName,
+    variantName,
+    color,
+    wheels,
+    interior,
+    roof,
+    price,
+    city,
+  } = request;
+
   if (!sourceCanvas) throw new Error("Configurator canvas is unavailable");
   const data = buildShareCardData({ vehicleName, variantName, color, wheels, interior, roof, price, city });
   const canvas = document.createElement("canvas");
