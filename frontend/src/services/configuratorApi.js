@@ -51,6 +51,7 @@ export const configuratorApi = {
   validateConfiguration: (configuration) => api.post(`${V1}/configurator/validate`, { configuration }),
   calculatePrice: (configuration, city = null) => api.post(`${V1}/configurator/price`, { configuration, city }),
   resolveWithAI: (intent) => api.post(`${V1}/configurator/ai`, intent),
+  recommendVariants: (request) => api.post(`${V1}/configurator/recommendations`, request),
   calculateEMI: (payload) => api.post('/emi/calculate', payload),
   saveConfiguration: async (payload) => {
     const response = await api.post(`${V1}/configurator/configurations`, payload);
