@@ -25,12 +25,8 @@ from rules_engine import get_available_options_for_variant, validate_configurati
 from configurator_persistence import revalidate_saved_configuration
 
 
-async def _resolve_optional_user_phone(
-    authorization: Optional[str] = Header(None),
-) -> Optional[str]:
-    """Resolve the application's canonical optional auth dependency lazily."""
+async def _resolve_optional_user_phone(authorization: Optional[str] = Header(None)) -> Optional[str]:
     from server import optional_user_phone
-
     return await optional_user_phone(authorization)
 
 
@@ -38,67 +34,24 @@ def _utcnow_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def build_saved_configuration_document(
-    request: SavedConfigurationCreate,
-    owner_phone: str,
-    server_price_snapshot: Dict[str, object],
-    server_asset: Optional[Dict[str, object]],
-    config_id: str,
-    share_token: str,
-    now: str,
-) -> Dict[str, object]:
-    """Build a persisted snapshot from server-authoritative values."""
+def build_saved_configuration_document(request: SavedConfigurationCreate, owner_phone: str, server_price_snapshot: Dict[str, object], server_asset: Optional[Dict[str, object]], config_id: str, share_token: str, now: str) -> Dict[str, object]:
     configuration = request.configuration.model_dump()
     stale_reason = None if server_asset else "Published verified configurator asset is unavailable"
     estimated_on_road = int(server_price_snapshot.get("estimated_on_road", 0))
-    return {
-        "config_id": config_id,
-        "owner_phone": owner_phone,
-        "share_token": share_token,
-        "configuration": configuration,
-        "city": request.city,
-        "price_snapshot": estimated_on_road,
-        "price_breakdown": server_price_snapshot,
-        "asset_id": server_asset.get("asset_id") if server_asset else None,
-        "asset_version": server_asset.get("version") if server_asset else None,
-        "stale": bool(stale_reason),
-        "stale_reason": stale_reason,
-        "created_at": now,
-        "updated_at": now,
-    }
+    return {"config_id": config_id, "owner_phone": owner_phone, "share_token": share_token, "configuration": configuration, "city": request.city, "price_snapshot": estimated_on_road, "price_breakdown": server_price_snapshot, "asset_id": server_asset.get("asset_id") if server_asset else None, "asset_version": server_asset.get("version") if server_asset else None, "stale": bool(stale_reason), "stale_reason": stale_reason, "created_at": now, "updated_at": now}
 
 
-async def resolve_saved_configuration_asset(
-    db: AsyncIOMotorDatabase,
-    variant_id: str,
-    requested_asset_id: Optional[str],
-) -> Optional[Dict[str, object]]:
-    """Resolve the published verified asset assigned to a variant for persistence."""
+async def resolve_saved_configuration_asset(db: AsyncIOMotorDatabase, variant_id: str, requested_asset_id: Optional[str]) -> Optional[Dict[str, object]]:
     asset_id = requested_asset_id
     if not asset_id:
-        variant = await db.variants.find_one(
-            {"variant_id": variant_id},
-            {"_id": 0, "configurator_asset_id": 1},
-        )
+        variant = await db.variants.find_one({"variant_id": variant_id}, {"_id": 0, "configurator_asset_id": 1})
         asset_id = variant.get("configurator_asset_id") if variant else None
     if not asset_id:
         return None
-    return await db.configurator_assets.find_one(
-        {
-            "asset_id": asset_id,
-            "variant_id": variant_id,
-            "published": True,
-            "validation_passed": True,
-        },
-        {"_id": 0, "asset_id": 1, "version": 1},
-    )
+    return await db.configurator_assets.find_one({"asset_id": asset_id, "variant_id": variant_id, "published": True, "validation_passed": True}, {"_id": 0, "asset_id": 1, "version": 1})
 
 
-def make_configurator_router(
-    db: AsyncIOMotorDatabase,
-    optional_user_phone: Optional[Callable[..., Awaitable[Optional[str]]]] = None,
-) -> APIRouter:
-    """Build the versioned configurator router with database/auth dependencies."""
+def make_configurator_router(db: AsyncIOMotorDatabase, optional_user_phone: Optional[Callable[..., Awaitable[Optional[str]]]] = None) -> APIRouter:
     auth_dependency = optional_user_phone or _resolve_optional_user_phone
     router = APIRouter(prefix="/api/v1", tags=["configurator"])
 
@@ -110,58 +63,37 @@ def make_configurator_router(
     @router.get("/brands/{brand_id}")
     async def get_brand(brand_id: str):
         doc = await db.brands.find_one({"brand_id": brand_id}, {"_id": 0})
-        if not doc:
-            raise HTTPException(status_code=404, detail="Brand not found")
+        if not doc: raise HTTPException(status_code=404, detail="Brand not found")
         return doc
 
     @router.get("/models", response_model=List[ModelSummary])
-    async def list_models(
-        brand_id: Optional[str] = Query(None, max_length=60),
-        body_type: Optional[str] = Query(None, max_length=40),
-        segment: Optional[str] = Query(None, max_length=40),
-        include_discontinued: bool = Query(False),
-    ):
+    async def list_models(brand_id: Optional[str] = Query(None, max_length=60), body_type: Optional[str] = Query(None, max_length=40), segment: Optional[str] = Query(None, max_length=40), include_discontinued: bool = Query(False)):
         query: Dict[str, object] = {}
-        if brand_id:
-            query["brand_id"] = brand_id
-        if body_type:
-            query["body_type"] = body_type
-        if segment:
-            query["market_segment"] = segment
-        if not include_discontinued:
-            query["discontinued"] = False
+        if brand_id: query["brand_id"] = brand_id
+        if body_type: query["body_type"] = body_type
+        if segment: query["market_segment"] = segment
+        if not include_discontinued: query["discontinued"] = False
         return await db.models.find(query, {"_id": 0}).sort("name", 1).to_list(500)
 
     @router.get("/models/{model_id}")
     async def get_model(model_id: str):
         doc = await db.models.find_one({"model_id": model_id}, {"_id": 0})
-        if not doc:
-            raise HTTPException(status_code=404, detail="Model not found")
+        if not doc: raise HTTPException(status_code=404, detail="Model not found")
         return doc
 
     @router.get("/variants", response_model=List[VariantSummary])
-    async def list_variants(
-        model_id: Optional[str] = Query(None, max_length=80),
-        brand_id: Optional[str] = Query(None, max_length=60),
-        fuel: Optional[str] = Query(None, max_length=40),
-        active_only: bool = Query(True),
-    ):
+    async def list_variants(model_id: Optional[str] = Query(None, max_length=80), brand_id: Optional[str] = Query(None, max_length=60), fuel: Optional[str] = Query(None, max_length=40), active_only: bool = Query(True)):
         query: Dict[str, object] = {}
-        if model_id:
-            query["model_id"] = model_id
-        if brand_id:
-            query["brand_id"] = brand_id
-        if fuel:
-            query["specs.fuel_type"] = fuel
-        if active_only:
-            query["active"] = True
+        if model_id: query["model_id"] = model_id
+        if brand_id: query["brand_id"] = brand_id
+        if fuel: query["specs.fuel_type"] = fuel
+        if active_only: query["active"] = True
         return await db.variants.find(query, {"_id": 0}).to_list(500)
 
     @router.get("/variants/{variant_id}", response_model=VariantDetail)
     async def get_variant(variant_id: str):
         doc = await db.variants.find_one({"variant_id": variant_id}, {"_id": 0})
-        if not doc:
-            raise HTTPException(status_code=404, detail="Variant not found")
+        if not doc: raise HTTPException(status_code=404, detail="Variant not found")
         pricing = await db.variant_pricing.find_one({"variant_id": variant_id}, {"_id": 0})
         colors = await db.variant_colors.find({"variant_id": variant_id}, {"_id": 0}).to_list(30)
         wheels = await db.variant_wheels.find({"variant_id": variant_id}, {"_id": 0}).to_list(20)
@@ -170,80 +102,24 @@ def make_configurator_router(
 
     @router.get("/configurator/{variant_id}/availability")
     async def get_configurator_availability(variant_id: str):
-        variant = await db.variants.find_one(
-            {"variant_id": variant_id},
-            {"_id": 0, "configurator_status": 1, "configurator_asset_id": 1},
-        )
+        variant = await db.variants.find_one({"variant_id": variant_id}, {"_id": 0, "configurator_status": 1, "configurator_asset_id": 1})
         if not variant:
             legacy = await db.cars.find_one({"id": variant_id}, {"_id": 0})
-            if not legacy:
-                raise HTTPException(status_code=404, detail="Variant not found")
-            return {
-                "variant_id": variant_id,
-                "configurator_status": ConfiguratorStatus.COMING_SOON,
-                "asset_id": None,
-                "message": "3D Configurator Coming Soon",
-            }
+            if not legacy: raise HTTPException(status_code=404, detail="Variant not found")
+            return {"variant_id": variant_id, "configurator_status": ConfiguratorStatus.COMING_SOON, "asset_id": None, "message": "3D Configurator Coming Soon"}
         status = variant.get("configurator_status", ConfiguratorStatus.COMING_SOON)
-        return {
-            "variant_id": variant_id,
-            "configurator_status": status,
-            "asset_id": variant.get("configurator_asset_id"),
-            "message": _status_message(status),
-        }
+        return {"variant_id": variant_id, "configurator_status": status, "asset_id": variant.get("configurator_asset_id"), "message": _status_message(status)}
 
     @router.get("/configurator/{variant_id}/asset")
     async def get_configurator_asset(variant_id: str):
-        variant = await db.variants.find_one(
-            {"variant_id": variant_id},
-            {"_id": 0, "configurator_status": 1, "configurator_asset_id": 1},
-        )
+        variant = await db.variants.find_one({"variant_id": variant_id}, {"_id": 0, "configurator_status": 1, "configurator_asset_id": 1})
         if not variant or variant.get("configurator_status") != ConfiguratorStatus.AVAILABLE:
-            return {
-                "variant_id": variant_id,
-                "available": False,
-                "message": _status_message(
-                    variant.get("configurator_status", ConfiguratorStatus.COMING_SOON)
-                    if variant else ConfiguratorStatus.COMING_SOON
-                ),
-            }
+            return {"variant_id": variant_id, "available": False, "message": _status_message(variant.get("configurator_status", ConfiguratorStatus.COMING_SOON) if variant else ConfiguratorStatus.COMING_SOON)}
         asset_id = variant.get("configurator_asset_id")
-        if not asset_id:
-            return {"variant_id": variant_id, "available": False, "message": "3D asset not assigned"}
-        asset = await db.configurator_assets.find_one(
-            {
-                "asset_id": asset_id,
-                "variant_id": variant_id,
-                "published": True,
-                "validation_passed": True,
-            },
-            {"_id": 0},
-        )
-        if not asset:
-            return {
-                "variant_id": variant_id,
-                "available": False,
-                "message": "3D asset is not yet published or has not passed validation",
-            }
-        return {
-            "variant_id": variant_id,
-            "available": True,
-            "asset": {
-                "asset_id": asset["asset_id"],
-                "url": asset.get("cdn_url") or asset["url"],
-                "format": asset["format"],
-                "version": asset["version"],
-                "lod_level": asset["lod_level"],
-                "supported_interactions": asset.get("supported_interactions", []),
-                "paint_material_names": asset.get("paint_material_names", []),
-                "interior_material_names": asset.get("interior_material_names", []),
-                "interior_material_mappings": asset.get("interior_material_mappings", {}),
-                "wheel_mesh_names": asset.get("wheel_mesh_names", {}),
-                "option_mesh_names": asset.get("option_mesh_names", {}),
-                "camera_preset_names": asset.get("camera_preset_names", []),
-                "interaction_animation_names": asset.get("interaction_animation_names", {}),
-            },
-        }
+        if not asset_id: return {"variant_id": variant_id, "available": False, "message": "3D asset not assigned"}
+        asset = await db.configurator_assets.find_one({"asset_id": asset_id, "variant_id": variant_id, "published": True, "validation_passed": True}, {"_id": 0})
+        if not asset: return {"variant_id": variant_id, "available": False, "message": "3D asset is not yet published or has not passed validation"}
+        return {"variant_id": variant_id, "available": True, "asset": {"asset_id": asset["asset_id"], "url": asset.get("cdn_url") or asset["url"], "format": asset["format"], "version": asset["version"], "lod_level": asset["lod_level"], "supported_interactions": asset.get("supported_interactions", []), "paint_material_names": asset.get("paint_material_names", []), "interior_material_names": asset.get("interior_material_names", []), "interior_material_mappings": asset.get("interior_material_mappings", {}), "wheel_mesh_names": asset.get("wheel_mesh_names", {}), "option_mesh_names": asset.get("option_mesh_names", {}), "camera_preset_names": asset.get("camera_preset_names", []), "interaction_animation_names": asset.get("interaction_animation_names", {})}}
 
     @router.get("/configurator/{variant_id}/options")
     async def get_configurator_options(variant_id: str):
@@ -251,213 +127,75 @@ def make_configurator_router(
         variant = await db.variants.find_one({"variant_id": variant_id}, {"_id": 0, "configurator_status": 1})
         if not variant:
             legacy = await db.cars.find_one({"id": variant_id}, {"_id": 0})
-            if not legacy:
-                raise HTTPException(status_code=404, detail="Variant not found")
+            if not legacy: raise HTTPException(status_code=404, detail="Variant not found")
         return {"variant_id": variant_id, **options}
 
     @router.get("/configurator/{variant_id}/rules")
     async def get_configurator_rules(variant_id: str):
-        rules = await db.configurator_rules.find(
-            {"active": True, "$or": [{"variant_id": variant_id}, {"variant_id": None}]},
-            {"_id": 0},
-        ).to_list(200)
+        rules = await db.configurator_rules.find({"active": True, "$or": [{"variant_id": variant_id}, {"variant_id": None}]}, {"_id": 0}).to_list(200)
         return {"variant_id": variant_id, "rules": rules}
 
     @router.post("/configurator/validate", response_model=ValidationResult)
-    async def validate_config(request: ConfigurationValidationRequest):
-        return await validate_configuration(request, db)
+    async def validate_config(request: ConfigurationValidationRequest): return await validate_configuration(request, db)
 
     @router.post("/configurator/price", response_model=ConfigurationPriceResponse)
     async def calculate_price(request: ConfigurationPriceRequest):
-        validation = await validate_configuration(
-            ConfigurationValidationRequest(configuration=request.configuration), db
-        )
-        if not validation.valid:
-            raise HTTPException(
-                status_code=422,
-                detail={"message": "Invalid configuration", "errors": validation.errors},
-            )
-        try:
-            return await calculate_configuration_price(request, db)
-        except ValueError as exc:
-            raise HTTPException(status_code=404, detail=str(exc))
+        validation = await validate_configuration(ConfigurationValidationRequest(configuration=request.configuration), db)
+        if not validation.valid: raise HTTPException(status_code=422, detail={"message": "Invalid configuration", "errors": validation.errors})
+        try: return await calculate_configuration_price(request, db)
+        except ValueError as exc: raise HTTPException(status_code=404, detail=str(exc))
 
     @router.post("/configurator/configurations")
-    async def save_configuration(
-        request: SavedConfigurationCreate,
-        auth_phone: Optional[str] = Depends(auth_dependency),
-    ):
-        """Persist only a server-validated, server-priced configuration."""
-        if not auth_phone:
-            raise HTTPException(status_code=401, detail="Authentication required")
-        validation = await validate_configuration(
-            ConfigurationValidationRequest(configuration=request.configuration.purchasable), db
-        )
-        if not validation.valid:
-            raise HTTPException(
-                status_code=422,
-                detail={"message": "Invalid configuration", "errors": validation.errors},
-            )
-        price_request = ConfigurationPriceRequest(
-            configuration=request.configuration.purchasable,
-            city=request.city,
-        )
-        try:
-            server_price = await calculate_configuration_price(price_request, db)
-        except ValueError as exc:
-            raise HTTPException(status_code=404, detail=str(exc))
-        server_asset = await resolve_saved_configuration_asset(
-            db, request.configuration.purchasable.variant_id, request.asset_id
-        )
-        config_id = str(uuid.uuid4())
-        share_token = uuid.uuid4().hex
-        now = _utcnow_iso()
-        doc = build_saved_configuration_document(
-            request=request,
-            owner_phone=auth_phone,
-            server_price_snapshot=server_price.model_dump(mode="json"),
-            server_asset=server_asset,
-            config_id=config_id,
-            share_token=share_token,
-            now=now,
-        )
-        await db.configurations.insert_one(doc)
-        doc.pop("_id", None)
-        return doc
+    async def save_configuration(request: SavedConfigurationCreate, auth_phone: Optional[str] = Depends(auth_dependency)):
+        if not auth_phone: raise HTTPException(status_code=401, detail="Authentication required")
+        validation = await validate_configuration(ConfigurationValidationRequest(configuration=request.configuration.purchasable), db)
+        if not validation.valid: raise HTTPException(status_code=422, detail={"message": "Invalid configuration", "errors": validation.errors})
+        try: server_price = await calculate_configuration_price(ConfigurationPriceRequest(configuration=request.configuration.purchasable, city=request.city), db)
+        except ValueError as exc: raise HTTPException(status_code=404, detail=str(exc))
+        server_asset = await resolve_saved_configuration_asset(db, request.configuration.purchasable.variant_id, request.asset_id)
+        config_id, share_token, now = str(uuid.uuid4()), uuid.uuid4().hex, _utcnow_iso()
+        doc = build_saved_configuration_document(request, auth_phone, server_price.model_dump(mode="json"), server_asset, config_id, share_token, now)
+        await db.configurations.insert_one(doc); doc.pop("_id", None); return doc
 
     @router.get("/configurator/configurations/{config_id}")
-    async def get_configuration(
-        config_id: str,
-        auth_phone: Optional[str] = Depends(auth_dependency),
-    ):
-        """Load a private configuration by owner or a public share token."""
+    async def get_configuration(config_id: str, auth_phone: Optional[str] = Depends(auth_dependency)):
         shared_doc = await db.configurations.find_one({"share_token": config_id}, {"_id": 0})
-        if shared_doc:
-            return _public_configuration_response(shared_doc)
+        if shared_doc: return _public_configuration_response(shared_doc)
         doc = await db.configurations.find_one({"config_id": config_id}, {"_id": 0})
-        if not doc:
-            raise HTTPException(status_code=404, detail="Configuration not found")
-        if not auth_phone:
-            raise HTTPException(status_code=401, detail="Authentication required")
-        if doc.get("owner_phone") != auth_phone:
-            raise HTTPException(status_code=403, detail="Configuration access denied")
-
-        async def current_price_resolver(
-            configuration: Dict[str, object],
-            city: Optional[str],
-        ) -> Dict[str, object]:
-            request = ConfigurationPriceRequest.model_validate(
-                {"configuration": configuration, "city": city}
-            )
-            price = await calculate_configuration_price(request, db)
+        if not doc: raise HTTPException(status_code=404, detail="Configuration not found")
+        if not auth_phone: raise HTTPException(status_code=401, detail="Authentication required")
+        if doc.get("owner_phone") != auth_phone: raise HTTPException(status_code=403, detail="Configuration access denied")
+        async def current_price_resolver(configuration: Dict[str, object], city: Optional[str]) -> Dict[str, object]:
+            price = await calculate_configuration_price(ConfigurationPriceRequest.model_validate({"configuration": configuration, "city": city}), db)
             return price.model_dump(mode="json")
-
-        async def current_asset_resolver(
-            variant_id: str,
-            asset_id: Optional[str],
-        ) -> Optional[Dict[str, object]]:
+        async def current_asset_resolver(variant_id: str, asset_id: Optional[str]) -> Optional[Dict[str, object]]:
             return await resolve_saved_configuration_asset(db, variant_id, asset_id)
-
-        try:
-            return await revalidate_saved_configuration(
-                doc,
-                current_price_resolver,
-                current_asset_resolver,
-            )
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc))
+        try: return await revalidate_saved_configuration(doc, current_price_resolver, current_asset_resolver)
+        except ValueError as exc: raise HTTPException(status_code=422, detail=str(exc))
 
     @router.post("/configurator/ai", response_model=AIConfiguratorResponse)
     async def ai_configurator(intent: AIConfiguratorIntent):
-        """Resolve natural-language intent through the catalog, rules engine and price engine."""
-        try:
-            configuration, explanation, unavailable = await resolve_ai_selection(intent, db)
-        except ValueError as exc:
-            return AIConfiguratorResponse(
-                configuration=None,
-                price=None,
-                explanation=str(exc),
-                unavailable_options=[],
-                valid=False,
-            )
-        validation = await validate_configuration(
-            ConfigurationValidationRequest(configuration=configuration), db
-        )
-        if not validation.valid:
-            return AIConfiguratorResponse(
-                configuration=None,
-                price=None,
-                explanation="AI selection was rejected by the configurator rules engine: " + "; ".join(validation.errors),
-                unavailable_options=unavailable,
-                valid=False,
-            )
-        try:
-            price = await calculate_configuration_price(
-                ConfigurationPriceRequest(configuration=configuration), db
-            )
-        except ValueError as exc:
-            return AIConfiguratorResponse(
-                configuration=None,
-                price=None,
-                explanation=str(exc),
-                unavailable_options=unavailable,
-                valid=False,
-            )
+        try: configuration, explanation, unavailable = await resolve_ai_selection(intent, db)
+        except ValueError as exc: return AIConfiguratorResponse(configuration=None, price=None, explanation=str(exc), unavailable_options=[], valid=False)
+        validation = await validate_configuration(ConfigurationValidationRequest(configuration=configuration), db)
+        if not validation.valid: return AIConfiguratorResponse(configuration=None, price=None, explanation="AI selection was rejected by the configurator rules engine: " + "; ".join(validation.errors), unavailable_options=unavailable, valid=False)
+        try: price = await calculate_configuration_price(ConfigurationPriceRequest(configuration=configuration), db)
+        except ValueError as exc: return AIConfiguratorResponse(configuration=None, price=None, explanation=str(exc), unavailable_options=unavailable, valid=False)
         if intent.max_budget is not None and price.estimated_on_road > intent.max_budget:
-            explanation = (
-                f"The best resolved configuration is estimated at ₹{price.estimated_on_road:,}, "
-                f"which exceeds the requested ₹{intent.max_budget:,} budget."
-            )
-            return AIConfiguratorResponse(
-                configuration=None,
-                price=price,
-                explanation=explanation,
-                unavailable_options=unavailable,
-                valid=False,
-            )
-        configuration_state = {
-            "purchasable": configuration.model_dump(),
-            "interaction": build_interaction_state(intent).model_dump(),
-        }
-        return AIConfiguratorResponse(
-            configuration=configuration_state,
-            price=price,
-            explanation=explanation,
-            unavailable_options=unavailable,
-            valid=True,
-        )
+            explanation = f"The best resolved configuration is estimated at ₹{price.estimated_on_road:,}, which exceeds the requested ₹{intent.max_budget:,} budget."
+            return AIConfiguratorResponse(configuration=None, price=price, explanation=explanation, unavailable_options=unavailable, valid=False)
+        return AIConfiguratorResponse(configuration={"purchasable": configuration.model_dump(), "interaction": build_interaction_state(intent).model_dump()}, price=price, explanation=explanation, unavailable_options=unavailable, valid=True)
 
     @router.post("/configurator/assets/validate-url")
-    async def validate_asset_url_endpoint(payload: Dict[str, str]):
-        return await validate_asset_url(payload.get("url", ""))
-
+    async def validate_asset_url_endpoint(payload: Dict[str, str]): return await validate_asset_url(payload.get("url", ""))
     return router
 
 
 def _public_configuration_response(doc: Dict[str, object]) -> Dict[str, object]:
-    """Return only fields intentionally exposed through a share link."""
-    public_fields = (
-        "config_id",
-        "configuration",
-        "city",
-        "price_snapshot",
-        "price_breakdown",
-        "asset_id",
-        "asset_version",
-        "stale",
-        "stale_reason",
-        "created_at",
-        "updated_at",
-    )
+    public_fields = ("config_id", "configuration", "city", "price_snapshot", "price_breakdown", "asset_id", "asset_version", "stale", "stale_reason", "created_at", "updated_at")
     return {key: doc[key] for key in public_fields if key in doc}
 
 
 def _status_message(status: ConfiguratorStatus) -> str:
-    messages = {
-        ConfiguratorStatus.AVAILABLE: "3D Configurator Available",
-        ConfiguratorStatus.COMING_SOON: "3D Configurator Coming Soon",
-        ConfiguratorStatus.UNAVAILABLE: "3D Configurator Unavailable",
-        ConfiguratorStatus.UNDER_REVIEW: "3D Configurator Under Review",
-        ConfiguratorStatus.DISABLED: "3D Configurator Disabled",
-    }
-    return messages.get(status, "Configurator Status Unknown")
+    messages = {ConfiguratorStatus.AVAILABLE: "3D Configurator Available", ConfiguratorStatus.COMING_SOON: "3D Configurator Coming Soon", ConfiguratorStatus.UNAVAILABLE: "3D Configurator Unavailable", ConfiguratorStatus.UNDER_REVIEW: "3D Configurator Under Review", ConfiguratorStatus.DISABLED: "3D Configurator Disabled"}
+    return messages.get(status, "3D Configurator Status Unknown")
