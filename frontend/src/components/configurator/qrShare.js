@@ -1,4 +1,4 @@
-import QRCode from 'qrcode';
+import * as QRCode from 'qrcode';
 
 const QR_OPTIONS = {
   errorCorrectionLevel: 'M',
