@@ -1,7 +1,7 @@
 jest.mock('qrcode', () => ({
   __esModule: true,
   default: {
-    toDataURL: jest.fn(async (value, options) => `data:image/png;base64,${btoa(`${value}:${options.width}`)`}),
+    toDataURL: jest.fn(async (value, options) => `data:image/png;base64,${btoa(`${value}:${options.width}`)}`),
   },
 }));
 
