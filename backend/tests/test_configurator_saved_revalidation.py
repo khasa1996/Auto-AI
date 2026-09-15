@@ -1,6 +1,7 @@
 import pytest
 
 from configurator_persistence import revalidate_saved_configuration
+from configurator_routes import resolve_saved_configuration_asset
 
 
 @pytest.mark.asyncio
@@ -51,3 +52,29 @@ async def test_revalidate_saved_configuration_preserves_fresh_context():
     assert result["stale"] is False
     assert result["stale_reason"] is None
     assert result["price_snapshot"] == 1250000
+
+
+@pytest.mark.asyncio
+async def test_saved_configuration_resolves_current_variant_asset_when_saved_asset_is_old():
+    class Assets:
+        async def find_one(self, query, projection=None):
+            assert query == {
+                "asset_id": "asset-current",
+                "variant_id": "v1",
+                "published": True,
+                "validation_passed": True,
+            }
+            return {"asset_id": "asset-current", "version": "3.0"}
+
+    class Variants:
+        async def find_one(self, query, projection=None):
+            assert query == {"variant_id": "v1"}
+            return {"configurator_asset_id": "asset-current"}
+
+    class DB:
+        variants = Variants()
+        configurator_assets = Assets()
+
+    result = await resolve_saved_configuration_asset(DB(), "v1", "asset-old")
+
+    assert result == {"asset_id": "asset-current", "version": "3.0"}
