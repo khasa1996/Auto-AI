@@ -73,26 +73,17 @@ def make_configurator_recommendation_router(db: AsyncIOMotorDatabase) -> APIRout
                     {"_id": 0, "asset_id": 1, "version": 1},
                 )
             configurator_available = status == "AVAILABLE" and asset is not None
-            pricing = candidate.get("pricing") or None
-            vehicle = {
-                key: candidate[key]
-                for key in ("variant_id", "brand_id", "model_id", "name", "display_name", "slug", "body_type", "market_segment")
-                if key in candidate
-            }
+            vehicle = {key: candidate[key] for key in ("variant_id", "brand_id", "model_id", "name", "display_name", "slug", "body_type", "market_segment") if key in candidate}
             recommendations.append({
                 **item,
                 "availability_status": status,
                 "configurator_available": configurator_available,
                 "vehicle": vehicle,
-                "pricing": pricing,
+                "pricing": candidate.get("pricing") or None,
                 "tradeoff": "3D configurator is not currently available for this variant." if not configurator_available else None,
             })
 
-        explanation = (
-            "No eligible variants matched the explicit requirements. Try a wider budget or remove one strict filter."
-            if not recommendations
-            else "Recommendations are ranked deterministically from active backend catalog data; pricing, availability and configurator readiness remain backend-authoritative."
-        )
+        explanation = "No eligible variants matched the explicit requirements. Try a wider budget or remove one strict filter." if not recommendations else "Recommendations are ranked deterministically from active backend catalog data; pricing, availability and configurator readiness remain backend-authoritative."
         return AIRecommendationResponse(recommendations=recommendations, explanation=explanation, ai_assisted=False, valid=True)
 
     return router
