@@ -52,5 +52,6 @@ test('share-card request normalizes the viewer legacy call into the object contr
     roof: 'Panoramic',
     price: '₹24,50,000',
     city: 'Sonipat',
+    shareUrl: undefined,
   });
 });
