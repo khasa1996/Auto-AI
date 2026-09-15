@@ -1,10 +1,13 @@
 jest.mock('qrcode', () => ({
-  toDataURL: jest.fn(async (value, options) => `data:image/png;base64,${btoa(`${value}:${options.width}`)}`),
+  __esModule: true,
+  default: {
+    toDataURL: jest.fn(async (value, options) => `data:image/png;base64,${btoa(`${value}:${options.width}`)}`),
+  },
 }));
 
 import { buildConfiguratorShareQr } from './qrShare';
 
-const getQrMock = () => require('qrcode').toDataURL;
+const getQrMock = () => require('qrcode').default.toDataURL;
 
 test('generates a local QR data URL from the canonical share URL', async () => {
   const url = 'https://autoaiindia.com/configurator/variant-1?config=opaque-token';
