@@ -8,7 +8,7 @@ Design rules:
   - AI must NEVER invent prices.
   - City components are additive on top of ex-showroom.
   - All prices are integers in Indian Rupees (paise not used).
-  - Unknown components are omitted, not invented.
+  - Unknown or unavailable selected components are rejected, not silently omitted.
 
 Formula:
     base_ex_showroom
@@ -42,6 +42,13 @@ def _utcnow_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _require_available_option(document: Optional[Dict[str, Any]], option_type: str, option_id: str) -> Dict[str, Any]:
+    """Require a selected catalog option to exist and be available for pricing."""
+    if not document or document.get("available", True) is not True:
+        raise ValueError(f"{option_type} option '{option_id}' is not available")
+    return document
+
+
 async def calculate_configuration_price(
     request: ConfigurationPriceRequest,
     db: "AsyncIOMotorDatabase",
@@ -68,63 +75,83 @@ async def calculate_configuration_price(
     option_deltas: List[PriceComponent] = []
 
     if config.paint_id:
-        color_doc = await db.variant_colors.find_one(
-            {"color_id": config.paint_id, "variant_id": variant_id},
-            {"_id": 0},
+        color_doc = _require_available_option(
+            await db.variant_colors.find_one(
+                {"color_id": config.paint_id, "variant_id": variant_id},
+                {"_id": 0},
+            ),
+            "Paint",
+            config.paint_id,
         )
-        if color_doc and color_doc.get("price_delta", 0) > 0:
+        if color_doc.get("price_delta", 0) > 0:
             option_deltas.append(PriceComponent(
                 name=color_doc.get("display_name", "Paint option"),
                 amount=color_doc["price_delta"],
             ))
 
     if config.wheel_id:
-        wheel_doc = await db.variant_wheels.find_one(
-            {"wheel_id": config.wheel_id, "variant_id": variant_id},
-            {"_id": 0},
+        wheel_doc = _require_available_option(
+            await db.variant_wheels.find_one(
+                {"wheel_id": config.wheel_id, "variant_id": variant_id},
+                {"_id": 0},
+            ),
+            "Wheel",
+            config.wheel_id,
         )
-        if wheel_doc and wheel_doc.get("price_delta", 0) > 0:
+        if wheel_doc.get("price_delta", 0) > 0:
             option_deltas.append(PriceComponent(
                 name=wheel_doc.get("name", "Wheel option"),
                 amount=wheel_doc["price_delta"],
             ))
 
     if config.interior_id:
-        interior_doc = await db.variant_interiors.find_one(
-            {"interior_id": config.interior_id, "variant_id": variant_id},
-            {"_id": 0},
+        interior_doc = _require_available_option(
+            await db.variant_interiors.find_one(
+                {"interior_id": config.interior_id, "variant_id": variant_id},
+                {"_id": 0},
+            ),
+            "Interior",
+            config.interior_id,
         )
-        if interior_doc and interior_doc.get("price_delta", 0) > 0:
+        if interior_doc.get("price_delta", 0) > 0:
             option_deltas.append(PriceComponent(
                 name=interior_doc.get("name", "Interior option"),
                 amount=interior_doc["price_delta"],
             ))
 
     if config.roof_id:
-        roof_doc = await db.configurator_options.find_one(
-            {
-                "option_id": config.roof_id,
-                "variant_id": variant_id,
-                "option_type": "roof",
-            },
-            {"_id": 0},
+        roof_doc = _require_available_option(
+            await db.configurator_options.find_one(
+                {
+                    "option_id": config.roof_id,
+                    "variant_id": variant_id,
+                    "option_type": "roof",
+                },
+                {"_id": 0},
+            ),
+            "Roof",
+            config.roof_id,
         )
-        if roof_doc and roof_doc.get("price_delta", 0) > 0:
+        if roof_doc.get("price_delta", 0) > 0:
             option_deltas.append(PriceComponent(
                 name=roof_doc.get("display_name", "Roof option"),
                 amount=roof_doc["price_delta"],
             ))
 
     for acc_id in config.accessory_ids:
-        acc_doc = await db.configurator_options.find_one(
-            {
-                "option_id": acc_id,
-                "variant_id": variant_id,
-                "option_type": "accessory",
-            },
-            {"_id": 0},
+        acc_doc = _require_available_option(
+            await db.configurator_options.find_one(
+                {
+                    "option_id": acc_id,
+                    "variant_id": variant_id,
+                    "option_type": "accessory",
+                },
+                {"_id": 0},
+            ),
+            "Accessory",
+            acc_id,
         )
-        if acc_doc and acc_doc.get("price_delta", 0) > 0:
+        if acc_doc.get("price_delta", 0) > 0:
             option_deltas.append(PriceComponent(
                 name=acc_doc.get("display_name", "Accessory"),
                 amount=acc_doc["price_delta"],
