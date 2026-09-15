@@ -20,6 +20,13 @@ export function gateAssetResponse(assetResponse, readiness) {
   };
 }
 
+export function syncConfiguratorShareUrl(shareToken) {
+  if (!shareToken || typeof window === 'undefined' || !window.history?.replaceState) return;
+  const url = new URL(window.location.href);
+  url.searchParams.set('config', shareToken);
+  window.history.replaceState({}, '', url.toString());
+}
+
 export const configuratorApi = {
   getBrands: (activeOnly = true) => api.get(`${V1}/brands`, { params: { active_only: activeOnly } }),
   getModels: (params = {}) => api.get(`${V1}/models`, { params }),
@@ -45,7 +52,11 @@ export const configuratorApi = {
   calculatePrice: (configuration, city = null) => api.post(`${V1}/configurator/price`, { configuration, city }),
   resolveWithAI: (intent) => api.post(`${V1}/configurator/ai`, intent),
   calculateEMI: (payload) => api.post('/emi/calculate', payload),
-  saveConfiguration: (payload) => api.post(`${V1}/configurator/configurations`, payload),
+  saveConfiguration: async (payload) => {
+    const response = await api.post(`${V1}/configurator/configurations`, payload);
+    syncConfiguratorShareUrl(response.data?.share_token);
+    return response;
+  },
   loadConfiguration: (configIdOrToken) => api.get(`${V1}/configurator/configurations/${configIdOrToken}`),
   getHistory: (limit = 20) => api.get(`${V1}/configurator/history`, { params: { limit } }),
   compareConfigurations: (left, right) => api.post(`${V1}/configurator/compare`, { left, right }),
