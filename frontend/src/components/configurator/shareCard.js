@@ -1,3 +1,5 @@
+import { buildConfiguratorShareQr } from './qrShare';
+
 function text(value, fallback = "Not selected") {
   return String(value || fallback).slice(0, 80);
 }
@@ -16,7 +18,7 @@ export function buildShareCardData({ vehicleName, variantName, color, wheels, in
 }
 
 export function normalizeShareCardRequest(sourceOrRequest, legacyRequest) {
-  if (legacyRequest && typeof legacyRequest === "object") {
+  if (legacyRequest && typeof legacyRequest === 'object') {
     return {
       sourceCanvas: sourceOrRequest,
       vehicleName: legacyRequest.vehicleName,
@@ -27,6 +29,7 @@ export function normalizeShareCardRequest(sourceOrRequest, legacyRequest) {
       roof: legacyRequest.roof,
       price: legacyRequest.price,
       city: legacyRequest.city,
+      shareUrl: legacyRequest.shareUrl,
     };
   }
   return sourceOrRequest || {};
@@ -49,6 +52,15 @@ function wrapLines(ctx, value, maxWidth, maxLines = 2) {
   return lines;
 }
 
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Unable to load share QR"));
+    image.src = src;
+  });
+}
+
 export async function buildConfiguratorShareCard(sourceOrRequest, legacyRequest) {
   const request = normalizeShareCardRequest(sourceOrRequest, legacyRequest);
   const {
@@ -61,6 +73,7 @@ export async function buildConfiguratorShareCard(sourceOrRequest, legacyRequest)
     roof,
     price,
     city,
+    shareUrl,
   } = request;
 
   if (!sourceCanvas) throw new Error("Configurator canvas is unavailable");
@@ -134,6 +147,25 @@ export async function buildConfiguratorShareCard(sourceOrRequest, legacyRequest)
   ctx.fillStyle = "rgba(255,255,255,0.35)";
   ctx.fillText(data.city ? `Estimated on-road · ${data.city}` : "Estimated on-road", 1160, 616);
   ctx.textAlign = "left";
+
+  let resolvedShareUrl = shareUrl;
+  if (!resolvedShareUrl && typeof window !== 'undefined') {
+    const current = new URL(window.location.href);
+    if (current.searchParams.get('config')) resolvedShareUrl = current.href;
+  }
+
+  if (resolvedShareUrl) {
+    const qrDataUrl = await buildConfiguratorShareQr(resolvedShareUrl);
+    const qrImage = await loadImage(qrDataUrl);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(1010, 608, 150, 140);
+    ctx.drawImage(qrImage, 1025, 615, 120, 120);
+    ctx.font = '700 9px Arial, sans-serif';
+    ctx.fillStyle = '#111111';
+    ctx.textAlign = 'center';
+    ctx.fillText('SCAN TO VIEW', 1085, 756);
+    ctx.textAlign = 'left';
+  }
 
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Unable to create share card"))), "image/png", 1);
