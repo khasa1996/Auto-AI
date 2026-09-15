@@ -12,12 +12,7 @@ export function gateAssetResponse(assetResponse, readiness) {
     ? readiness.blockers.filter((item) => typeof item === 'string' && item.trim())
     : [];
   if (readiness?.ready === true && blockers.length === 0) return assetResponse;
-  return {
-    available: false,
-    asset: null,
-    status: 'COMING_SOON',
-    readiness_blockers: blockers.length ? blockers : [READINESS_BLOCKER],
-  };
+  return { available: false, asset: null, status: 'COMING_SOON', readiness_blockers: blockers.length ? blockers : [READINESS_BLOCKER] };
 }
 
 export function syncConfiguratorShareUrl(shareToken) {
