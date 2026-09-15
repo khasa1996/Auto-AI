@@ -36,7 +36,11 @@ describe('syncConfiguratorShareUrl', () => {
     const replaceState = jest.spyOn(window.history, 'replaceState').mockImplementation(() => {});
     Object.defineProperty(window, 'location', {
       configurable: true,
-      value: { origin: 'https://autoaiindia.com', pathname: '/configurator/variant-1' },
+      value: {
+        href: 'https://autoaiindia.com/configurator/variant-1',
+        origin: 'https://autoaiindia.com',
+        pathname: '/configurator/variant-1',
+      },
     });
 
     syncConfiguratorShareUrl('opaque-token');
