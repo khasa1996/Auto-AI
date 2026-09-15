@@ -29,7 +29,7 @@ export function projectRuntimeConfiguration(purchasable = {}, asset = {}) {
     paintId: normalizeIdentifier(purchasable.paintId),
     wheelId: normalizeIdentifier(purchasable.wheelId),
     interiorId: normalizeIdentifier(purchasable.interiorId),
-    roofId: normalizeIdentifier(purchable.roofId),
+    roofId: normalizeIdentifier(purchasable.roofId),
     accessoryIds: normalizeStringList(purchasable.accessoryIds),
     assetVersion: normalizeIdentifier(asset.version),
     supportedInteractions: normalizeStringList(asset.supportedInteractions),
