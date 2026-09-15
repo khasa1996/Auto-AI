@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import { ANIMATION_NAMES, useVehicleAnimations } from './AnimationController';
 import { collectOwnedMaterialResources, disposeOwnedMaterialResources, markRuntimeOwnedMaterials } from './runtimeLifecycle';
 import { applyRuntimeMeshVisibility, canRenderLoadedRuntime, resolveRuntimeAsset, buildRuntimeNodeIndex, buildRuntimeMaterialIndex } from './vehicleRuntime';
+import { projectVerifiedVisualConfiguration } from '../components/configurator/runtimeVisualConfiguration';
 
 function applyPaintColor(materialIndex, colorHex, paintMaterialNames) {
   if (!(materialIndex instanceof Map) || !colorHex || !paintMaterialNames?.length) return;
@@ -31,6 +32,10 @@ function LoadedVehicle({ asset, runtime, purchasable, interaction }) {
   const { scene, animations } = useGLTF(asset.url);
   const groupRef = useRef();
   const previousInteractionRef = useRef(null);
+  const visualConfiguration = useMemo(
+    () => projectVerifiedVisualConfiguration(purchasable, runtime),
+    [purchasable, runtime],
+  );
   const clonedScene = useMemo(() => {
     const clone = scene.clone(true);
     const meshes = [];
@@ -56,13 +61,13 @@ function LoadedVehicle({ asset, runtime, purchasable, interaction }) {
 
   useEffect(() => applyPaintColor(runtimeMaterialIndex, asset.paintColorHex, runtime.paintMaterialNames), [asset.paintColorHex, runtime.paintMaterialNames, runtimeMaterialIndex]);
   useEffect(() => {
-    applyRuntimeMeshVisibility(runtimeNodeIndex, [purchasable.wheelId], normalizeWheelMappings(runtime.wheelMeshNames));
+    applyRuntimeMeshVisibility(runtimeNodeIndex, [visualConfiguration.wheelId], normalizeWheelMappings(runtime.wheelMeshNames));
     applyRuntimeMeshVisibility(
       runtimeNodeIndex,
-      [purchasable.interiorId, purchasable.roofId, ...(purchasable.accessoryIds || [])],
+      [visualConfiguration.interiorId, visualConfiguration.roofId, ...visualConfiguration.accessoryIds],
       runtime.optionMeshNames,
     );
-  }, [purchasable, runtime.optionMeshNames, runtime.wheelMeshNames, runtimeNodeIndex]);
+  }, [visualConfiguration, runtime.optionMeshNames, runtime.wheelMeshNames, runtimeNodeIndex]);
 
   useEffect(() => {
     const previous = previousInteractionRef.current;
@@ -84,7 +89,7 @@ function LoadedVehicle({ asset, runtime, purchasable, interaction }) {
     playToggle('hood', interaction.hoodOpen, previous.hoodOpen, 'hood', 'open', 'close', ANIMATION_NAMES.HOOD_OPEN, ANIMATION_NAMES.HOOD_CLOSE);
     playToggle('boot', interaction.bootOpen, previous.bootOpen, 'boot', 'open', 'close', ANIMATION_NAMES.BOOT_OPEN, ANIMATION_NAMES.BOOT_CLOSE);
     playToggle('frunk', interaction.frunkOpen, previous.frunkOpen, 'frunk', 'open', 'close', ANIMATION_NAMES.FRUNK_OPEN, ANIMATION_NAMES.FRUNK_CLOSE);
-    playToggle('sunroof', interaction.sunroofOpen, previous.sunroofOpen, 'sunroof', 'open', 'close', ANIMATION_NAMES.SUNROOF_OPEN, ANIMATION_NAMES.SUNROOF_CLOSE);
+    playToggle('sunroof', interaction.sunroofOpen, previousInteractionRef.current?.sunroofOpen, 'sunroof', 'open', 'close', ANIMATION_NAMES.SUNROOF_OPEN, ANIMATION_NAMES.SUNROOF_CLOSE);
   }, [interaction, play, runtime, verifiedAnimationMappings]);
 
   useEffect(() => () => disposeOwnedMaterialResources(ownedMaterials), [ownedMaterials]);
