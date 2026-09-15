@@ -73,7 +73,7 @@ def test_missing_required_option_category_blocks_readiness():
         _vehicle(), _pricing(), colors, [], interiors, _asset()
     )
     assert result["ready"] is False
-    assert "no available wheel option" in result["blockers"]
+    assert "no available wheel option for the vehicle" in result["blockers"]
 
 
 def test_asset_identity_and_publication_are_required():
