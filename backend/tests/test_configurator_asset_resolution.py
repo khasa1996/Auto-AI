@@ -35,18 +35,20 @@ async def test_resolves_variant_assigned_asset_when_request_omits_asset_id():
 
 
 @pytest.mark.asyncio
-async def test_requested_asset_must_match_variant_and_verified_publication():
+async def test_requested_asset_can_fallback_when_variant_has_no_assignment():
     db = FakeDb(
-        variants=[],
+        variants=[{}],
         assets=[{"asset_id": "asset-v1", "version": "2.0"}],
     )
 
     result = await resolve_saved_configuration_asset(db, "variant-1", "asset-v1")
 
     assert result == {"asset_id": "asset-v1", "version": "2.0"}
-    assert db.variants.queries == []
+    assert db.variants.queries == [{"variant_id": "variant-1"}]
     assert db.configurator_assets.queries[0]["asset_id"] == "asset-v1"
     assert db.configurator_assets.queries[0]["variant_id"] == "variant-1"
+    assert db.configurator_assets.queries[0]["published"] is True
+    assert db.configurator_assets.queries[0]["validation_passed"] is True
 
 
 @pytest.mark.asyncio
