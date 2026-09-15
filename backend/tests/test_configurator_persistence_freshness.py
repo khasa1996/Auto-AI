@@ -1,4 +1,4 @@
-from configurator_routes import assess_saved_configuration_freshness
+from configurator_persistence import assess_saved_configuration_freshness
 
 
 def test_saved_configuration_is_fresh_when_price_and_asset_match():
