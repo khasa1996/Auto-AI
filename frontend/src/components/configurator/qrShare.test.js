@@ -1,8 +1,9 @@
 jest.mock('qrcode', () => ({
+  __esModule: true,
   toDataURL: jest.fn(async (value, options) => `data:image/png;base64,${btoa(`${value}:${options.width}`)}`),
 }));
 
-import QRCode from 'qrcode';
+import * as QRCode from 'qrcode';
 import { buildConfiguratorShareQr } from './qrShare';
 
 test('generates a local QR data URL from the canonical share URL', async () => {
