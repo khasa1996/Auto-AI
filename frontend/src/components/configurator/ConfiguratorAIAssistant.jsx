@@ -10,6 +10,8 @@ export default function ConfiguratorAIAssistant() {
   const variantId = useConfiguratorStore((state) => state.purchasable.variantId);
   const city = useConfiguratorStore((state) => state.city);
   const purchasable = useConfiguratorStore((state) => state.purchasable);
+  const currentPrice = useConfiguratorStore((state) => state.price.data);
+  const asset = useConfiguratorStore((state) => state.asset);
   const [request, setRequest] = useState('');
   const [expanded, setExpanded] = useState(false);
   const [state, setState] = useState({ loading: false, error: null, explanation: null, price: null, finance: null });
@@ -58,7 +60,21 @@ export default function ConfiguratorAIAssistant() {
         roof_id: purchasable.roofId,
         accessory_ids: purchasable.accessoryIds,
       };
-      const response = await configuratorApi.resolveWithAI(buildConfiguratorAIIntent(variantId, rawRequest, { currentConfiguration, city }));
+      const verifiedAsset = asset?.available && asset?.version
+        ? {
+            asset_id: asset.assetId || asset.asset_id || null,
+            version: asset.version,
+            supported_interactions: Array.isArray(asset.supportedInteractions) ? asset.supportedInteractions : [],
+            camera_preset_names: Array.isArray(asset.cameraPresetNames) ? asset.cameraPresetNames : [],
+          }
+        : null;
+      const response = await configuratorApi.resolveWithAI(buildConfiguratorAIIntent(variantId, rawRequest, {
+        currentConfiguration,
+        city,
+        state: null,
+        authoritativePrice: currentPrice || null,
+        verifiedAsset,
+      }));
       const selection = getAIConfigurationSelection(response);
       if (!selection || !applySelection(selection)) {
         setState({ loading: false, error: response.data?.explanation || 'AI could not create a valid configuration.', explanation: null, price: null, finance: null });
@@ -82,7 +98,7 @@ export default function ConfiguratorAIAssistant() {
     <div className="flex flex-col items-start gap-2">
       {expanded && (
         <section className="w-[min(380px,calc(100vw-2rem))] rounded-2xl border border-amber-400/20 bg-[#090909]/95 p-4 shadow-2xl backdrop-blur-xl">
-          <div className="mb-3 flex items-center gap-2"><Sparkles size={14} className="text-amber-300" /><div><h3 className="text-[10px] font-semibold uppercase tracking-widest text-amber-300">AI configurator</h3><p className="mt-0.5 text-[9px] text-white/35">AI reads your current build and city, then applies only verified options.</p></div></div>
+          <div className="mb-3 flex items-center gap-2"><Sparkles size={14} className="text-amber-300" /><div><h3 className="text-[10px] font-semibold uppercase tracking-widest text-amber-300">AI configurator</h3><p className="mt-0.5 text-[9px] text-white/35">AI reads your current build, verified 3D capabilities and city, then applies only verified options.</p></div></div>
           <form onSubmit={submit} className="space-y-2">
             <textarea value={request} onChange={(event) => setRequest(event.target.value.slice(0, 1800))} rows={3} maxLength={1800} placeholder="e.g. Make it black, keep it under ₹25 lakh and show EMI at 9% for 5 years" className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none placeholder:text-white/20 focus:border-amber-400/40" />
             <button type="submit" disabled={state.loading || !request.trim()} className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-black transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-40"><Sparkles size={12} /> {state.loading ? 'Building configuration…' : 'Build with AI'}</button>

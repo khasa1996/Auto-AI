@@ -1,3 +1,5 @@
+import { buildConfiguratorShareQr } from './qrShare';
+
 function text(value, fallback = "Not selected") {
   return String(value || fallback).slice(0, 80);
 }
@@ -13,6 +15,24 @@ export function buildShareCardData({ vehicleName, variantName, color, wheels, in
     price: price ? text(price) : "Price on request",
     city: city ? text(city) : "",
   };
+}
+
+export function normalizeShareCardRequest(sourceOrRequest, legacyRequest) {
+  if (legacyRequest && typeof legacyRequest === 'object') {
+    return {
+      sourceCanvas: sourceOrRequest,
+      vehicleName: legacyRequest.vehicleName,
+      variantName: legacyRequest.variantName || legacyRequest.variant,
+      color: legacyRequest.color,
+      wheels: legacyRequest.wheels,
+      interior: legacyRequest.interior,
+      roof: legacyRequest.roof,
+      price: legacyRequest.price,
+      city: legacyRequest.city,
+      shareUrl: legacyRequest.shareUrl,
+    };
+  }
+  return sourceOrRequest || {};
 }
 
 function wrapLines(ctx, value, maxWidth, maxLines = 2) {
@@ -32,17 +52,30 @@ function wrapLines(ctx, value, maxWidth, maxLines = 2) {
   return lines;
 }
 
-export async function buildConfiguratorShareCard({
-  sourceCanvas,
-  vehicleName,
-  variantName,
-  color,
-  wheels,
-  interior,
-  roof,
-  price,
-  city,
-}) {
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Unable to load share QR"));
+    image.src = src;
+  });
+}
+
+export async function buildConfiguratorShareCard(sourceOrRequest, legacyRequest) {
+  const request = normalizeShareCardRequest(sourceOrRequest, legacyRequest);
+  const {
+    sourceCanvas,
+    vehicleName,
+    variantName,
+    color,
+    wheels,
+    interior,
+    roof,
+    price,
+    city,
+    shareUrl,
+  } = request;
+
   if (!sourceCanvas) throw new Error("Configurator canvas is unavailable");
   const data = buildShareCardData({ vehicleName, variantName, color, wheels, interior, roof, price, city });
   const canvas = document.createElement("canvas");
@@ -114,6 +147,25 @@ export async function buildConfiguratorShareCard({
   ctx.fillStyle = "rgba(255,255,255,0.35)";
   ctx.fillText(data.city ? `Estimated on-road · ${data.city}` : "Estimated on-road", 1160, 616);
   ctx.textAlign = "left";
+
+  let resolvedShareUrl = shareUrl;
+  if (!resolvedShareUrl && typeof window !== 'undefined') {
+    const current = new URL(window.location.href);
+    if (current.searchParams.get('config')) resolvedShareUrl = current.href;
+  }
+
+  if (resolvedShareUrl) {
+    const qrDataUrl = await buildConfiguratorShareQr(resolvedShareUrl);
+    const qrImage = await loadImage(qrDataUrl);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(1010, 608, 150, 140);
+    ctx.drawImage(qrImage, 1025, 615, 120, 120);
+    ctx.font = '700 9px Arial, sans-serif';
+    ctx.fillStyle = '#111111';
+    ctx.textAlign = 'center';
+    ctx.fillText('SCAN TO VIEW', 1085, 756);
+    ctx.textAlign = 'left';
+  }
 
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Unable to create share card"))), "image/png", 1);

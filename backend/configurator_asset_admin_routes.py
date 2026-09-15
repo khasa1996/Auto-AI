@@ -34,6 +34,7 @@ _MAX_UPLOAD_BYTES = 200 * 1024 * 1024
 class AssetManifestValidationRequest(BaseModel):
     asset: ConfiguratorAssetCreate
     mesh_names: List[str] = Field(default_factory=list, max_length=10000)
+    material_names: List[str] = Field(default_factory=list, max_length=10000)
 
 
 class AssetPublicationRequest(BaseModel):
@@ -81,7 +82,7 @@ def make_asset_admin_router(db: AsyncIOMotorDatabase) -> APIRouter:
         request: AssetManifestValidationRequest,
         _: str = Depends(_require_admin),
     ):
-        result = validate_asset_manifest(request.asset, request.mesh_names)
+        result = validate_asset_manifest(request.asset, request.mesh_names, request.material_names)
         now = datetime.now(timezone.utc).isoformat()
         update = {
             "validation_passed": result["valid"],
@@ -189,7 +190,11 @@ def make_asset_admin_router(db: AsyncIOMotorDatabase) -> APIRouter:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
         asset = ConfiguratorAssetCreate.model_validate(asset_doc)
-        manifest_result = validate_asset_manifest(asset, [*inspected["mesh_names"], *inspected["node_names"]])
+        manifest_result = validate_asset_manifest(
+            asset,
+            [*inspected["mesh_names"], *inspected["node_names"]],
+            inspected["material_names"],
+        )
         structure_result = build_verified_asset_metadata(asset, inspected)
         valid = manifest_result["valid"] and structure_result["valid"]
         now = datetime.now(timezone.utc).isoformat()
@@ -249,7 +254,11 @@ def make_asset_admin_router(db: AsyncIOMotorDatabase) -> APIRouter:
         except (TypeError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-        manifest_result = validate_asset_manifest(asset, [*inspected["mesh_names"], *inspected["node_names"]])
+        manifest_result = validate_asset_manifest(
+            asset,
+            [*inspected["mesh_names"], *inspected["node_names"]],
+            inspected["material_names"],
+        )
         structure_result = build_verified_asset_metadata(asset, inspected)
         valid = manifest_result["valid"] and structure_result["valid"]
         checksum = hashlib.sha256(payload).hexdigest()
@@ -344,7 +353,7 @@ def make_asset_admin_router(db: AsyncIOMotorDatabase) -> APIRouter:
             "review_notes": request.review_notes,
             "published": False if not request.approved else bool(asset_doc.get("published")),
         }
-    
+
     @router.post("/assets/publish")
     async def publish_asset(
         request: AssetPublicationRequest,
