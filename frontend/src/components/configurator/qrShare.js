@@ -1,4 +1,4 @@
-import { toDataURL } from 'qrcode';
+import * as QRCode from 'qrcode';
 
 const QR_OPTIONS = {
   errorCorrectionLevel: 'M',
@@ -10,5 +10,5 @@ export async function buildConfiguratorShareQr(shareUrl) {
   if (!shareUrl || typeof shareUrl !== 'string' || !shareUrl.trim()) {
     throw new Error('Configurator share URL is unavailable');
   }
-  return toDataURL(shareUrl, QR_OPTIONS);
+  return QRCode.toDataURL(shareUrl, QR_OPTIONS);
 }
