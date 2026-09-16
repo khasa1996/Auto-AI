@@ -63,7 +63,10 @@ def build_conversion_response(document: Dict[str, Any], intent: ConversionIntent
         "status": document["status"],
     }
     if intent.finance_required:
-        principal = max(0, server_price - (intent.down_payment or 0))
+        down_payment = intent.down_payment or 0
+        if down_payment > server_price:
+            raise ValueError("down payment cannot exceed authoritative vehicle price")
+        principal = server_price - down_payment
         response["finance"].update({
             "principal": principal,
             "down_payment": intent.down_payment,
@@ -74,7 +77,7 @@ def build_conversion_response(document: Dict[str, Any], intent: ConversionIntent
     return response
 
 
-def mount_premium_configurator_routes(app, db: AsyncIOMotorDatabase, auth_dependency: OptionalUserPhone = None) -> None:
+def mount_premium_configurator_routes(app: Any, db: AsyncIOMotorDatabase, auth_dependency: OptionalUserPhone = None) -> None:
     """Mount authenticated premium configurator workflows."""
     if auth_dependency is None:
         from configurator_routes import _resolve_optional_user_phone
@@ -140,9 +143,12 @@ def mount_premium_configurator_routes(app, db: AsyncIOMotorDatabase, auth_depend
             price = await calculate_configuration_price(ConfigurationPriceRequest(configuration=purchasable, city=payload.city), db)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc))
-        document = build_conversion_document(payload, auth_phone, price.estimated_on_road, _utcnow_iso())
-        document["conversion_intent"] = intent.model_dump(mode="json")
-        await db.configurator_conversion_leads.insert_one(document)
-        return build_conversion_response(document, intent, price.estimated_on_road)
+        try:
+            document = build_conversion_document(payload, auth_phone, price.estimated_on_road, _utcnow_iso())
+            document["conversion_intent"] = intent.model_dump(mode="json")
+            await db.configurator_conversion_leads.insert_one(document)
+            return build_conversion_response(document, intent, price.estimated_on_road)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
 
     app.include_router(router)

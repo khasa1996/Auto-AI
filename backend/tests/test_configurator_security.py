@@ -68,8 +68,8 @@ class FakeCollection:
 class FakeDatabase:
     def __init__(self) -> None:
         self.configurations = FakeConfigurations()
-        self.variants = FakeCollection([None])
-        self.configurator_assets = FakeCollection([None])
+        self.variants = FakeCollection([None, None, None, None, None])
+        self.configurator_assets = FakeCollection([None, None, None, None, None])
 
 
 @pytest.fixture(autouse=True)

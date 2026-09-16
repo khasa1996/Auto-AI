@@ -12,6 +12,8 @@ from configurator_asset_admin_routes import mount_asset_admin_routes
 from configurator_asset_versioning import mount_asset_version_routes
 from configurator_city_pricing import mount_city_pricing_routes
 from configurator_hotspots import mount_hotspot_routes
+from configurator_vehicle_readiness_routes import make_vehicle_readiness_router
+from configurator_recommendation_routes import make_configurator_recommendation_router
 
 OptionalUserPhone = Optional[Callable[..., object]]
 
@@ -23,6 +25,8 @@ def mount_configurator_router(
 ) -> FastAPI:
     """Mount the canonical configurator API onto the existing FastAPI app."""
     app.include_router(make_configurator_router(db, auth_dependency))
+    app.include_router(make_vehicle_readiness_router(db))
+    app.include_router(make_configurator_recommendation_router(db))
     mount_premium_configurator_routes(app, db, auth_dependency)
     mount_asset_admin_routes(app, db)
     mount_asset_version_routes(app, db)

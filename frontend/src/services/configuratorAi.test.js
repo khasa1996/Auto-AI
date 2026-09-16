@@ -19,6 +19,35 @@ describe('configurator AI contract helpers', () => {
     expect(intent.raw_request).toContain('\nMake it black');
   });
 
+  test('serializes authoritative price and verified asset runtime context', () => {
+    const intent = buildConfiguratorAIIntent('seltos-gtx', 'Make it premium', {
+      city: 'Delhi',
+      state: 'Delhi',
+      currentConfiguration: { variant_id: 'seltos-gtx', paint_id: 'red', wheel_id: 'alloy-18' },
+      authoritativePrice: { estimated_on_road: 2475000, effective_date: '2026-09-15', source: 'Auto AI India' },
+      verifiedAsset: {
+        asset_id: 'asset-seltos-1',
+        version: 'v3',
+        supported_interactions: ['doors', 'hood', 'camera_exterior'],
+        camera_preset_names: ['exterior', 'front'],
+      },
+    });
+    const context = JSON.parse(intent.raw_request.split('\n')[0].replace('__AUTO_AI_CONTEXT__', ''));
+    expect(context.authoritative_price.estimated_on_road).toBe(2475000);
+    expect(context.verified_asset.asset_id).toBe('asset-seltos-1');
+    expect(context.verified_asset.version).toBe('v3');
+    expect(context.verified_asset.supported_interactions).toEqual(['doors', 'hood', 'camera_exterior']);
+  });
+
+  test('does not serialize client price as authoritative when no verified price is supplied', () => {
+    const intent = buildConfiguratorAIIntent('seltos-gtx', 'What is the price?', {
+      currentConfiguration: { variant_id: 'seltos-gtx' },
+      clientPrice: 999,
+    });
+    expect(intent.raw_request).not.toContain('999');
+    expect(intent.raw_request).not.toContain('authoritative_price');
+  });
+
   test('extracts explicit EMI rate and tenure without inventing finance assumptions', () => {
     expect(extractFinanceIntent('show EMI at 9% for 5 years', 2500000)).toEqual({ principal: 2500000, annual_rate: 9, tenure_months: 60 });
     expect(extractFinanceIntent('show EMI for five years', 2500000)).toBeNull();
