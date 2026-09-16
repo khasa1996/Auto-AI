@@ -1,4 +1,4 @@
-import { buildRecommendationCards } from './MultiVariantRecommendations';
+import { buildRecommendationCards, getRecommendationCta } from './MultiVariantRecommendations';
 
 test('builds bounded recommendation cards from backend-authoritative results', () => {
   const response = {
@@ -41,4 +41,17 @@ test('fails closed for malformed or over-limit recommendation responses', () => 
     { variant_id: '3', rank: 3, fit_score: 30, vehicle: { name: 'C' } },
     { variant_id: '4', rank: 4, fit_score: 40, vehicle: { name: 'D' } },
   ] }, 3)).toHaveLength(3);
+});
+
+test('uses a readiness-safe CTA when the 3D configurator is unavailable', () => {
+  expect(getRecommendationCta({ variantId: 'variant-2', configuratorAvailable: false })).toEqual({
+    label: '3D coming soon',
+    href: null,
+    disabled: true,
+  });
+  expect(getRecommendationCta({ variantId: 'variant-1', configuratorAvailable: true })).toEqual({
+    label: 'Open configurator',
+    href: '/configurator/variant-1',
+    disabled: false,
+  });
 });
