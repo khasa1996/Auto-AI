@@ -38,8 +38,13 @@ class _DB:
             {"variant_id": "v2", "brand_id": "b2", "model_id": "m2", "name": "Petrol SUV", "market_segment": "SUV", "specs": {"fuel_type": "Petrol"}, "active": True, "configurator_status": "COMING_SOON"},
         ])
         self.variant_pricing = _Collection([
-            {"variant_id": "v1", "base_ex_showroom": 1200000, "verification_status": "verified"},
-            {"variant_id": "v2", "base_ex_showroom": 1000000, "verification_status": "verified"},
+            {"variant_id": "v1", "base_ex_showroom": 1200000, "verification_status": "verified", "city_pricing": [
+                {"city": "Delhi", "state": "Delhi", "ex_showroom": 1250000, "verification_status": "verified"},
+                {"city": "Panipat", "state": "Haryana", "ex_showroom": 1300000, "verification_status": "verified"},
+            ]},
+            {"variant_id": "v2", "base_ex_showroom": 1000000, "verification_status": "verified", "city_pricing": [
+                {"city": "Panipat", "state": "Haryana", "ex_showroom": 1100000, "verification_status": "verified"},
+            ]},
         ])
         self.configurator_assets = _Collection([
             {"asset_id": "asset-1", "variant_id": "v1", "version": "1.0.0", "published": True, "validation_passed": True},
@@ -64,6 +69,40 @@ async def test_recommendations_return_bounded_backend_candidates_and_readiness()
     assert body["recommendations"][0]["configurator_available"] is True
     assert body["recommendations"][0]["pricing"]["base_ex_showroom"] == 1200000
     assert body["ai_assisted"] is False
+
+
+@pytest.mark.asyncio
+async def test_recommendations_use_verified_city_price_for_budget_filtering():
+    async with AsyncClient(transport=ASGITransport(app=_app(_DB())), base_url="http://test") as client:
+        response = await client.post("/api/v1/configurator/recommendations", json={
+            "raw_request": "SUV under ₹12 lakh in Panipat",
+            "city": "Panipat",
+            "state": "Haryana",
+            "limit": 5,
+        })
+
+    assert response.status_code == 200
+    result = {item["variant_id"]: item for item in response.json()["recommendations"]}
+    assert "v1" not in result
+    assert result["v2"]["pricing"]["ex_showroom"] == 1100000
+
+
+@pytest.mark.asyncio
+async def test_recommendations_do_not_use_unverified_city_price():
+    db = _DB()
+    db.variant_pricing.rows[0]["city_pricing"][1]["verification_status"] = "unverified"
+
+    async with AsyncClient(transport=ASGITransport(app=_app(db)), base_url="http://test") as client:
+        response = await client.post("/api/v1/configurator/recommendations", json={
+            "raw_request": "diesel SUV under ₹15 lakh in Panipat",
+            "city": "Panipat",
+            "state": "Haryana",
+            "limit": 5,
+        })
+
+    assert response.status_code == 200
+    result = {item["variant_id"]: item for item in response.json()["recommendations"]}
+    assert "v1" not in result
 
 
 @pytest.mark.asyncio
