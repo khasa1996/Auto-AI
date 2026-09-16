@@ -19,7 +19,7 @@ export function buildRecommendationCards(response, limit = 3) {
     return [{
       variantId: item.variant_id,
       name: String(vehicle.display_name || vehicle.name || item.variant_id),
-      fitScore: typeof item.fit_score === 'number' ? item.fit_score : 0,
+      fitScore: typeof item.fit_score === 'number' ? Math.max(0, Math.min(100, item.fit_score)) : 0,
       requirementFit: String(item.requirement_fit || 'unknown'),
       budgetFit: String(item.budget_fit || 'unknown'),
       fuelFit: String(item.fuel_fit || 'unknown'),
@@ -30,6 +30,13 @@ export function buildRecommendationCards(response, limit = 3) {
       tradeoff: item.tradeoff ? String(item.tradeoff) : null,
     }];
   });
+}
+
+export function getRecommendationCta({ variantId, configuratorAvailable }) {
+  if (configuratorAvailable !== true) {
+    return { label: '3D coming soon', href: null, disabled: true };
+  }
+  return { label: 'Open configurator', href: `/configurator/${encodeURIComponent(variantId)}`, disabled: false };
 }
 
 function badgeClass(active) {
@@ -110,23 +117,30 @@ export default function MultiVariantRecommendations() {
 
           {state.cards.length > 0 && (
             <div className="mt-3 grid gap-2 md:grid-cols-3">
-              {state.cards.map((card) => (
-                <article key={card.variantId} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0"><h3 className="truncate text-xs font-semibold text-white">{card.name}</h3><p className="mt-1 text-[9px] uppercase tracking-widest text-white/30">{card.variantId}</p></div>
-                    <span className="shrink-0 rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-1 text-[9px] font-semibold text-amber-300">{card.fitScore}% fit</span>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    <span className={`rounded-full border px-2 py-1 text-[8px] uppercase tracking-wider ${badgeClass(card.budgetFit === 'within_budget')}`}>{card.budgetFit.replaceAll('_', ' ')}</span>
-                    <span className={`rounded-full border px-2 py-1 text-[8px] uppercase tracking-wider ${badgeClass(card.fuelFit === 'match')}`}>{card.fuelFit}</span>
-                    <span className={`rounded-full border px-2 py-1 text-[8px] uppercase tracking-wider ${badgeClass(card.configuratorAvailable)}`}>{card.configuratorAvailable ? '3D ready' : '3D coming soon'}</span>
-                  </div>
-                  {card.price !== null && <p className="mt-3 font-mono text-sm text-amber-300">{formatINR(card.price)}</p>}
-                  <p className="mt-2 text-[9px] leading-4 text-white/45">{card.whyItFits}</p>
-                  {card.tradeoff && <p className="mt-2 text-[9px] leading-4 text-white/30">{card.tradeoff}</p>}
-                  <a href={`/configurator/${encodeURIComponent(card.variantId)}`} className="mt-3 flex items-center justify-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-[9px] font-semibold uppercase tracking-widest text-white/70 transition hover:border-amber-400/30 hover:text-amber-300"><CarFront size={11} /> Open configurator</a>
-                </article>
-              ))}
+              {state.cards.map((card) => {
+                const cta = getRecommendationCta(card);
+                return (
+                  <article key={card.variantId} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0"><h3 className="truncate text-xs font-semibold text-white">{card.name}</h3><p className="mt-1 text-[9px] uppercase tracking-widest text-white/30">{card.variantId}</p></div>
+                      <span className="shrink-0 rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-1 text-[9px] font-semibold text-amber-300">{card.fitScore}% fit</span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      <span className={`rounded-full border px-2 py-1 text-[8px] uppercase tracking-wider ${badgeClass(card.budgetFit === 'within_budget')}`}>{card.budgetFit.replaceAll('_', ' ')}</span>
+                      <span className={`rounded-full border px-2 py-1 text-[8px] uppercase tracking-wider ${badgeClass(card.fuelFit === 'match')}`}>{card.fuelFit}</span>
+                      <span className={`rounded-full border px-2 py-1 text-[8px] uppercase tracking-wider ${badgeClass(card.configuratorAvailable)}`}>{card.configuratorAvailable ? '3D ready' : '3D coming soon'}</span>
+                    </div>
+                    {card.price !== null && <p className="mt-3 font-mono text-sm text-amber-300">{formatINR(card.price)}</p>}
+                    <p className="mt-2 text-[9px] leading-4 text-white/45">{card.whyItFits}</p>
+                    {card.tradeoff && <p className="mt-2 text-[9px] leading-4 text-white/30">{card.tradeoff}</p>}
+                    {cta.disabled ? (
+                      <span className="mt-3 flex items-center justify-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-[9px] font-semibold uppercase tracking-widest text-white/30" aria-disabled="true"><CarFront size={11} /> {cta.label}</span>
+                    ) : (
+                      <a href={cta.href} className="mt-3 flex items-center justify-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-[9px] font-semibold uppercase tracking-widest text-white/70 transition hover:border-amber-400/30 hover:text-amber-300"><CarFront size={11} /> {cta.label}</a>
+                    )}
+                  </article>
+                );
+              })}
             </div>
           )}
         </section>
