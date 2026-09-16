@@ -2,23 +2,13 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from configurator_recommendation_schemas import AIRecommendationRequest, AIRecommendationResponse
-from configurator_recommendations import rank_variant_recommendations
-
-
-def _budget_from_text(request: str) -> Optional[int]:
-    match = re.search(r"(?:under|below|within|max(?:imum)?|budget(?:\s+of)?)\s*₹?\s*([0-9]+(?:\.[0-9]+)?)\s*(crore|cr|lakh|lac|k)?", request.lower())
-    if not match:
-        return None
-    value = float(match.group(1))
-    multiplier = {"crore": 10_000_000, "cr": 10_000_000, "lakh": 100_000, "lac": 100_000, "k": 1_000}.get(match.group(2) or "", 1)
-    return int(value * multiplier)
+from configurator_recommendations import extract_recommendation_intent, rank_variant_recommendations
 
 
 def _candidate_price(pricing: Dict[str, Any]) -> Optional[int]:
@@ -31,47 +21,11 @@ def _candidate_price(pricing: Dict[str, Any]) -> Optional[int]:
     return None
 
 
-def _infer_preference(raw_request: str, values: tuple[tuple[str, tuple[str, ...]], ...]) -> Optional[str]:
-    normalized = raw_request.lower()
-    for canonical, aliases in values:
-        if any(re.search(rf"\b{re.escape(alias)}\b", normalized) for alias in aliases):
-            return canonical
-    return None
-
-
-def _inferred_request_fields(raw_request: str) -> Dict[str, Optional[str]]:
-    return {
-        "preferred_fuel": _infer_preference(
-            raw_request,
-            (
-                ("diesel", ("diesel",)),
-                ("petrol", ("petrol", "gasoline")),
-                ("electric", ("electric", "ev")),
-                ("hybrid", ("hybrid",)),
-                ("cng", ("cng",)),
-            ),
-        ),
-        "preferred_segment": _infer_preference(
-            raw_request,
-            (
-                ("suv", ("suv",)),
-                ("hatchback", ("hatchback",)),
-                ("sedan", ("sedan",)),
-                ("mpv", ("mpv", "muv")),
-            ),
-        ),
-    }
-
-
 def make_configurator_recommendation_router(db: AsyncIOMotorDatabase) -> APIRouter:
     router = APIRouter(prefix="/api/v1/configurator", tags=["configurator-recommendations"])
 
     @router.post("/recommendations", response_model=AIRecommendationResponse)
     async def recommend_variants(request: AIRecommendationRequest) -> AIRecommendationResponse:
-        max_budget = request.max_budget if request.max_budget is not None else _budget_from_text(request.raw_request)
-        inferred = _inferred_request_fields(request.raw_request)
-        preferred_fuel = request.preferred_fuel or inferred["preferred_fuel"]
-        preferred_segment = request.preferred_segment or inferred["preferred_segment"]
         variants = await db.variants.find({"active": True}, {"_id": 0}).to_list(500)
         if not variants:
             return AIRecommendationResponse(recommendations=[], explanation="No active vehicle variants are available for this request.", ai_assisted=False, valid=True)
@@ -91,10 +45,12 @@ def make_configurator_recommendation_router(db: AsyncIOMotorDatabase) -> APIRout
             candidate["pricing"] = pricing if price is not None else {}
             candidates.append(candidate)
 
+        ai_intent = await extract_recommendation_intent(request.raw_request, candidates)
         ranking_request = request.model_dump()
-        ranking_request["max_budget"] = max_budget
-        ranking_request["preferred_fuel"] = preferred_fuel
-        ranking_request["preferred_segment"] = preferred_segment
+        ranking_request["max_budget"] = request.max_budget if request.max_budget is not None else ai_intent["max_budget"]
+        ranking_request["preferred_fuel"] = request.preferred_fuel or ai_intent["preferred_fuel"]
+        ranking_request["preferred_segment"] = request.preferred_segment or ai_intent["preferred_segment"]
+        ranking_request["required_features"] = request.required_features or ai_intent["required_features"]
         ranked = rank_variant_recommendations(candidates, ranking_request)
         by_id = {str(item.get("variant_id")): item for item in candidates}
         recommendations = []
@@ -120,7 +76,7 @@ def make_configurator_recommendation_router(db: AsyncIOMotorDatabase) -> APIRout
                 "tradeoff": "3D configurator is not currently available for this variant." if not configurator_available else None,
             })
 
-        explanation = "No eligible variants matched the explicit requirements. Try a wider budget or remove one strict filter." if not recommendations else "Recommendations are ranked deterministically from active backend catalog data; pricing, availability and configurator readiness remain backend-authoritative."
-        return AIRecommendationResponse(recommendations=recommendations, explanation=explanation, ai_assisted=False, valid=True)
+        explanation = "No eligible variants matched the explicit requirements. Try a wider budget or remove one strict filter." if not recommendations else "AI extracted the request preferences, then the backend deterministically ranked active catalog candidates. Pricing, availability and configurator readiness remain backend-authoritative."
+        return AIRecommendationResponse(recommendations=recommendations, explanation=explanation, ai_assisted=bool(ai_intent["ai_assisted"]), valid=True)
 
     return router
