@@ -156,7 +156,7 @@ async def test_recommendations_explanation_identifies_ai_assisted_intent_extract
 
     monkeypatch.setattr("configurator_recommendation_routes.extract_recommendation_intent", ai_intent)
 
-    async with AsyncClient(transport=ASGITransport(app=_DB()), base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=_app(_DB())), base_url="http://test") as client:
         response = await client.post("/api/v1/configurator/recommendations", json={"raw_request": "diesel SUV under ₹15 lakh", "limit": 3})
 
     assert response.status_code == 200
