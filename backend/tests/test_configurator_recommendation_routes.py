@@ -118,3 +118,48 @@ async def test_recommendations_never_claim_configurator_ready_for_coming_soon_va
     result = {item["variant_id"]: item for item in response.json()["recommendations"]}
     assert result["v1"]["configurator_available"] is False
     assert result["v1"]["availability_status"] == "COMING_SOON"
+
+
+@pytest.mark.asyncio
+async def test_recommendations_explanation_reports_deterministic_fallback_when_ai_is_unavailable(monkeypatch):
+    async def fallback_intent(_raw_request, _candidates):
+        return {
+            "preferred_segment": "suv",
+            "preferred_fuel": "diesel",
+            "max_budget": 1500000,
+            "required_features": [],
+            "ai_assisted": False,
+        }
+
+    monkeypatch.setattr("configurator_recommendation_routes.extract_recommendation_intent", fallback_intent)
+
+    async with AsyncClient(transport=ASGITransport(app=_app(_DB())), base_url="http://test") as client:
+        response = await client.post("/api/v1/configurator/recommendations", json={"raw_request": "diesel SUV under ₹15 lakh", "limit": 3})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ai_assisted"] is False
+    assert "deterministically extracted" in body["explanation"]
+    assert "AI extracted" not in body["explanation"]
+
+
+@pytest.mark.asyncio
+async def test_recommendations_explanation_identifies_ai_assisted_intent_extraction(monkeypatch):
+    async def ai_intent(_raw_request, _candidates):
+        return {
+            "preferred_segment": "suv",
+            "preferred_fuel": "diesel",
+            "max_budget": 1500000,
+            "required_features": [],
+            "ai_assisted": True,
+        }
+
+    monkeypatch.setattr("configurator_recommendation_routes.extract_recommendation_intent", ai_intent)
+
+    async with AsyncClient(transport=ASGITransport(app=_DB()), base_url="http://test") as client:
+        response = await client.post("/api/v1/configurator/recommendations", json={"raw_request": "diesel SUV under ₹15 lakh", "limit": 3})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ai_assisted"] is True
+    assert "AI extracted" in body["explanation"]
