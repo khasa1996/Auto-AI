@@ -1,11 +1,21 @@
 const CONTEXT_PREFIX = '__AUTO_AI_CONTEXT__';
 
 export function buildConfiguratorAIIntent(variantId, rawRequest, fields = {}) {
-  const { currentConfiguration, city, state, ...intentFields } = fields;
+  const {
+    currentConfiguration,
+    city,
+    state,
+    authoritativePrice,
+    verifiedAsset,
+    clientPrice: _clientPrice,
+    ...intentFields
+  } = fields;
   const context = {};
   if (currentConfiguration) context.current_configuration = currentConfiguration;
   if (city) context.city = city;
   if (state) context.state = state;
+  if (authoritativePrice) context.authoritative_price = authoritativePrice;
+  if (verifiedAsset) context.verified_asset = verifiedAsset;
   const contextLine = Object.keys(context).length ? `${CONTEXT_PREFIX}${JSON.stringify(context)}\n` : '';
   return {
     variant_id: variantId,

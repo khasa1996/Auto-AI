@@ -1,0 +1,80 @@
+import pytest
+
+from configurator_persistence import revalidate_saved_configuration
+from configurator_routes import resolve_saved_configuration_asset
+
+
+@pytest.mark.asyncio
+async def test_revalidate_saved_configuration_returns_stale_when_authoritative_context_changes():
+    saved = {
+        "configuration": {"purchasable": {"variant_id": "v1", "paint_id": "red"}},
+        "city": "Delhi",
+        "price_snapshot": 1250000,
+        "asset_id": "asset-1",
+        "asset_version": "2.0",
+        "stale": False,
+        "stale_reason": None,
+    }
+
+    async def current_price(_configuration, _city):
+        return {"estimated_on_road": 1275000}
+
+    async def current_asset(_variant_id, _asset_id):
+        return {"asset_id": "asset-1", "version": "2.0"}
+
+    result = await revalidate_saved_configuration(saved, current_price, current_asset)
+
+    assert result["stale"] is True
+    assert result["stale_reason"] == "Authoritative configurator price has changed"
+    assert result["price_snapshot"] == 1275000
+
+
+@pytest.mark.asyncio
+async def test_revalidate_saved_configuration_preserves_fresh_context():
+    saved = {
+        "configuration": {"purchasable": {"variant_id": "v1"}},
+        "city": "Delhi",
+        "price_snapshot": 1250000,
+        "asset_id": "asset-1",
+        "asset_version": "2.0",
+        "stale": False,
+        "stale_reason": None,
+    }
+
+    async def current_price(_configuration, _city):
+        return {"estimated_on_road": 1250000}
+
+    async def current_asset(_variant_id, _asset_id):
+        return {"asset_id": "asset-1", "version": "2.0"}
+
+    result = await revalidate_saved_configuration(saved, current_price, current_asset)
+
+    assert result["stale"] is False
+    assert result["stale_reason"] is None
+    assert result["price_snapshot"] == 1250000
+
+
+@pytest.mark.asyncio
+async def test_saved_configuration_resolves_current_variant_asset_when_saved_asset_is_old():
+    class Assets:
+        async def find_one(self, query, projection=None):
+            assert query == {
+                "asset_id": "asset-current",
+                "variant_id": "v1",
+                "published": True,
+                "validation_passed": True,
+            }
+            return {"asset_id": "asset-current", "version": "3.0"}
+
+    class Variants:
+        async def find_one(self, query, projection=None):
+            assert query == {"variant_id": "v1"}
+            return {"configurator_asset_id": "asset-current"}
+
+    class DB:
+        variants = Variants()
+        configurator_assets = Assets()
+
+    result = await resolve_saved_configuration_asset(DB(), "v1", "asset-old")
+
+    assert result == {"asset_id": "asset-current", "version": "3.0"}

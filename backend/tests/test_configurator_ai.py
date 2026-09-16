@@ -85,3 +85,30 @@ def test_ai_prompt_includes_live_city_and_existing_build():
     prompt = build_ai_prompt(intent, catalog(), base, "Delhi")
     assert "Pricing city: Delhi" in prompt
     assert '"paint_id":"red"' in prompt
+
+
+def test_ai_prompt_includes_authoritative_price_and_verified_asset_capabilities():
+    intent = AIConfiguratorIntent(variant_id="v1", raw_request="open the hood")
+    base = PurchasableConfiguration(variant_id="v1", paint_id="red")
+    runtime_context = {
+        "authoritative_price": {"estimated_on_road": 2475000, "effective_date": "2026-09-15", "source": "verified"},
+        "verified_asset": {
+            "asset_id": "asset-v1",
+            "version": "v3",
+            "supported_interactions": ["hood", "doors", "camera_exterior"],
+            "camera_preset_names": ["exterior", "front"],
+        },
+    }
+    prompt = build_ai_prompt(intent, catalog(), base, "Delhi", runtime_context)
+    assert '"estimated_on_road":2475000' in prompt
+    assert '"asset_id":"asset-v1"' in prompt
+    assert '"version":"v3"' in prompt
+    assert '"supported_interactions":["hood","doors","camera_exterior"]' in prompt
+    assert '"camera_preset_names":["exterior","front"]' in prompt
+
+
+def test_ai_prompt_excludes_untrusted_client_price_from_authoritative_context():
+    intent = AIConfiguratorIntent(variant_id="v1", raw_request="what is the price?")
+    prompt = build_ai_prompt(intent, catalog(), PurchasableConfiguration(variant_id="v1"), "Delhi", {"client_price": 999})
+    assert "client_price" not in prompt
+    assert "999" not in prompt

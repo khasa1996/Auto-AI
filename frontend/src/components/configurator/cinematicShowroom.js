@@ -11,10 +11,14 @@ export const CINEMATIC_SEQUENCE = [
   'cockpit',
 ];
 
-export function buildCinematicSequence(supportedInteractions) {
-  return CINEMATIC_SEQUENCE.filter((preset) => (
+export function buildCinematicSequence(supportedInteractions, cameraPresetNames) {
+  const sequence = CINEMATIC_SEQUENCE.filter((preset) => (
     isCameraPresetSupported(supportedInteractions, preset)
   ));
+
+  if (!Array.isArray(cameraPresetNames)) return sequence;
+  const declared = new Set(cameraPresetNames);
+  return sequence.filter((preset) => declared.has(preset));
 }
 
 export function getNextCinematicPreset(sequence, currentPreset) {
