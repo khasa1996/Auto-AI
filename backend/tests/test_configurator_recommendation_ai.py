@@ -28,7 +28,8 @@ async def test_extract_recommendation_intent_uses_structured_ai_output(monkeypat
     )
 
     result = await extract_recommendation_intent(
-        "I want a diesel SUV under 20 lakh with ADAS and 360 camera"
+        "I want a diesel SUV under 20 lakh with ADAS and 360 camera",
+        [{"features": ["ADAS", "360 camera"]}],
     )
 
     assert result["preferred_segment"] == "suv"
