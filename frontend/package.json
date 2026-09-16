@@ -74,6 +74,7 @@
     "build": "craco build",
     "test": "craco test",
     "mobile:init:android": "npx cap add android",
+    "mobile:init:ios": "npx cap add ios",
     "mobile:sync": "npx cap sync",
     "mobile:open:android": "npx cap open android",
     "mobile:open:ios": "npx cap open ios",
