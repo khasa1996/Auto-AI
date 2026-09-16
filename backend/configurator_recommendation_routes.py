@@ -55,6 +55,21 @@ def _candidate_price(pricing: Dict[str, Any], city: str | None = None, state: st
     return None
 
 
+def _verified_pricing_by_variant(rows: list[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    """Keep only verified pricing records and resolve duplicate rows deterministically."""
+    verified: Dict[str, Dict[str, Any]] = {}
+    for row in rows:
+        variant_id = row.get("variant_id")
+        if not variant_id:
+            continue
+        if str(row.get("verification_status", "unverified")).casefold() != "verified":
+            continue
+        key = str(variant_id)
+        if key not in verified:
+            verified[key] = row
+    return verified
+
+
 def make_configurator_recommendation_router(db: AsyncIOMotorDatabase) -> APIRouter:
     router = APIRouter(prefix="/api/v1/configurator", tags=["configurator-recommendations"])
 
@@ -66,7 +81,7 @@ def make_configurator_recommendation_router(db: AsyncIOMotorDatabase) -> APIRout
 
         variant_ids = [str(item.get("variant_id")) for item in variants if item.get("variant_id")]
         pricing_rows = await db.variant_pricing.find({"variant_id": {"$in": variant_ids}}, {"_id": 0}).to_list(500)
-        pricing_by_variant = {str(item.get("variant_id")): item for item in pricing_rows if item.get("variant_id")}
+        pricing_by_variant = _verified_pricing_by_variant(pricing_rows)
 
         candidates = []
         for variant in variants:
