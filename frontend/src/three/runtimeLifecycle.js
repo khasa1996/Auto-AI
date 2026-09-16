@@ -63,8 +63,14 @@ export function collectOwnedMaterialResources(meshes) {
 }
 
 export function disposeOwnedMaterialResources(materials) {
-  disposeOwnedRuntimeResources(materials.map((material) => {
-    if (material?.userData?.runtimeOwnedMaterial) markOwnedResource(material);
-    return material;
-  }));
+  const seen = new Set();
+  for (const material of materials || []) {
+    if (!material || seen.has(material)) continue;
+    seen.add(material);
+    try {
+      material.dispose?.();
+    } catch {
+      // Cleanup must not turn an unmount/replacement into a runtime failure.
+    }
+  }
 }
