@@ -62,8 +62,6 @@ def _budget_fit(price: Optional[int], budget: Optional[int]) -> tuple[str, float
         return "unknown", 0.5
     if price <= budget:
         return "within_budget", 1.0
-    if price <= int(budget * 1.10):
-        return "slightly_over_budget", 0.35
     return "over_budget", 0.0
 
 
@@ -111,7 +109,7 @@ def _eligible(candidate: Dict[str, Any], request: Dict[str, Any]) -> bool:
         return False
     budget = request.get("max_budget")
     price = _price(candidate)
-    if isinstance(budget, (int, float)) and price is not None and price > int(budget * 1.10):
+    if isinstance(budget, (int, float)) and price is not None and price > int(budget):
         return False
     return bool(candidate.get("variant_id"))
 
