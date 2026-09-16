@@ -30,6 +30,11 @@ def _asset():
         "published": True,
         "validation_passed": True,
         "provenance": "AUTO_AI_LICENSED",
+        "license_name": "Production license",
+        "publisher": "Auto AI India",
+        "checksum_sha256": "a" * 64,
+        "file_size_bytes": 1024,
+        "storage_status": "PUBLISHED",
     }
 
 
@@ -84,3 +89,33 @@ def test_asset_identity_and_publication_are_required():
     )
     assert result["ready"] is False
     assert "configured asset identity does not match the variant" in result["blockers"]
+
+
+def test_asset_license_and_publisher_are_required():
+    colors, wheels, interiors = _options()
+    asset = {**_asset(), "license_name": None, "publisher": None}
+    result = assess_vehicle_configurator_readiness(
+        _vehicle(), _pricing(), colors, wheels, interiors, asset
+    )
+    assert result["ready"] is False
+    assert "configurator asset license metadata is incomplete" in result["blockers"]
+
+
+def test_asset_integrity_evidence_is_required():
+    colors, wheels, interiors = _options()
+    asset = {**_asset(), "checksum_sha256": None, "file_size_bytes": None}
+    result = assess_vehicle_configurator_readiness(
+        _vehicle(), _pricing(), colors, wheels, interiors, asset
+    )
+    assert result["ready"] is False
+    assert "configurator asset integrity evidence is incomplete" in result["blockers"]
+
+
+def test_asset_storage_publication_state_is_required():
+    colors, wheels, interiors = _options()
+    asset = {**_asset(), "storage_status": "VALIDATED"}
+    result = assess_vehicle_configurator_readiness(
+        _vehicle(), _pricing(), colors, wheels, interiors, asset
+    )
+    assert result["ready"] is False
+    assert "configurator asset storage publication state is not complete" in result["blockers"]
