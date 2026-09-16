@@ -102,14 +102,25 @@ def _eligible(candidate: Dict[str, Any], request: Dict[str, Any]) -> bool:
     if candidate.get("active") is False:
         return False
     preferred_fuel = _normalized(request.get("preferred_fuel"))
-    if preferred_fuel and _fuel(candidate) and _fuel(candidate) != preferred_fuel:
-        return False
+    if preferred_fuel:
+        fuel = _fuel(candidate)
+        if not fuel or fuel != preferred_fuel:
+            return False
     preferred_segment = _normalized(request.get("preferred_segment"))
-    if preferred_segment and _segment(candidate) and _segment(candidate) != preferred_segment:
-        return False
+    if preferred_segment:
+        segment = _segment(candidate)
+        if not segment or segment != preferred_segment:
+            return False
     budget = request.get("max_budget")
     price = _price(candidate)
-    if isinstance(budget, (int, float)) and price is not None and price > int(budget):
+    if isinstance(budget, (int, float)):
+        if price is None or price > int(budget):
+            return False
+    requested_features = request.get("required_features") or []
+    if isinstance(requested_features, str):
+        requested_features = [requested_features]
+    wanted = {_normalized(value) for value in requested_features if value}
+    if wanted and not wanted.issubset(_feature_tokens(candidate)):
         return False
     return bool(candidate.get("variant_id"))
 
