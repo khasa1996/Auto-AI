@@ -11,7 +11,41 @@ from configurator_recommendation_schemas import AIRecommendationRequest, AIRecom
 from configurator_recommendations import extract_recommendation_intent, rank_variant_recommendations
 
 
-def _candidate_price(pricing: Dict[str, Any]) -> Optional[int]:
+def _normalize_location(value: str | None) -> str:
+    return " ".join(str(value or "").strip().casefold().split())
+
+
+def _verified_city_price(pricing: Dict[str, Any], city: str | None, state: str | None) -> Optional[Dict[str, Any]]:
+    """Return a verified city pricing record matching the requested city/state."""
+    if not city:
+        return None
+
+    requested_city = _normalize_location(city)
+    requested_state = _normalize_location(state)
+    for entry in pricing.get("city_pricing", []):
+        if not isinstance(entry, dict):
+            continue
+        if str(entry.get("verification_status", "unverified")).casefold() != "verified":
+            continue
+        if _normalize_location(entry.get("city")) != requested_city:
+            continue
+        if requested_state and _normalize_location(entry.get("state")) != requested_state:
+            continue
+        return entry
+    return None
+
+
+def _candidate_price(pricing: Dict[str, Any], city: str | None = None, state: str | None = None) -> Optional[int]:
+    if city:
+        city_price = _verified_city_price(pricing, city, state)
+        if city_price is None:
+            return None
+        for key in ("base_ex_showroom", "ex_showroom", "price"):
+            value = city_price.get(key)
+            if isinstance(value, (int, float)) and value >= 0:
+                return int(value)
+        return None
+
     if pricing.get("verification_status") not in {"verified", "VERIFIED"}:
         return None
     for key in ("base_ex_showroom", "ex_showroom", "price"):
@@ -39,11 +73,32 @@ def make_configurator_recommendation_router(db: AsyncIOMotorDatabase) -> APIRout
             variant_id = str(variant.get("variant_id"))
             pricing = pricing_by_variant.get(variant_id, {})
             candidate = dict(variant)
-            price = _candidate_price(pricing)
+            price = _candidate_price(pricing, request.city, request.state)
             if price is not None:
                 candidate["price"] = price
-            candidate["pricing"] = pricing if price is not None else {}
+                candidate["pricing"] = pricing if not request.city else {
+                    "variant_id": variant_id,
+                    "city": request.city,
+                    "state": request.state,
+                    "ex_showroom": price,
+                    "verification_status": "verified",
+                }
+            elif not request.city:
+                candidate["pricing"] = {}
+            else:
+                # A requested location without verified pricing is not eligible
+                # for a price-sensitive recommendation and must not fall back to
+                # a generic or unverified price.
+                continue
             candidates.append(candidate)
+
+        if not candidates:
+            return AIRecommendationResponse(
+                recommendations=[],
+                explanation="No active variants have verified pricing for the requested city/state.",
+                ai_assisted=False,
+                valid=True,
+            )
 
         ai_intent = await extract_recommendation_intent(request.raw_request, candidates)
         ranking_request = request.model_dump()
