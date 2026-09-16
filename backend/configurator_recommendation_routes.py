@@ -146,7 +146,13 @@ def make_configurator_recommendation_router(db: AsyncIOMotorDatabase) -> APIRout
                 "tradeoff": "3D configurator is not currently available for this variant." if not configurator_available else None,
             })
 
-        explanation = "No eligible variants matched the explicit requirements. Try a wider budget or remove one strict filter." if not recommendations else "AI extracted the request preferences, then the backend deterministically ranked active catalog candidates. Pricing, availability and configurator readiness remain backend-authoritative."
+        if not recommendations:
+            explanation = "No eligible variants matched the explicit requirements. Try a wider budget or remove one strict filter."
+        elif ai_intent["ai_assisted"]:
+            explanation = "AI extracted the request preferences, then the backend deterministically ranked active catalog candidates. Pricing, availability and configurator readiness remain backend-authoritative."
+        else:
+            explanation = "Preferences were deterministically extracted, then the backend ranked active catalog candidates. Pricing, availability and configurator readiness remain backend-authoritative."
+
         return AIRecommendationResponse(recommendations=recommendations, explanation=explanation, ai_assisted=bool(ai_intent["ai_assisted"]), valid=True)
 
     return router
