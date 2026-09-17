@@ -56,4 +56,51 @@ describe('configuratorStore asset boundary', () => {
     expect(asset.interactionAnimationNames).toEqual({ doors: { open: 'Door_Open' } });
     expect(asset.available).toBe(true);
   });
+
+  test('stores one normalized runtime contract including backend options', () => {
+    useConfiguratorStore.getState().setRuntimeContract({
+      variant_id: 'variant-1',
+      ready: true,
+      asset: {
+        asset_id: 'asset-1',
+        url: 'https://cdn.example.com/model.glb',
+        format: 'glb',
+        version: 'v1',
+        lod_level: 'high',
+        provenance: 'AUTO_AI_LICENSED',
+        license_name: 'Production license',
+        publisher: 'Auto AI India',
+        checksum_sha256: 'a'.repeat(64),
+        file_size_bytes: 1024,
+      },
+      capabilities: {
+        interactions: ['camera_exterior'],
+        cameras: ['exterior', 'front'],
+        animations: {},
+        paint_materials: ['BodyPaint'],
+        interior_materials: [],
+        interior_material_mappings: {},
+        wheel_mesh_mappings: {},
+        option_mesh_mappings: {},
+      },
+      options: {
+        colors: [{ color_id: 'white', display_name: 'White', available: true }],
+        wheels: [{ wheel_id: 'sport', display_name: 'Sport', available: true }],
+        interiors: [],
+        roofs: [],
+        accessories: [],
+      },
+    });
+
+    const state = useConfiguratorStore.getState();
+    expect(state.asset.available).toBe(true);
+    expect(state.runtimeOptions).toEqual({
+      variant_id: 'variant-1',
+      colors: [{ color_id: 'white', display_name: 'White', available: true }],
+      wheels: [{ wheel_id: 'sport', display_name: 'Sport', available: true }],
+      interiors: [],
+      roofs: [],
+      accessories: [],
+    });
+  });
 });
