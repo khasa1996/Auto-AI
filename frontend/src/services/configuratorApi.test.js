@@ -1,4 +1,5 @@
-import { gateAssetResponse, normalizeRuntimeCapabilityContract, syncConfiguratorShareUrl } from './configuratorApi';
+import { api } from '../lib/api';
+import { gateAssetResponse, normalizeRuntimeCapabilityContract, syncConfiguratorShareUrl, configuratorApi } from './configuratorApi';
 
 describe('gateAssetResponse', () => {
   it('keeps a verified published asset available', () => {
@@ -122,5 +123,37 @@ describe('syncConfiguratorShareUrl', () => {
     syncConfiguratorShareUrl('');
     expect(replaceState).not.toHaveBeenCalled();
     replaceState.mockRestore();
+  });
+});
+
+describe('runtime capability contract requests', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('deduplicates concurrent requests for the same variant contract', async () => {
+    const response = {
+      data: {
+        variant_id: 'variant-1',
+        ready: false,
+        blockers: ['3D asset is not published'],
+        warnings: [],
+        asset: null,
+        capabilities: null,
+        options: null,
+      },
+    };
+    const request = jest.spyOn(api, 'get').mockResolvedValue(response);
+
+    const [availability, asset, options] = await Promise.all([
+      configuratorApi.getAvailability('variant-1'),
+      configuratorApi.getAsset('variant-1'),
+      configuratorApi.getOptions('variant-1'),
+    ]);
+
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(availability.data.configurator_status).toBe('COMING_SOON');
+    expect(asset.data.status).toBe('COMING_SOON');
+    expect(options.data.variant_id).toBe('variant-1');
   });
 });
