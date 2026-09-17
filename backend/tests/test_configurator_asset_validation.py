@@ -47,3 +47,31 @@ def test_manifest_rejects_missing_interior_material_mapping():
     result = validate_asset_manifest(asset, ["wheel-a", "roof-a"], ["BodyPaint"])
     assert result["valid"] is False
     assert any("interior material mapping" in error.lower() for error in result["errors"])
+
+
+def test_manifest_rejects_missing_paint_material_mapping():
+    asset = make_asset(paint_material_names=["BodyPaint"])
+    result = validate_asset_manifest(asset, ["wheel-a", "roof-a"], ["Leather"])
+    assert result["valid"] is False
+    assert any("paint material" in error.lower() for error in result["errors"])
+
+
+def test_manifest_rejects_unknown_camera_preset():
+    asset = make_asset(camera_preset_names=["studio-front", "missing-camera"])
+    result = validate_asset_manifest(
+        asset,
+        ["wheel-a", "roof-a"],
+        [],
+        inspected_camera_preset_names=["studio-front"],
+    )
+    assert result["valid"] is False
+    assert any("camera preset" in error.lower() for error in result["errors"])
+
+
+def test_manifest_rejects_animation_mapping_for_unsupported_interaction():
+    asset = make_asset(
+        interaction_animation_names={"doors": {"front_left": "Door_FL"}, "sunroof": {"open": "Sunroof_Open"}}
+    )
+    result = validate_asset_manifest(asset, ["wheel-a", "roof-a"])
+    assert result["valid"] is False
+    assert any("animation mapping" in error.lower() for error in result["errors"])

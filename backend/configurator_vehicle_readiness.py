@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, Iterable, Optional
 
 
@@ -10,6 +11,7 @@ _PUBLISHABLE_PROVENANCE = {
     "AUTO_AI_LICENSED",
     "LICENSED_THIRD_PARTY",
 }
+_SHA256_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
 
 
 def _available_options(options: Optional[Iterable[Dict[str, Any]]]) -> list[Dict[str, Any]]:
@@ -82,6 +84,20 @@ def assess_vehicle_configurator_readiness(
             blockers.append("configurator asset has not passed validation")
         if asset.get("provenance") not in _PUBLISHABLE_PROVENANCE:
             blockers.append("configurator asset provenance is not publishable")
+
+        if not asset.get("license_name") or not asset.get("publisher"):
+            blockers.append("configurator asset license metadata is incomplete")
+
+        checksum = asset.get("checksum_sha256")
+        file_size = asset.get("file_size_bytes")
+        if not isinstance(file_size, int) or file_size <= 0 or file_size > 200 * 1024 * 1024:
+            blockers.append("configurator asset integrity evidence is incomplete")
+        if not isinstance(checksum, str) or not _SHA256_PATTERN.fullmatch(checksum):
+            if "configurator asset integrity evidence is incomplete" not in blockers:
+                blockers.append("configurator asset integrity evidence is incomplete")
+
+        if asset.get("storage_status") != "PUBLISHED":
+            blockers.append("configurator asset storage publication state is not complete")
 
     if not vehicle.get("source") or not vehicle.get("source_url"):
         warnings.append("vehicle source traceability is incomplete")

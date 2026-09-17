@@ -51,6 +51,11 @@ class _DB:
             "published": True,
             "validation_passed": True,
             "provenance": "AUTO_AI_LICENSED",
+            "license_name": "Production license",
+            "publisher": "Auto AI India",
+            "checksum_sha256": "a" * 64,
+            "file_size_bytes": 1024,
+            "storage_status": "PUBLISHED",
         })
 
 

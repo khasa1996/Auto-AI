@@ -6,6 +6,7 @@ import { api } from "../lib/api";
 
 const V1 = "/v1";
 const READINESS_BLOCKER = 'production readiness could not be verified';
+const runtimeCapabilityRequests = new Map();
 
 export function gateAssetResponse(assetResponse, readiness) {
   const blockers = Array.isArray(readiness?.blockers)
@@ -13,6 +14,68 @@ export function gateAssetResponse(assetResponse, readiness) {
     : [];
   if (readiness?.ready === true && blockers.length === 0) return assetResponse;
   return { available: false, asset: null, status: 'COMING_SOON', readiness_blockers: blockers.length ? blockers : [READINESS_BLOCKER] };
+}
+
+export function normalizeRuntimeCapabilityContract(contract) {
+  const blockers = Array.isArray(contract?.blockers)
+    ? contract.blockers.filter((item) => typeof item === 'string' && item.trim())
+    : [];
+  const asset = contract?.asset;
+  const capabilities = contract?.capabilities;
+  if (contract?.ready !== true || !asset || !capabilities) {
+    return {
+      available: false,
+      asset: null,
+      status: 'COMING_SOON',
+      readiness_blockers: blockers.length ? blockers : [READINESS_BLOCKER],
+    };
+  }
+
+  return {
+    available: true,
+    asset_id: asset.asset_id,
+    url: asset.url,
+    format: asset.format,
+    version: asset.version,
+    lodLevel: asset.lod_level,
+    provenance: asset.provenance,
+    licenseName: asset.license_name,
+    publisher: asset.publisher,
+    checksumSha256: asset.checksum_sha256,
+    fileSizeBytes: asset.file_size_bytes,
+    supportedInteractions: capabilities.interactions || [],
+    paintMaterialNames: capabilities.paint_materials || [],
+    interiorMaterialNames: capabilities.interior_materials || [],
+    interiorMaterialMappings: capabilities.interior_material_mappings || {},
+    wheelMeshNames: capabilities.wheel_mesh_mappings || {},
+    optionMeshNames: capabilities.option_mesh_mappings || {},
+    cameraPresetNames: capabilities.cameras || [],
+    interactionAnimationNames: capabilities.animations || {},
+    configuratorStatus: 'AVAILABLE',
+  };
+}
+
+function normalizeRuntimeOptions(contract) {
+  if (contract?.ready !== true || !contract?.options) {
+    return { variant_id: contract?.variant_id, colors: [], wheels: [], interiors: [], roofs: [], accessories: [] };
+  }
+  return { variant_id: contract.variant_id, ...contract.options };
+}
+
+async function fetchRuntimeCapabilityContract(variantId) {
+  const inFlight = runtimeCapabilityRequests.get(variantId);
+  if (inFlight) return inFlight;
+
+  const request = api.get(`${V1}/configurator/${variantId}/capabilities`)
+    .then((response) => ({ ...response, data: response.data }))
+    .finally(() => {
+      if (runtimeCapabilityRequests.get(variantId) === request) {
+        runtimeCapabilityRequests.delete(variantId);
+      }
+    });
+
+  runtimeCapabilityRequests.set(variantId, request);
+  return request;
 }
 
 export function syncConfiguratorShareUrl(shareToken) {
@@ -28,19 +91,40 @@ export const configuratorApi = {
   getModel: (modelId) => api.get(`${V1}/models/${modelId}`),
   getVariants: (params = {}) => api.get(`${V1}/variants`, { params }),
   getVariant: (variantId) => api.get(`${V1}/variants/${variantId}`),
-  getAvailability: (variantId) => api.get(`${V1}/configurator/${variantId}/availability`),
+  getAvailability: async (variantId) => {
+    const response = await fetchRuntimeCapabilityContract(variantId);
+    const normalized = normalizeRuntimeCapabilityContract(response.data);
+    return {
+      ...response,
+      data: {
+        variant_id: variantId,
+        configurator_status: normalized.available ? 'AVAILABLE' : normalized.status,
+        asset_id: normalized.asset_id || null,
+        message: normalized.available ? '3D Configurator Available' : '3D Configurator Coming Soon',
+        readiness_blockers: normalized.readiness_blockers || [],
+      },
+    };
+  },
   getReadiness: (variantId) => api.get(`${V1}/configurator/variants/${variantId}/readiness`),
+  getRuntimeCapabilities: async (variantId) => {
+    const response = await fetchRuntimeCapabilityContract(variantId);
+    return { ...response, data: normalizeRuntimeCapabilityContract(response.data) };
+  },
   getAsset: async (variantId) => {
-    const assetResponse = await api.get(`${V1}/configurator/${variantId}/asset`);
-    try {
-      const readinessResponse = await api.get(`${V1}/configurator/variants/${variantId}/readiness`);
-      return { ...assetResponse, data: gateAssetResponse(assetResponse.data, readinessResponse.data) };
-    } catch {
-      return { ...assetResponse, data: gateAssetResponse(assetResponse.data, null) };
-    }
+    const response = await fetchRuntimeCapabilityContract(variantId);
+    const normalized = normalizeRuntimeCapabilityContract(response.data);
+    return {
+      ...response,
+      data: normalized.available
+        ? { available: true, asset: normalized, status: 'AVAILABLE' }
+        : normalized,
+    };
   },
   getHotspots: (variantId) => api.get(`${V1}/configurator/${variantId}/hotspots`),
-  getOptions: (variantId) => api.get(`${V1}/configurator/${variantId}/options`),
+  getOptions: async (variantId) => {
+    const response = await fetchRuntimeCapabilityContract(variantId);
+    return { ...response, data: normalizeRuntimeOptions(response.data) };
+  },
   getRules: (variantId) => api.get(`${V1}/configurator/${variantId}/rules`),
   getPricingLocations: (variantId) => api.get(`${V1}/configurator/${variantId}/pricing-locations`),
   validateConfiguration: (configuration) => api.post(`${V1}/configurator/validate`, { configuration }),
