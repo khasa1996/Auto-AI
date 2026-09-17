@@ -54,6 +54,18 @@ export function normalizeRuntimeCapabilityContract(contract) {
   };
 }
 
+function normalizeRuntimeOptions(contract) {
+  if (contract?.ready !== true || !contract?.options) {
+    return { variant_id: contract?.variant_id, colors: [], wheels: [], interiors: [], roofs: [], accessories: [] };
+  }
+  return { variant_id: contract.variant_id, ...contract.options };
+}
+
+async function fetchRuntimeCapabilityContract(variantId) {
+  const response = await api.get(`${V1}/configurator/${variantId}/capabilities`);
+  return { ...response, data: response.data };
+}
+
 export function syncConfiguratorShareUrl(shareToken) {
   if (!shareToken || typeof window === 'undefined' || !window.history?.replaceState) return;
   const url = new URL(window.location.href);
@@ -67,23 +79,40 @@ export const configuratorApi = {
   getModel: (modelId) => api.get(`${V1}/models/${modelId}`),
   getVariants: (params = {}) => api.get(`${V1}/variants`, { params }),
   getVariant: (variantId) => api.get(`${V1}/variants/${variantId}`),
-  getAvailability: (variantId) => api.get(`${V1}/configurator/${variantId}/availability`),
+  getAvailability: async (variantId) => {
+    const response = await fetchRuntimeCapabilityContract(variantId);
+    const normalized = normalizeRuntimeCapabilityContract(response.data);
+    return {
+      ...response,
+      data: {
+        variant_id: variantId,
+        configurator_status: normalized.available ? 'AVAILABLE' : normalized.status,
+        asset_id: normalized.asset_id || null,
+        message: normalized.available ? '3D Configurator Available' : '3D Configurator Coming Soon',
+        readiness_blockers: normalized.readiness_blockers || [],
+      },
+    };
+  },
   getReadiness: (variantId) => api.get(`${V1}/configurator/variants/${variantId}/readiness`),
   getRuntimeCapabilities: async (variantId) => {
-    const response = await api.get(`${V1}/configurator/${variantId}/capabilities`);
+    const response = await fetchRuntimeCapabilityContract(variantId);
     return { ...response, data: normalizeRuntimeCapabilityContract(response.data) };
   },
   getAsset: async (variantId) => {
-    const assetResponse = await api.get(`${V1}/configurator/${variantId}/asset`);
-    try {
-      const readinessResponse = await api.get(`${V1}/configurator/variants/${variantId}/readiness`);
-      return { ...assetResponse, data: gateAssetResponse(assetResponse.data, readinessResponse.data) };
-    } catch {
-      return { ...assetResponse, data: gateAssetResponse(assetResponse.data, null) };
-    }
+    const response = await fetchRuntimeCapabilityContract(variantId);
+    const normalized = normalizeRuntimeCapabilityContract(response.data);
+    return {
+      ...response,
+      data: normalized.available
+        ? { available: true, asset: normalized, status: 'AVAILABLE' }
+        : normalized,
+    };
   },
   getHotspots: (variantId) => api.get(`${V1}/configurator/${variantId}/hotspots`),
-  getOptions: (variantId) => api.get(`${V1}/configurator/${variantId}/options`),
+  getOptions: async (variantId) => {
+    const response = await fetchRuntimeCapabilityContract(variantId);
+    return { ...response, data: normalizeRuntimeOptions(response.data) };
+  },
   getRules: (variantId) => api.get(`${V1}/configurator/${variantId}/rules`),
   getPricingLocations: (variantId) => api.get(`${V1}/configurator/${variantId}/pricing-locations`),
   validateConfiguration: (configuration) => api.post(`${V1}/configurator/validate`, { configuration }),
