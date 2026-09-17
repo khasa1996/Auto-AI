@@ -6,6 +6,7 @@ import { api } from "../lib/api";
 
 const V1 = "/v1";
 const READINESS_BLOCKER = 'production readiness could not be verified';
+const runtimeCapabilityRequests = new Map();
 
 export function gateAssetResponse(assetResponse, readiness) {
   const blockers = Array.isArray(readiness?.blockers)
@@ -62,8 +63,19 @@ function normalizeRuntimeOptions(contract) {
 }
 
 async function fetchRuntimeCapabilityContract(variantId) {
-  const response = await api.get(`${V1}/configurator/${variantId}/capabilities`);
-  return { ...response, data: response.data };
+  const inFlight = runtimeCapabilityRequests.get(variantId);
+  if (inFlight) return inFlight;
+
+  const request = api.get(`${V1}/configurator/${variantId}/capabilities`)
+    .then((response) => ({ ...response, data: response.data }))
+    .finally(() => {
+      if (runtimeCapabilityRequests.get(variantId) === request) {
+        runtimeCapabilityRequests.delete(variantId);
+      }
+    });
+
+  runtimeCapabilityRequests.set(variantId, request);
+  return request;
 }
 
 export function syncConfiguratorShareUrl(shareToken) {
