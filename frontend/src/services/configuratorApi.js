@@ -15,6 +15,45 @@ export function gateAssetResponse(assetResponse, readiness) {
   return { available: false, asset: null, status: 'COMING_SOON', readiness_blockers: blockers.length ? blockers : [READINESS_BLOCKER] };
 }
 
+export function normalizeRuntimeCapabilityContract(contract) {
+  const blockers = Array.isArray(contract?.blockers)
+    ? contract.blockers.filter((item) => typeof item === 'string' && item.trim())
+    : [];
+  const asset = contract?.asset;
+  const capabilities = contract?.capabilities;
+  if (contract?.ready !== true || !asset || !capabilities) {
+    return {
+      available: false,
+      asset: null,
+      status: 'COMING_SOON',
+      readiness_blockers: blockers.length ? blockers : [READINESS_BLOCKER],
+    };
+  }
+
+  return {
+    available: true,
+    asset_id: asset.asset_id,
+    url: asset.url,
+    format: asset.format,
+    version: asset.version,
+    lodLevel: asset.lod_level,
+    provenance: asset.provenance,
+    licenseName: asset.license_name,
+    publisher: asset.publisher,
+    checksumSha256: asset.checksum_sha256,
+    fileSizeBytes: asset.file_size_bytes,
+    supportedInteractions: capabilities.interactions || [],
+    paintMaterialNames: capabilities.paint_materials || [],
+    interiorMaterialNames: capabilities.interior_materials || [],
+    interiorMaterialMappings: capabilities.interior_material_mappings || {},
+    wheelMeshNames: capabilities.wheel_mesh_mappings || {},
+    optionMeshNames: capabilities.option_mesh_mappings || {},
+    cameraPresetNames: capabilities.cameras || [],
+    interactionAnimationNames: capabilities.animations || {},
+    configuratorStatus: 'AVAILABLE',
+  };
+}
+
 export function syncConfiguratorShareUrl(shareToken) {
   if (!shareToken || typeof window === 'undefined' || !window.history?.replaceState) return;
   const url = new URL(window.location.href);
@@ -30,6 +69,10 @@ export const configuratorApi = {
   getVariant: (variantId) => api.get(`${V1}/variants/${variantId}`),
   getAvailability: (variantId) => api.get(`${V1}/configurator/${variantId}/availability`),
   getReadiness: (variantId) => api.get(`${V1}/configurator/variants/${variantId}/readiness`),
+  getRuntimeCapabilities: async (variantId) => {
+    const response = await api.get(`${V1}/configurator/${variantId}/capabilities`);
+    return { ...response, data: normalizeRuntimeCapabilityContract(response.data) };
+  },
   getAsset: async (variantId) => {
     const assetResponse = await api.get(`${V1}/configurator/${variantId}/asset`);
     try {
