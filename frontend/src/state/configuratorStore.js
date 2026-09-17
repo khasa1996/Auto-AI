@@ -57,6 +57,15 @@ const defaultAsset = {
   loadedAt: null,
 };
 
+const defaultRuntimeOptions = {
+  variant_id: null,
+  colors: [],
+  wheels: [],
+  interiors: [],
+  roofs: [],
+  accessories: [],
+};
+
 const defaultPrice = { loading: false, error: null, data: null, lastFetchedFor: null };
 const defaultValidation = { loading: false, error: null, result: null };
 const defaultShowroom = { active: false, paused: true };
@@ -97,10 +106,40 @@ function normalizeAssetManifest(assetData = {}) {
   };
 }
 
+function normalizeRuntimeOptions(options = {}, variantId = null) {
+  return {
+    variant_id: options.variant_id ?? variantId,
+    colors: Array.isArray(options.colors) ? options.colors : [],
+    wheels: Array.isArray(options.wheels) ? options.wheels : [],
+    interiors: Array.isArray(options.interiors) ? options.interiors : [],
+    roofs: Array.isArray(options.roofs) ? options.roofs : [],
+    accessories: Array.isArray(options.accessories) ? options.accessories : [],
+  };
+}
+
+function runtimeContractToAsset(contract = {}) {
+  const asset = contract.asset || {};
+  const capabilities = contract.capabilities || {};
+  return {
+    ...asset,
+    available: contract.ready === true,
+    supportedInteractions: capabilities.interactions || [],
+    paintMaterialNames: capabilities.paint_materials || [],
+    interiorMaterialNames: capabilities.interior_materials || [],
+    interiorMaterialMappings: capabilities.interior_material_mappings || {},
+    wheelMeshNames: capabilities.wheel_mesh_mappings || {},
+    optionMeshNames: capabilities.option_mesh_mappings || {},
+    cameraPresetNames: capabilities.cameras || [],
+    interactionAnimationNames: capabilities.animations || {},
+    configuratorStatus: contract.ready === true ? 'AVAILABLE' : 'COMING_SOON',
+  };
+}
+
 export const useConfiguratorStore = create((set, get) => ({
   purchasable: { ...defaultPurchasable },
   interaction: { ...defaultInteraction },
   asset: { ...defaultAsset },
+  runtimeOptions: { ...defaultRuntimeOptions },
   price: { ...defaultPrice },
   validation: { ...defaultValidation },
   showroom: { ...defaultShowroom },
@@ -112,6 +151,7 @@ export const useConfiguratorStore = create((set, get) => ({
       purchasable: { ...defaultPurchasable, variantId },
       interaction: { ...defaultInteraction },
       asset: { ...defaultAsset },
+      runtimeOptions: { ...defaultRuntimeOptions, variant_id: variantId },
       price: { ...defaultPrice },
       validation: { ...defaultValidation },
       showroom: { ...defaultShowroom },
@@ -182,7 +222,28 @@ export const useConfiguratorStore = create((set, get) => ({
       },
     });
   },
-  setAssetUnavailable(status = 'COMING_SOON') { set({ asset: { ...defaultAsset, configuratorStatus: status } }); },
+  setRuntimeContract(contract) {
+    const normalizedAsset = normalizeAssetManifest(runtimeContractToAsset(contract));
+    const capabilities = getVerifiedRuntimeCapabilities(normalizedAsset);
+    const mappings = getVerifiedMappings(normalizedAsset);
+    const usable = contract?.ready === true && isRuntimeAssetUsable(normalizedAsset);
+    const variantId = typeof contract?.variant_id === 'string' ? contract.variant_id : null;
+    set({
+      asset: {
+        ...defaultAsset,
+        ...normalizedAsset,
+        ...capabilities,
+        ...mappings,
+        available: usable,
+        configuratorStatus: usable ? 'AVAILABLE' : 'COMING_SOON',
+        loadedAt: new Date().toISOString(),
+      },
+      runtimeOptions: normalizeRuntimeOptions(contract?.options, variantId),
+    });
+  },
+  setAssetUnavailable(status = 'COMING_SOON') {
+    set({ asset: { ...defaultAsset, configuratorStatus: status } });
+  },
   setPriceLoading() { set({ price: { ...get().price, loading: true, error: null } }); },
   setPriceResult(data) { set({ price: { loading: false, error: null, data, lastFetchedFor: JSON.stringify(get().purchasable) } }); },
   setPriceError(error) { set({ price: { ...get().price, loading: false, error } }); },
@@ -191,6 +252,6 @@ export const useConfiguratorStore = create((set, get) => ({
   setValidationError(error) { set({ validation: { loading: false, error, result: null } }); },
   setCity(city) { set({ city }); },
   reset() {
-    set({ purchasable: { ...defaultPurchasable }, interaction: { ...defaultInteraction }, asset: { ...defaultAsset }, price: { ...defaultPrice }, validation: { ...defaultValidation }, showroom: { ...defaultShowroom }, city: null, isInitialized: false });
+    set({ purchasable: { ...defaultPurchasable }, interaction: { ...defaultInteraction }, asset: { ...defaultAsset }, runtimeOptions: { ...defaultRuntimeOptions }, price: { ...defaultPrice }, validation: { ...defaultValidation }, showroom: { ...defaultShowroom }, city: null, isInitialized: false });
   },
 }));
