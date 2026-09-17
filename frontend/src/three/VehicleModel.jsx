@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { ANIMATION_NAMES, resolveAnimationName, useVehicleAnimations } from './AnimationController';
+import { disposeOwnedVehicleMaterials } from './vehicleModelLifecycle';
 
 function applyPaintColor(scene, colorHex, paintMaterialNames) {
   if (!scene || !colorHex || !paintMaterialNames?.length) return;
@@ -98,13 +99,7 @@ function LoadedVehicle({ url, paintColorHex, paintMaterialNames, wheelMeshNames,
     playToggle('sunroof', interaction.sunroofOpen, previous.sunroofOpen, 'sunroof', 'open', 'close', ANIMATION_NAMES.SUNROOF_OPEN, ANIMATION_NAMES.SUNROOF_CLOSE);
   }, [interaction, play, supportedInteractions, interactionAnimationNames]);
 
-  useEffect(() => () => {
-    clonedScene.traverse((node) => {
-      if (!node.isMesh) return;
-      const materials = Array.isArray(node.material) ? node.material : [node.material];
-      materials.forEach((material) => material?.dispose());
-    });
-  }, [clonedScene]);
+  useEffect(() => () => disposeOwnedVehicleMaterials(clonedScene), [clonedScene]);
 
   return <primitive ref={groupRef} object={clonedScene} />;
 }
