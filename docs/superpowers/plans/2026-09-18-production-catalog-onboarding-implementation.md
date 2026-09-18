@@ -195,7 +195,7 @@
 - [ ] **Step 1: Run backend configurator regression**: `cd backend && pytest tests/test_configurator*.py -q`.
 - [ ] **Step 2: Run frontend regression**: `cd frontend && CI=true npm test -- --watchAll=false --runInBand`.
 - [ ] **Step 3: Run frontend production build**: `cd frontend && npm run build`.
-- [ ] **Step 4: Run repository validation/independence checks and inspect GitHub Actions results for the current head SHA.
-- [ ] **Step 5: Review the complete diff for synthetic vehicle/pricing/asset records, hardcoded production DB selection, credentials, arbitrary asset fallback, unverified OEM claims, and main-branch mutations.
-- [ ] **Step 6: Request code review on PR #66 after verification.
-- [ ] **Step 7: Keep PR #66 draft and unmerged; do not merge without explicit user approval.
+- [ ] **Step 4: Run repository validation/independence checks and inspect GitHub Actions results for the current head SHA.**
+- [ ] **Step 5: Review the complete diff for synthetic vehicle/pricing/asset records, hardcoded production DB selection, credentials, arbitrary asset fallback, unverified OEM claims, and main-branch mutations.**
+- [ ] **Step 6: Request code review on PR #66 after verification.**
+- [ ] **Step 7: Keep PR #66 draft and unmerged; do not merge without explicit user approval.**
