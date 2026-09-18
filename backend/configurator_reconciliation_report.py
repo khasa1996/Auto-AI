@@ -11,9 +11,12 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from configurator_catalog_reconciliation import (
+    AuthoritativeCatalogEvidence,
+    AuthoritativeVehicleIdentity,
     CatalogReconciliationResult,
     ReconciliationStatus,
 )
+from configurator_reconciliation_matrix import build_reconciliation_matrix
 
 
 @dataclass(frozen=True)
@@ -75,3 +78,19 @@ def summarize_reconciliation_matrix(
         ready_legacy_car_ids=ready_ids,
         blocked_legacy_car_ids=blocked_ids,
     )
+
+
+
+def reconcile_and_summarize_legacy_catalog(
+    legacy_records: Iterable[dict[str, object]],
+    identities: dict[str, AuthoritativeVehicleIdentity] | None = None,
+    evidence: dict[str, AuthoritativeCatalogEvidence] | None = None,
+) -> ReconciliationReport:
+    """Build and summarize a legacy reconciliation matrix without persistence."""
+
+    matrix = build_reconciliation_matrix(
+        legacy_records,
+        identities=identities,
+        evidence=evidence,
+    )
+    return summarize_reconciliation_matrix(matrix)
