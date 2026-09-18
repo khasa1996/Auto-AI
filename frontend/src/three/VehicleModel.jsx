@@ -95,7 +95,7 @@ function LoadedVehicle({ asset, runtime, purchasable, interaction }) {
     playToggle('hood', interaction.hoodOpen, previous.hoodOpen, 'hood', 'open', 'close');
     playToggle('boot', interaction.bootOpen, previous.bootOpen, 'boot', 'open', 'close');
     playToggle('frunk', interaction.frunkOpen, previous.frunkOpen, 'frunk', 'open', 'close');
-    playToggle('sunroof', interaction.sunroofOpen, previousInteractionRef.current?.sunroofOpen ?? false, 'sunroof', 'open', 'close');
+    playToggle('sunroof', interaction.sunroofOpen, previous.sunroofOpen, 'sunroof', 'open', 'close');
   }, [interaction, play, runtime, verifiedAnimationMappings]);
 
   useEffect(() => () => disposeOwnedMaterialResources(ownedMaterials), [ownedMaterials]);
