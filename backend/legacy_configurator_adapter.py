@@ -11,7 +11,8 @@ from typing import Any, Dict
 
 
 def _slug(value: str) -> str:
-    normalized = re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")
+    normalized_value = value.strip().lower().replace("+", " plus ")
+    normalized = re.sub(r"[^a-z0-9]+", "-", normalized_value).strip("-")
     if not normalized:
         raise ValueError("cannot build canonical identifier from empty value")
     return normalized
