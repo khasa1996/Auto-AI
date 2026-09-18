@@ -35,6 +35,8 @@ class FakeDatabase:
             {
                 "asset_id": "asset-1",
                 "variant_id": "variant-1",
+                "active_revision_id": "rev-1",
+                "revisions": [{"revision_id": "rev-1", "asset_id": "asset-1", "variant_id": "variant-1", "version": "v1", "checksum_sha256": "a" * 64, "state": "PUBLISHED"}],
                 "url": "https://cdn.example.com/model.glb",
                 "format": "glb",
                 "version": "v1",
