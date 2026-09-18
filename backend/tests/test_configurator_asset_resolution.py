@@ -56,7 +56,22 @@ async def test_resolves_variant_assigned_asset_when_request_omits_asset_id():
 async def test_requested_asset_cannot_fallback_when_variant_has_no_assignment():
     db = FakeDb(
         variants=[{}],
-        assets=[{"asset_id": "asset-v1", "version": "2.0"}],
+        assets=[{
+            "asset_id": "asset-v1",
+            "variant_id": "variant-1",
+            "active_revision_id": "rev-1",
+            "revisions": [{
+                "revision_id": "rev-1",
+                "asset_id": "asset-v1",
+                "variant_id": "variant-1",
+                "version": "2.0",
+                "checksum_sha256": "b" * 64,
+                "state": "PUBLISHED",
+            }],
+            "version": "legacy-version",
+            "published": True,
+            "validation_passed": True,
+        }],
     )
 
     result = await resolve_saved_configuration_asset(db, "variant-1", "asset-v1")
