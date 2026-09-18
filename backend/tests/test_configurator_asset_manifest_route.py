@@ -31,6 +31,16 @@ class FakeDatabase:
                 "configurator_asset_id": "asset-1",
             }
         ])
+        self.variant_pricing = FakeCollection([{
+            "variant_id": "variant-1",
+            "base_ex_showroom": 1000000,
+            "verification_status": "verified",
+            "source": "OEM",
+        }])
+        self.variant_colors = FakeCollection([{"variant_id": "variant-1", "color_id": "black", "available": True}])
+        self.variant_wheels = FakeCollection([{"variant_id": "variant-1", "wheel_id": "alloy", "available": True}])
+        self.variant_interiors = FakeCollection([{"variant_id": "variant-1", "interior_id": "black", "available": True}])
+        self.configurator_options = FakeCollection([])
         self.configurator_assets = FakeCollection([
             {
                 "asset_id": "asset-1",
