@@ -8,7 +8,7 @@
 
 **Tech Stack:** FastAPI, Pydantic, Motor/MongoDB, pytest, React frontend/Jest, existing configurator pricing/rules/runtime/asset modules, GitHub Actions.
 
-**Spec:** `docs/superpowers/specs/2026-09-18-production-configurator-catalog-design.md` (approved design; repository state must be checked before relying on this path).
+**Spec:** `docs/superpowers/specs/2026-09-18-production-catalog-onboarding-design.md` (approved design; repository state must be checked before relying on this path).
 
 ## Global Constraints
 
