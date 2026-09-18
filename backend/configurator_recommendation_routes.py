@@ -133,7 +133,7 @@ def make_configurator_recommendation_router(db: AsyncIOMotorDatabase) -> APIRout
             if asset_id:
                 asset = await db.configurator_assets.find_one(
                     {"asset_id": asset_id, "variant_id": item["variant_id"], "published": True, "validation_passed": True},
-                    {"_id": 0, "asset_id": 1, "version": 1},
+                    {"_id": 0, "asset_id": 1, "variant_id": 1, "active_revision_id": 1, "revisions": 1, "version": 1},
                 )
             configurator_available = False
             if asset is not None:
