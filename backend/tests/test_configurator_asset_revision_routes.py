@@ -5,9 +5,20 @@ from fastapi.testclient import TestClient
 import configurator_routes
 
 
+class _Cursor:
+    def __init__(self, rows):
+        self.rows = rows
+
+    async def to_list(self, _limit):
+        return self.rows
+
+
 class _Collection:
     def __init__(self, one=None):
         self.one = one
+
+    def find(self, query, projection=None):
+        return _Cursor([])
 
     async def find_one(self, query, projection=None):
         if query.get("variant_id") is not None and self.one is not None:
