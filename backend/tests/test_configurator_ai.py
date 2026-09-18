@@ -16,6 +16,13 @@ def test_extract_json_accepts_markdown_fenced_json():
     assert _extract_json('```json\n{"paint_id":"red"}\n```')["paint_id"] == "red"
 
 
+def test_safe_selection_rejects_unavailable_catalog_ids():
+    unavailable_catalog = catalog()
+    unavailable_catalog["colors"][0]["available"] = False
+    selected = _safe_selection({"paint_id": "red"}, unavailable_catalog, "v1")
+    assert selected.paint_id is None
+
+
 def test_safe_selection_rejects_ai_invented_ids():
     selected = _safe_selection({"variant_id": "attacker-variant", "paint_id": "red", "wheel_id": "invented-wheel", "accessory_ids": ["a1", "invented-accessory"]}, catalog(), "v1")
     assert selected.variant_id == "v1"
