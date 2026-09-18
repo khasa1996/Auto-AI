@@ -11,7 +11,7 @@ from vehicle_schemas import ConfiguratorStatus
 
 class FakeCollection:
     def __init__(self, documents: list[Optional[Dict[str, Any]]]) -> None:
-        self.documents = iter(documents)
+        self.documents = documents
         self.queries: list[Dict[str, Any]] = []
 
     async def find_one(
@@ -20,14 +20,20 @@ class FakeCollection:
         projection: Optional[Dict[str, int]] = None,
     ) -> Optional[Dict[str, Any]]:
         self.queries.append(query)
-        return next(self.documents)
+        for document in self.documents:
+            if document is not None and all(document.get(key) == value for key, value in query.items()):
+                return document
+        return None
 
     def find(
         self,
         _query: Dict[str, Any],
         _projection: Optional[Dict[str, int]] = None,
     ) -> Any:
-        return _AsyncCursor([])
+        return _AsyncCursor([
+            document for document in self.documents
+            if document is not None and all(document.get(key) == value for key, value in _query.items())
+        ])
 
 
 class _AsyncCursor:
