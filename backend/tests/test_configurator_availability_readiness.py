@@ -122,3 +122,44 @@ async def test_asset_endpoint_does_not_expose_asset_without_full_runtime_readine
     assert response.status_code == 200
     body = response.json()
     assert body["available"] is False
+
+
+@pytest.mark.asyncio
+async def test_rules_and_pricing_do_not_use_legacy_cars_for_configurator_identity():
+    from pricing_engine import calculate_configuration_price
+    from configurator_schemas import ConfigurationPriceRequest, PurchasableConfiguration, ConfigurationValidationRequest
+    from rules_engine import validate_configuration
+
+    class LegacyOnlyDB:
+        class Legacy:
+            async def find_one(self, *args, **kwargs):
+                return {"id": "v1", "price_ex_showroom": 1000000}
+
+        cars = Legacy()
+
+        class Missing:
+            async def find_one(self, *args, **kwargs):
+                return None
+            def find(self, *args, **kwargs):
+                return _Cursor([])
+
+        variants = Missing()
+        variant_pricing = Missing()
+        variant_colors = Missing()
+        variant_wheels = Missing()
+        variant_interiors = Missing()
+        configurator_options = Missing()
+        configurator_rules = Missing()
+
+    db = LegacyOnlyDB()
+    with pytest.raises(ValueError, match="authoritative variant pricing is missing"):
+        await calculate_configuration_price(
+            ConfigurationPriceRequest(configuration=PurchasableConfiguration(variant_id="v1")),
+            db,
+        )
+    result = await validate_configuration(
+        ConfigurationValidationRequest(configuration=PurchasableConfiguration(variant_id="v1")),
+        db,
+    )
+    assert result.valid is False
+    assert result.errors == ["Variant 'v1' not found"]
