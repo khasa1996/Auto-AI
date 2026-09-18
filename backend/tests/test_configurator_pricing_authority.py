@@ -31,7 +31,7 @@ class FakeDatabase:
 
 def test_selected_paint_must_be_available() -> None:
     db = FakeDatabase(
-        pricing=[{"variant_id": "variant-1", "base_ex_showroom": 1000000}],
+        pricing=[{"variant_id": "variant-1", "base_ex_showroom": 1000000, "verification_status": "verified"}],
         colors=[{
             "variant_id": "variant-1",
             "color_id": "red-01",
@@ -53,6 +53,7 @@ def test_price_totals_use_authoritative_option_deltas() -> None:
         pricing=[{
             "variant_id": "variant-1",
             "base_ex_showroom": 1000000,
+            "verification_status": "verified",
             "city_pricing": [{
                 "city": "Delhi",
                 "state": "Delhi",
