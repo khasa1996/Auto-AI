@@ -85,7 +85,7 @@ function LoadedVehicle({ asset, runtime, purchasable, interaction }) {
       const mapping = verifiedAnimationMappings?.[group];
       const requestedKey = current ? openKey : closeKey;
       const fallback = current ? openFallback : closeFallback;
-      const animationName = mapping?.[requestedKey] || (mapping ? null : fallback);
+      const animationName = mapping?.[requestedKey] || null;
       if (animationName) play(animationName);
     };
     playToggle('doors', interaction.doors.frontLeft, previous.doors.frontLeft, 'doors', 'front_left_open', 'front_left_close', ANIMATION_NAMES.DOOR_FL_OPEN, ANIMATION_NAMES.DOOR_FL_CLOSE);
