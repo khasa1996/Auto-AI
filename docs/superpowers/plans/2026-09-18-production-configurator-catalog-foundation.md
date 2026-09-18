@@ -149,3 +149,20 @@
 - [ ] Review diff for synthetic vehicle/pricing/asset records, hardcoded production DB selection, credentials, placeholders, or unverified OEM claims.
 - [ ] Open a draft PR from `phase-3/production-configurator-catalog-foundation` to `main`.
 - [ ] Keep the PR unmerged until the user explicitly approves merging.
+
+
+### Task 11: Make active asset revision authoritative
+
+**Files:** modify `backend/configurator_runtime_capabilities.py`, `backend/configurator_routes.py`; test `backend/tests/test_configurator_runtime_capabilities.py` and create `backend/tests/test_configurator_asset_revision_runtime.py`.
+
+**Interfaces:** preserve `build_runtime_capability_contract(db, variant_id)`; preserve `resolve_saved_configuration_asset(db, variant_id, requested_asset_id)`; use `ConfiguratorAssetRevision` and `select_active_revision(...)` as the revision lifecycle contract. Do not create a second persistence collection for revisions.
+
+- [ ] Write failing runtime tests proving a configured `active_revision_id` is required when the asset declares one, and only that selected revision may be exposed.
+- [ ] Write failing tests proving a missing selected revision, a `SUPERSEDED` selected revision, an unpublished selected revision, and a cross-variant selected revision all fail closed without exposing the asset URL.
+- [ ] Write failing tests proving saved-configuration asset resolution uses the authoritative active revision rather than accepting an arbitrary requested asset ID.
+- [ ] Run the focused revision/runtime tests and verify RED for the new behavior.
+- [ ] Implement the smallest adapter that reads revision evidence from the existing asset record or existing revision data supplied by the repository, validates it through `select_active_revision(...)`, and keeps the existing `configurator_assets` persistence model.
+- [ ] Ensure the runtime contract reports the selected published revision's version/checksum and never exposes superseded/unverified revision data.
+- [ ] Verify focused runtime, saved-configuration, readiness, and asset-revision tests are GREEN.
+- [ ] Run the complete configurator regression suite and production gate.
+- [ ] Request a fresh code review for PR #66 and address all Critical/Important findings before proceeding.
