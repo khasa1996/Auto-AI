@@ -153,3 +153,18 @@ async def test_runtime_capabilities_returns_404_for_unknown_variant():
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Vehicle variant not found"
+
+
+
+@pytest.mark.asyncio
+async def test_runtime_capabilities_reports_active_revision_blocker() -> None:
+    db = _DB()
+    db.configurator_assets.one["active_revision_id"] = "missing-revision"
+
+    async with AsyncClient(transport=ASGITransport(app=_app(db)), base_url="http://test") as client:
+        response = await client.get("/api/v1/configurator/demo-variant/capabilities")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ready"] is False
+    assert "configurator asset active revision is not published or is invalid" in payload["blockers"]
