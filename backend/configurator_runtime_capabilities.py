@@ -2,44 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
 from typing import Any, Dict, Optional
 
-from configurator_asset_revision import ConfiguratorAssetRevision, select_active_revision
+from configurator_asset_revision import ConfiguratorAssetRevision, resolve_authoritative_asset_revision
 from configurator_vehicle_readiness import assess_vehicle_configurator_readiness
 from rules_engine import get_available_options_for_variant
 
-
-def resolve_authoritative_asset_revision(
-    asset: Mapping[str, object],
-    revisions: Sequence[ConfiguratorAssetRevision | Mapping[str, object]],
-) -> ConfiguratorAssetRevision:
-    """Resolve the single revision explicitly selected by the persisted asset record."""
-    active_revision_id = asset.get("active_revision_id")
-    if not isinstance(active_revision_id, str) or not active_revision_id.strip():
-        raise ValueError("active revision is not configured")
-
-    asset_id = asset.get("asset_id")
-    variant_id = asset.get("variant_id")
-    if not isinstance(asset_id, str) or not asset_id:
-        raise ValueError("asset identity is not configured")
-    if not isinstance(variant_id, str) or not variant_id:
-        raise ValueError("asset variant identity is not configured")
-
-    parsed_revisions = [
-        revision
-        if isinstance(revision, ConfiguratorAssetRevision)
-        else ConfiguratorAssetRevision.model_validate(revision)
-        for revision in revisions
-    ]
-    selected = select_active_revision(
-        active_revision_id,
-        parsed_revisions,
-        expected_variant_id=variant_id,
-    )
-    if selected.asset_id != asset_id:
-        raise ValueError("active revision does not belong to asset")
-    return selected
 
 def _asset_runtime_contract(
     asset: Dict[str, Any],
