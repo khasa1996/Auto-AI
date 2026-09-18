@@ -128,6 +128,7 @@ export default function CarConfigurator() {
         price_snapshot: current.price.data?.estimated_on_road || null,
         asset_id: current.asset?.asset_id || null,
         asset_version: current.asset?.version || null,
+        asset_revision_id: current.asset?.revisionId || null,
       };
       const response = await configuratorApi.saveConfiguration(payload);
       setSaveState({ loading: false, error: null, configId: response.data.config_id, shareToken: response.data.share_token });
