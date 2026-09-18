@@ -52,7 +52,10 @@ export function buildLightingMaterialIndex(scene) {
 }
 
 export function resolveLightingScene(sceneOrRef) {
-  return sceneOrRef?.current ?? sceneOrRef ?? null;
+  if (sceneOrRef && typeof sceneOrRef === 'object' && 'current' in sceneOrRef) {
+    return sceneOrRef.current ?? null;
+  }
+  return sceneOrRef ?? null;
 }
 
 function setMaterialEmissive(materials, on, color = '#ffffff', intensity = 2) {
