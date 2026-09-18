@@ -30,10 +30,24 @@ class _DB:
         self.variants = _Collection(
             {
                 "variant_id": "demo-variant",
+                "brand_id": "brand-1",
+                "model_id": "model-1",
+                "active": True,
+                "verification_status": "verified",
                 "configurator_status": "AVAILABLE",
                 "configurator_asset_id": "asset-1",
             }
         )
+        self.variant_pricing = _Collection({
+            "variant_id": "demo-variant",
+            "base_ex_showroom": 1000000,
+            "verification_status": "verified",
+            "source": "OEM",
+        })
+        self.variant_colors = _Collection({"variant_id": "demo-variant", "color_id": "black", "available": True})
+        self.variant_wheels = _Collection({"variant_id": "demo-variant", "wheel_id": "alloy", "available": True})
+        self.variant_interiors = _Collection({"variant_id": "demo-variant", "interior_id": "black", "available": True})
+        self.configurator_options = _Collection(None)
         self.configurator_assets = _Collection(asset)
 
 
@@ -66,6 +80,12 @@ def _asset(state="PUBLISHED"):
         "option_mesh_names": {},
         "camera_preset_names": [],
         "interaction_animation_names": {},
+        "provenance": "AUTO_AI_LICENSED",
+        "license_name": "Licensed",
+        "publisher": "Auto AI India",
+        "checksum_sha256": "b" * 64,
+        "file_size_bytes": 1024,
+        "storage_status": "PUBLISHED",
     }
 
 
