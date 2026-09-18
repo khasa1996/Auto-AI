@@ -9,6 +9,7 @@ from typing import Awaitable, Callable, Dict, List, Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
+from configurator_runtime_capabilities import resolve_authoritative_asset_revision
 from configurator_schemas import (
     AIConfiguratorIntent,
     AIConfiguratorResponse,
@@ -93,15 +94,30 @@ async def resolve_saved_configuration_asset(
     asset_id = assigned_asset_id or requested_asset_id
     if not asset_id:
         return None
-    return await db.configurator_assets.find_one(
+    asset = await db.configurator_assets.find_one(
         {
             "asset_id": asset_id,
             "variant_id": variant_id,
             "published": True,
             "validation_passed": True,
         },
-        {"_id": 0, "asset_id": 1, "version": 1},
+        {"_id": 0},
     )
+    if not asset:
+        return None
+    try:
+        revision = resolve_authoritative_asset_revision(
+            asset,
+            asset.get("revisions", []),
+        )
+    except (TypeError, ValueError):
+        return None
+    return {
+        "asset_id": asset["asset_id"],
+        "revision_id": revision.revision_id,
+        "version": revision.version,
+        "checksum_sha256": revision.checksum_sha256,
+    }
 
 
 def make_configurator_router(
@@ -222,6 +238,17 @@ def make_configurator_router(
                 "available": False,
                 "message": "3D asset is not yet published or has not passed validation",
             }
+        try:
+            revision = resolve_authoritative_asset_revision(
+                asset,
+                asset.get("revisions", []),
+            )
+        except (TypeError, ValueError):
+            return {
+                "variant_id": variant_id,
+                "available": False,
+                "message": "3D asset active revision is not published or is invalid",
+            }
         return {
             "variant_id": variant_id,
             "available": True,
@@ -229,7 +256,8 @@ def make_configurator_router(
                 "asset_id": asset["asset_id"],
                 "url": asset.get("cdn_url") or asset["url"],
                 "format": asset["format"],
-                "version": asset["version"],
+                "revision_id": revision.revision_id,
+                "version": revision.version,
                 "lod_level": asset["lod_level"],
                 "supported_interactions": asset.get("supported_interactions", []),
                 "paint_material_names": asset.get("paint_material_names", []),
