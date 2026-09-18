@@ -48,6 +48,9 @@ class FakeDatabase:
     def __init__(self) -> None:
         self.variants = FakeCollection([
             {
+                "variant_id": "variant-1",
+                "active": True,
+                "verification_status": "verified",
                 "configurator_status": ConfiguratorStatus.AVAILABLE,
                 "configurator_asset_id": "asset-1",
             }
@@ -82,6 +85,12 @@ class FakeDatabase:
                 "option_mesh_names": {"roof": {"sunroof": ["Sunroof"]}},
                 "camera_preset_names": ["exterior", "interior"],
                 "interaction_animation_names": {"doors": "door-open"},
+                "provenance": "AUTO_AI_LICENSED",
+                "license_name": "Licensed",
+                "publisher": "Auto AI India",
+                "checksum_sha256": "a" * 64,
+                "file_size_bytes": 1024,
+                "storage_status": "PUBLISHED",
             }
         ])
 
