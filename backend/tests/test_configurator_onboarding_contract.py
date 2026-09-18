@@ -30,6 +30,7 @@ def _complete_records() -> ConfiguratorOnboardingRecordSet:
             "brand_id": "brand-1",
             "active": True,
             "verification_status": "verified",
+            "configurator_status": "AVAILABLE",
             "configurator_asset_id": "asset-1",
         },
         pricing={
