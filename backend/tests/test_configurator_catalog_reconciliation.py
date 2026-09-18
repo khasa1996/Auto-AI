@@ -1,5 +1,9 @@
 """Tests for the side-effect-free configurator catalog reconciliation boundary."""
 
+from datetime import date
+
+import pytest
+
 from configurator_catalog_reconciliation import (
     AuthoritativeCatalogEvidence,
     AuthoritativeVehicleIdentity,
@@ -76,6 +80,67 @@ def test_complete_authoritative_evidence_is_ready_for_onboarding() -> None:
     assert result.status is ReconciliationStatus.READY_FOR_ONBOARDING
     assert result.canonical_variant_id == "kia-seltos-gtx"
     assert result.blockers == []
+
+
+def test_historical_model_year_must_match_explicitly() -> None:
+    legacy = _legacy() | {"model_year": 2024}
+    identity = _identity().model_copy(update={"model_year": 2024})
+
+    result = reconcile_legacy_vehicle(legacy, identity, _complete_evidence())
+
+    assert result.status is ReconciliationStatus.READY_FOR_ONBOARDING
+
+
+def test_model_year_mismatch_is_blocked() -> None:
+    legacy = _legacy() | {"model_year": 2024}
+    identity = _identity().model_copy(update={"model_year": 2025})
+
+    result = reconcile_legacy_vehicle(legacy, identity)
+
+    assert result.status is ReconciliationStatus.REVIEW_REQUIRED
+    assert "model year does not match" in result.blockers[0]
+
+
+def test_model_year_scoped_identity_cannot_match_unscoped_legacy_record() -> None:
+    identity = _identity().model_copy(update={"model_year": 2024})
+
+    result = reconcile_legacy_vehicle(_legacy(), identity)
+
+    assert result.status is ReconciliationStatus.REVIEW_REQUIRED
+    assert "legacy model year is missing" in result.blockers[0]
+
+
+def test_historical_gtx_plus_remains_distinct_from_current_gtx_o() -> None:
+    current_identity = _identity().model_copy(
+        update={
+            "variant_name": "GTX(O)",
+            "variant_id": "kia-seltos-gtx-o",
+            "model_year": 2026,
+        }
+    )
+
+    result = reconcile_legacy_vehicle(_legacy() | {"model_year": 2024}, current_identity)
+
+    assert result.status is ReconciliationStatus.REVIEW_REQUIRED
+    assert result.canonical_variant_id is None
+
+
+def test_effective_date_scope_requires_legacy_scope() -> None:
+    identity = _identity().model_copy(update={"effective_from": date(2024, 1, 1)})
+
+    result = reconcile_legacy_vehicle(_legacy(), identity)
+
+    assert result.status is ReconciliationStatus.REVIEW_REQUIRED
+    assert "effective-date scope is missing" in result.blockers[0]
+
+
+def test_effective_date_range_is_validated() -> None:
+    with pytest.raises(ValueError, match="effective_to"):
+        AuthoritativeVehicleIdentity(
+            **_identity().model_dump(),
+            effective_from=date(2025, 1, 1),
+            effective_to=date(2024, 1, 1),
+        )
 
 
 def test_reconciliation_does_not_mutate_legacy_input() -> None:
