@@ -135,7 +135,15 @@ def make_configurator_recommendation_router(db: AsyncIOMotorDatabase) -> APIRout
                     {"asset_id": asset_id, "variant_id": item["variant_id"], "published": True, "validation_passed": True},
                     {"_id": 0, "asset_id": 1, "version": 1},
                 )
-            configurator_available = status == "AVAILABLE" and asset is not None
+            configurator_available = False
+            if asset is not None:
+                try:
+                    from configurator_asset_revision import resolve_authoritative_asset_revision
+
+                    resolve_authoritative_asset_revision(asset, asset.get("revisions", []))
+                    configurator_available = status == "AVAILABLE"
+                except (TypeError, ValueError):
+                    configurator_available = False
             vehicle = {key: candidate[key] for key in ("variant_id", "brand_id", "model_id", "name", "display_name", "slug", "body_type", "market_segment") if key in candidate}
             recommendations.append({
                 **item,
