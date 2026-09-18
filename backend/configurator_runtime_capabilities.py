@@ -109,7 +109,8 @@ async def build_runtime_capability_contract(
                 "validation_passed": True,
             },
             {"_id": 0},
-        )        if asset is not None:
+        )
+        if asset is not None:
             try:
                 active_revision = resolve_authoritative_asset_revision(
                     asset,
