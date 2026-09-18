@@ -59,6 +59,8 @@ def _pick_by_description(description: Optional[str], options: Iterable[Dict[str,
     best_id: Optional[str] = None
     best_score = 0
     for option in options:
+        if option.get("available", True) is not True:
+            continue
         option_id = _option_id(option)
         tokens = set(re.findall(r"[a-z0-9]+", _option_label(option).lower()))
         score = len(query & tokens)
