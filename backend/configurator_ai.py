@@ -77,7 +77,15 @@ def resolve_textual_preferences(request: str, catalog: Dict[str, List[Dict[str, 
 
 
 def _allowed_ids(catalog: Dict[str, List[Dict[str, Any]]]) -> Dict[str, set[str]]:
-    return {key: {option_id for item in values if (option_id := _option_id(item))} for key, values in catalog.items()}
+    return {
+        key: {
+            option_id
+            for item in values
+            if item.get("available", True) is True
+            and (option_id := _option_id(item))
+        }
+        for key, values in catalog.items()
+    }
 
 
 def _safe_selection(candidate: Dict[str, Any], catalog: Dict[str, List[Dict[str, Any]]], variant_id: str) -> PurchasableConfiguration:
