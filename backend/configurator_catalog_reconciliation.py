@@ -35,6 +35,36 @@ class AuthoritativeVehicleIdentity(BaseModel):
     source: str = Field(..., min_length=1, max_length=100)
     source_url: str = Field(..., min_length=1, max_length=500)
 
+    @classmethod
+    def from_verified_source(
+        cls,
+        *,
+        brand_id: str,
+        brand_name: str,
+        model_id: str,
+        model_name: str,
+        variant_id: str,
+        variant_name: str,
+        fuel_type: str,
+        transmission: str,
+        source: str,
+        source_url: str,
+    ) -> "AuthoritativeVehicleIdentity":
+        """Construct identity only from an explicitly verified source record."""
+        return cls(
+            brand_id=brand_id,
+            brand_name=brand_name,
+            model_id=model_id,
+            model_name=model_name,
+            variant_id=variant_id,
+            variant_name=variant_name,
+            fuel_type=fuel_type,
+            transmission=transmission,
+            verification_status="verified",
+            source=source,
+            source_url=source_url,
+        )
+
 
 class AuthoritativeCatalogEvidence(BaseModel):
     """Evidence required before a reconciled vehicle can enter onboarding."""
