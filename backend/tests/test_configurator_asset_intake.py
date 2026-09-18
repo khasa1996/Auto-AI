@@ -62,12 +62,12 @@ def test_missing_license_evidence_is_blocked() -> None:
     assert "asset license evidence is incomplete" in result.errors
 
 
-def test_invalid_integrity_evidence_is_blocked() -> None:
-    result = validate_asset_intake(_request(file_size_bytes=0, checksum_sha256="bad"))
+def test_invalid_integrity_evidence_is_rejected_by_the_intake_schema() -> None:
+    with pytest.raises(ValidationError):
+        _request(file_size_bytes=0)
 
-    assert result.valid is False
-    assert result.publishable is False
-    assert "asset integrity evidence is invalid" in result.errors
+    with pytest.raises(ValidationError):
+        _request(checksum_sha256="bad")
 
 
 def test_variant_identity_must_match_expected_identity() -> None:
