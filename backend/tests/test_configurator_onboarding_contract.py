@@ -19,6 +19,17 @@ def _verified_asset() -> dict:
         "checksum_sha256": "a" * 64,
         "file_size_bytes": 1024,
         "storage_status": "PUBLISHED",
+        "active_revision_id": "rev-1",
+        "revisions": [
+            {
+                "revision_id": "rev-1",
+                "asset_id": "asset-1",
+                "variant_id": "variant-1",
+                "version": "1.0.0",
+                "checksum_sha256": "a" * 64,
+                "state": "PUBLISHED",
+            }
+        ],
     }
 
 
@@ -81,6 +92,16 @@ def test_unpublishable_asset_blocks_onboarding() -> None:
 
     assert result.valid is False
     assert "configurator asset provenance is not publishable" in result.errors
+
+
+def test_missing_active_revision_blocks_onboarding() -> None:
+    records = _complete_records()
+    records.asset = {key: value for key, value in _verified_asset().items() if key not in {"active_revision_id", "revisions"}}
+
+    result = validate_onboarding_record_set(records)
+
+    assert result.valid is False
+    assert "configurator asset active revision is not published or is invalid" in result.errors
 
 
 def test_onboarding_validation_is_side_effect_free() -> None:
