@@ -33,6 +33,7 @@ class _DB:
             "brand_id": "demo-brand",
             "active": True,
             "verification_status": "verified",
+            "configurator_status": "AVAILABLE",
             "configurator_asset_id": "asset-1",
         })
         self.variant_pricing = _Collection(one={
