@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping, Sequence
 from enum import Enum
 
 from pydantic import BaseModel, Field, field_validator
@@ -76,3 +77,35 @@ def select_active_revision(
         raise ValueError("active revision must be PUBLISHED")
 
     return revision
+
+
+def resolve_authoritative_asset_revision(
+    asset: Mapping[str, object],
+    revisions: Sequence[ConfiguratorAssetRevision | Mapping[str, object]],
+) -> ConfiguratorAssetRevision:
+    """Resolve the persisted asset's active published revision and verify ownership."""
+    active_revision_id = asset.get("active_revision_id")
+    if not isinstance(active_revision_id, str) or not active_revision_id.strip():
+        raise ValueError("active revision is not configured")
+
+    asset_id = asset.get("asset_id")
+    variant_id = asset.get("variant_id")
+    if not isinstance(asset_id, str) or not asset_id:
+        raise ValueError("asset identity is not configured")
+    if not isinstance(variant_id, str) or not variant_id:
+        raise ValueError("asset variant identity is not configured")
+
+    parsed_revisions = [
+        revision
+        if isinstance(revision, ConfiguratorAssetRevision)
+        else ConfiguratorAssetRevision.model_validate(revision)
+        for revision in revisions
+    ]
+    selected = select_active_revision(
+        active_revision_id,
+        parsed_revisions,
+        expected_variant_id=variant_id,
+    )
+    if selected.asset_id != asset_id:
+        raise ValueError("active revision does not belong to asset")
+    return selected
