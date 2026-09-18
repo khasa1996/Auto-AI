@@ -7,6 +7,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from configurator_asset_revision import ConfiguratorAssetRevision
+
 
 class AssetProvenance(str, Enum):
     OEM_AUTHORIZED = "OEM_AUTHORIZED"
@@ -43,7 +45,8 @@ class ConfiguratorAssetCreate(BaseModel):
     storage_key: Optional[str] = Field(None, max_length=500)
     storage_provider: Optional[str] = Field(None, max_length=40)
     storage_status: Optional[str] = Field(None, max_length=30)
-    active_revision_id: Optional[str] = Field(None, max_length=100)
+    active_revision_id: Optional[str] = Field(None, max_length=120)
+    revisions: List[ConfiguratorAssetRevision] = Field(default_factory=list)
     file_size_bytes: Optional[int] = Field(None, ge=0, le=_MAX_ASSET_BYTES)
     checksum_sha256: Optional[str] = Field(None, max_length=64)
     version: str = Field(..., min_length=1, max_length=30)
