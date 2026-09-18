@@ -15,6 +15,8 @@ class FakeDatabase:
 
 class _Collection:
     async def find_one(self, query, projection=None):
+        if query.get("variant_id") == "variant-1":
+            return {"variant_id": "variant-1"}
         return None
 
 
