@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, Iterable, Optional
 
-
 _PUBLISHABLE_PROVENANCE = {
     "OEM_AUTHORIZED",
     "AUTO_AI_LICENSED",
@@ -17,7 +16,11 @@ _SHA256_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
 def _available_options(options: Optional[Iterable[Dict[str, Any]]]) -> list[Dict[str, Any]]:
     if not options:
         return []
-    return [option for option in options if isinstance(option, dict) and option.get("available", True) is True]
+    return [
+        option
+        for option in options
+        if isinstance(option, dict) and option.get("available", True) is True
+    ]
 
 
 def assess_vehicle_configurator_readiness(
@@ -43,6 +46,8 @@ def assess_vehicle_configurator_readiness(
         blockers.append("vehicle variant is inactive")
     if vehicle.get("verification_status") != "verified":
         blockers.append("vehicle verification is not complete")
+    if vehicle.get("configurator_status") != "AVAILABLE":
+        blockers.append("configurator status is not AVAILABLE")
 
     if pricing is None:
         blockers.append("authoritative variant pricing is missing")
@@ -84,7 +89,6 @@ def assess_vehicle_configurator_readiness(
             blockers.append("configurator asset has not passed validation")
         if asset.get("provenance") not in _PUBLISHABLE_PROVENANCE:
             blockers.append("configurator asset provenance is not publishable")
-
         if not asset.get("license_name") or not asset.get("publisher"):
             blockers.append("configurator asset license metadata is incomplete")
 
