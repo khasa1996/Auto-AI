@@ -71,3 +71,20 @@ async def test_availability_does_not_claim_available_without_full_runtime_readin
     assert body["configurator_status"] == "COMING_SOON"
     assert body["available"] is False
     assert body["asset_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_availability_preserves_explicit_disabled_status_when_not_ready():
+    db = _DB()
+    db.variants.rows[0]["configurator_status"] = "DISABLED"
+
+    async with AsyncClient(
+        transport=ASGITransport(app=_app(db)),
+        base_url="http://test",
+    ) as client:
+        response = await client.get("/api/v1/configurator/v1/availability")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["configurator_status"] == "DISABLED"
+    assert body["available"] is False
