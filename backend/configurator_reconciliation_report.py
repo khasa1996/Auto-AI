@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
-from typing import Iterable
+from collections.abc import Iterable, Mapping
 
 from configurator_catalog_reconciliation import (
     AuthoritativeCatalogEvidence,
@@ -82,9 +82,9 @@ def summarize_reconciliation_matrix(
 
 
 def reconcile_and_summarize_legacy_catalog(
-    legacy_records: Iterable[dict[str, object]],
-    identities: dict[str, AuthoritativeVehicleIdentity] | None = None,
-    evidence: dict[str, AuthoritativeCatalogEvidence] | None = None,
+    legacy_records: Iterable[Mapping[str, object]],
+    identities: Mapping[str, AuthoritativeVehicleIdentity] | None = None,
+    evidence: Mapping[str, AuthoritativeCatalogEvidence] | None = None,
 ) -> ReconciliationReport:
     """Build and summarize a legacy reconciliation matrix without persistence."""
 
