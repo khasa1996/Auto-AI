@@ -59,7 +59,7 @@ def test_unmapped_legacy_record_is_explicitly_review_required() -> None:
 
 def test_explicit_identity_and_complete_evidence_can_reach_ready_state() -> None:
     items = build_oem_review_queue(
-        [_record("kia-seltos", "Kia", "Seltos", "GTX+")],
+        [_record("kia-seltos", "Kia", "Seltos", "GTX(O)")],
         identities={"kia-seltos": _identity()},
         evidence={"kia-seltos": _complete_evidence()},
     )
@@ -70,9 +70,21 @@ def test_explicit_identity_and_complete_evidence_can_reach_ready_state() -> None
     assert items[0].asset_revision_published is True
 
 
-def test_partial_evidence_remains_evidence_required() -> None:
+def test_actual_legacy_gtx_plus_mismatch_remains_blocked() -> None:
     items = build_oem_review_queue(
         [_record("kia-seltos", "Kia", "Seltos", "GTX+")],
+        identities={"kia-seltos": _identity()},
+        evidence={"kia-seltos": _complete_evidence()},
+    )
+    assert items[0].status is ReconciliationStatus.REVIEW_REQUIRED
+    assert items[0].review_state == "REVIEW_REQUIRED"
+    assert items[0].canonical_variant_id is None
+    assert items[0].blockers == ("legacy identity does not match authoritative identity",)
+
+
+def test_partial_evidence_remains_evidence_required() -> None:
+    items = build_oem_review_queue(
+        [_record("kia-seltos", "Kia", "Seltos", "GTX(O)")],
         identities={"kia-seltos": _identity()},
         evidence={"kia-seltos": AuthoritativeCatalogEvidence(pricing_verified=True)},
     )
