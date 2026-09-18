@@ -10,11 +10,11 @@ from configurator_catalog_reconciliation import (
 
 def _legacy() -> dict[str, str]:
     return {
-        "id": "seltos-gtx-plus",
+        "id": "kia-seltos",
         "brand": "Kia",
         "model": "Seltos",
         "variant": "GTX+",
-        "fuel": "Diesel",
+        "fuel": "Petrol",
         "transmission": "Automatic",
     }
 
@@ -27,7 +27,7 @@ def _identity() -> AuthoritativeVehicleIdentity:
         model_name="Seltos",
         variant_id="kia-seltos-gtx",
         variant_name="GTX+",
-        fuel_type="Diesel",
+        fuel_type="Petrol",
         transmission="Automatic",
         source="OEM",
         source_url="https://example.invalid/oem",
