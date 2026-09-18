@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, Iterable, Optional
 
+from configurator_asset_revision import resolve_authoritative_asset_revision
+
 _PUBLISHABLE_PROVENANCE = {
     "OEM_AUTHORIZED",
     "AUTO_AI_LICENSED",
@@ -102,6 +104,14 @@ def assess_vehicle_configurator_readiness(
 
         if asset.get("storage_status") != "PUBLISHED":
             blockers.append("configurator asset storage publication state is not complete")
+
+        try:
+            resolve_authoritative_asset_revision(
+                asset,
+                asset.get("revisions", []),
+            )
+        except (TypeError, ValueError):
+            blockers.append("configurator asset active revision is not published or is invalid")
 
     if not vehicle.get("source") or not vehicle.get("source_url"):
         warnings.append("vehicle source traceability is incomplete")
