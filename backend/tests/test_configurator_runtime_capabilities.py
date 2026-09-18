@@ -61,6 +61,17 @@ class _DB:
         self.configurator_assets = _Collection(one={
             "asset_id": "asset-1",
             "variant_id": "demo-variant",
+            "active_revision_id": "rev-1",
+            "revisions": [
+                {
+                    "revision_id": "rev-1",
+                    "asset_id": "asset-1",
+                    "variant_id": "demo-variant",
+                    "version": "1.0.0",
+                    "checksum_sha256": "a" * 64,
+                    "state": "PUBLISHED",
+                }
+            ],
             "version": "1.0.0",
             "published": True,
             "validation_passed": True,
@@ -103,7 +114,9 @@ async def test_runtime_capabilities_returns_only_published_verified_runtime_cont
     assert payload["variant_id"] == "demo-variant"
     assert payload["ready"] is True
     assert payload["asset"]["asset_id"] == "asset-1"
+    assert payload["asset"]["revision_id"] == "rev-1"
     assert payload["asset"]["version"] == "1.0.0"
+    assert payload["asset"]["checksum_sha256"] == "a" * 64
     assert payload["asset"]["url"] == "https://cdn.example/vehicle.glb"
     assert payload["capabilities"]["interactions"] == ["doors", "sunroof", "camera_exterior"]
     assert payload["capabilities"]["cameras"] == ["front", "interior"]
