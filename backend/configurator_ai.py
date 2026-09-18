@@ -10,6 +10,7 @@ from configurator_schemas import AIConfiguratorIntent, InteractionState, Purchas
 from llm_provider import LLMProviderError, LlmChat, UserMessage, resolve_model
 from pricing_engine import calculate_configuration_price
 from configurator_ai_readiness import require_ai_configurator_readiness
+from configurator_runtime_capabilities import resolve_authoritative_asset_revision
 from rules_engine import get_available_options_for_variant
 
 _CONTEXT_PREFIX = "__AUTO_AI_CONTEXT__"
@@ -198,18 +199,24 @@ async def resolve_ai_selection(intent: AIConfiguratorIntent, db: Any) -> tuple[P
         intent.max_budget = _budget_from_text(user_request)
 
     catalog = await get_available_options_for_variant(intent.variant_id, db)
-    await require_ai_configurator_readiness(
+    readiness_context = await require_ai_configurator_readiness(
         intent.variant_id,
         db,
         catalog.get("colors", []),
         catalog.get("wheels", []),
         catalog.get("interiors", []),
     )
-    asset = await db.configurator_assets.find_one(
-        {"variant_id": intent.variant_id, "published": True, "validation_passed": True},
-        {"_id": 0, "asset_id": 1, "version": 1, "supported_interactions": 1, "camera_preset_names": 1},
-    )
-    supported = set(asset.get("supported_interactions", [])) if asset else set()
+    asset = readiness_context.get("asset")
+    if not isinstance(asset, dict):
+        raise ValueError("verified configurator asset is unavailable")
+    try:
+        active_revision = resolve_authoritative_asset_revision(
+            asset,
+            asset.get("revisions", []),
+        )
+    except (TypeError, ValueError) as exc:
+        raise ValueError("configurator asset active revision is not published or is invalid") from exc
+    supported = set(asset.get("supported_interactions", []))
     intent.open_hood = bool(intent.open_hood and "hood" in supported)
     intent.open_boot = bool(intent.open_boot and "boot" in supported)
     intent.open_sunroof = bool(intent.open_sunroof and "sunroof" in supported)
@@ -231,7 +238,9 @@ async def resolve_ai_selection(intent: AIConfiguratorIntent, db: Any) -> tuple[P
     if asset:
         runtime_asset = {
             "asset_id": asset.get("asset_id"),
-            "version": asset.get("version"),
+            "revision_id": active_revision.revision_id,
+            "version": active_revision.version,
+            "checksum_sha256": active_revision.checksum_sha256,
             "supported_interactions": sorted(supported),
             "camera_preset_names": [str(value) for value in asset.get("camera_preset_names", []) if value],
         }
