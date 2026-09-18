@@ -61,8 +61,8 @@ def assess_saved_configuration_freshness(
     if (
         saved_document.get("asset_id") != current_asset.get("asset_id")
         or saved_document.get("asset_version") != current_asset.get("version")
-        or saved_document.get("asset_revision_id") != current_asset.get("revision_id")
     ):
-        if saved_document.get("asset_revision_id") != current_asset.get("revision_id"):
+        return True, "Published verified configurator asset has changed"
+    if saved_document.get("asset_revision_id") != current_asset.get("revision_id"):
         return True, "Published verified configurator asset revision has changed"
     return False, None
