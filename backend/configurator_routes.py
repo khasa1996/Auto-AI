@@ -228,10 +228,18 @@ def make_configurator_router(
             interiors,
             asset,
         )
+        configured_status = variant.get(
+            "configurator_status",
+            ConfiguratorStatus.COMING_SOON,
+        )
         status = (
             ConfiguratorStatus.AVAILABLE
             if readiness["ready"]
-            else ConfiguratorStatus.COMING_SOON
+            else (
+                ConfiguratorStatus.COMING_SOON
+                if configured_status == ConfiguratorStatus.AVAILABLE
+                else configured_status
+            )
         )
         return {
             "variant_id": variant_id,
