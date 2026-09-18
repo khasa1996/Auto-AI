@@ -31,3 +31,16 @@ A candidate must later be replaced by authoritative, verified records for:
 Only then can the existing readiness contract evaluate the variant as production-ready.
 
 No production database writes are performed by this adapter.
+
+## Current OEM reconciliation checkpoint
+
+A legacy record is not considered current merely because its brand/model names still exist.
+The legacy database currently contains `Kia Seltos / GTX+` as one candidate. Kia India's current Seltos showroom/specification pages list the current trim family as HTE, HTE(O), HTK, HTK(O), HTX, HTX(A), GTX, X-Line, GTX(A), X-Line(A), GTX(O), and X-Line(O). The current official pages do not list `GTX+` as a current Seltos trim.
+
+Therefore this legacy record must remain `REVIEW_REQUIRED` until a current authoritative OEM identity mapping is established. The adapter must not silently rename it, infer a successor trim, or promote its legacy price/specification data.
+
+Official current source used for this checkpoint:
+- https://www.kia.com/in/our-vehicles/seltos/showroom.html
+- https://www.kia.com/in/our-vehicles/seltos/specs.html
+
+This is a reconciliation example, not a production catalog record. No MongoDB catalog records are created by this checkpoint.
