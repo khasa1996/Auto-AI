@@ -61,6 +61,17 @@ def _records() -> ConfiguratorOnboardingRecordSet:
             "checksum_sha256": "a" * 64,
             "file_size_bytes": 1024,
             "storage_status": "PUBLISHED",
+            "active_revision_id": "rev-1",
+            "revisions": [
+                {
+                    "revision_id": "rev-1",
+                    "asset_id": "asset-1",
+                    "variant_id": "variant-1",
+                    "version": "1.0.0",
+                    "checksum_sha256": "a" * 64,
+                    "state": "PUBLISHED",
+                }
+            ],
         },
     )
 
@@ -106,6 +117,38 @@ def test_preparation_requires_manifest_and_runtime_variant_identity_to_match() -
 
     assert result.ready is False
     assert result.errors == ["manifest and runtime variant identities do not match"]
+    assert result.write_allowed is False
+
+
+def test_preparation_rejects_manifest_and_runtime_model_identity_mismatch() -> None:
+    records = _records()
+    records.vehicle["model_id"] = "model-other"
+
+    result = prepare_configurator_onboarding(
+        _manifest(),
+        records,
+        configured_database_name="autoai",
+        expected_database_name="autoai",
+    )
+
+    assert result.ready is False
+    assert result.errors == ["manifest and runtime model identities do not match"]
+    assert result.write_allowed is False
+
+
+def test_preparation_rejects_manifest_and_runtime_brand_identity_mismatch() -> None:
+    records = _records()
+    records.vehicle["brand_id"] = "brand-other"
+
+    result = prepare_configurator_onboarding(
+        _manifest(),
+        records,
+        configured_database_name="autoai",
+        expected_database_name="autoai",
+    )
+
+    assert result.ready is False
+    assert result.errors == ["manifest and runtime brand identities do not match"]
     assert result.write_allowed is False
 
 
