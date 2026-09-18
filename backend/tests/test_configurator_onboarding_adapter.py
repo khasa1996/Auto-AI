@@ -37,6 +37,8 @@ def _records() -> ConfiguratorOnboardingRecordSet:
             "verification_status": "verified",
             "configurator_status": "AVAILABLE",
             "configurator_asset_id": "asset-1",
+            "source": "verified-oem-source",
+            "source_url": "https://example.com/variant-1",
         },
         pricing={
             "variant_id": "variant-1",
@@ -134,7 +136,7 @@ def test_invalid_onboarding_records_are_reported_without_writes() -> None:
     )
 
     assert result.ready is False
-    assert "configurator asset is missing" in result.errors
+    assert "published verified configurator asset is missing" in result.errors
     assert result.write_allowed is False
 
 
