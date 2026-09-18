@@ -8,7 +8,14 @@ from configurator_schemas import ValidationResult
 
 
 class FakeDatabase:
-    pass
+    def __init__(self) -> None:
+        self.variants = _Collection()
+        self.cars = _Collection()
+
+
+class _Collection:
+    async def find_one(self, query, projection=None):
+        return None
 
 
 def _payload() -> dict[str, object]:
