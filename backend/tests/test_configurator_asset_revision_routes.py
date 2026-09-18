@@ -130,7 +130,7 @@ def test_asset_endpoint_fails_closed_for_non_published_active_revision():
     assert response.status_code == 200
     payload = response.json()
     assert payload["available"] is False
-    assert "active revision" in payload["message"]
+    assert any("active revision" in blocker for blocker in payload["readiness_blockers"])
     assert "https://cdn.example/vehicle.glb" not in response.text
 
 
