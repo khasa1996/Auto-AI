@@ -18,7 +18,11 @@ class _Collection:
         self.one = one
 
     def find(self, query, projection=None):
-        return _Cursor([])
+        rows = self.one if isinstance(self.one, list) else ([] if self.one is None else [self.one])
+        return _Cursor([
+            row for row in rows
+            if all(row.get(key) == value for key, value in query.items())
+        ])
 
     async def find_one(self, query, projection=None):
         if query.get("variant_id") is not None and self.one is not None:
