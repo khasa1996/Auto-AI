@@ -85,13 +85,15 @@ async def resolve_saved_configuration_asset(
     variant_id: str,
     requested_asset_id: Optional[str],
 ) -> Optional[Dict[str, object]]:
-    """Resolve the current published verified asset assigned to a variant."""
+    """Resolve only the current published verified asset assigned to a variant."""
     variant = await db.variants.find_one(
         {"variant_id": variant_id},
         {"_id": 0, "configurator_asset_id": 1},
     )
     assigned_asset_id = variant.get("configurator_asset_id") if variant else None
-    asset_id = assigned_asset_id or requested_asset_id
+    if not assigned_asset_id:
+        return None
+    asset_id = assigned_asset_id
     if not asset_id:
         return None
     asset = await db.configurator_assets.find_one(
