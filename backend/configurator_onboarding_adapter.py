@@ -52,6 +52,22 @@ def prepare_configurator_onboarding(
             variant_id=manifest.variant_id,
         )
 
+    if records.vehicle.get("model_id") != manifest.model_id:
+        return ConfiguratorOnboardingPreparation(
+            ready=False,
+            errors=["manifest and runtime model identities do not match"],
+            write_allowed=False,
+            variant_id=manifest.variant_id,
+        )
+
+    if records.vehicle.get("brand_id") != manifest.brand_id:
+        return ConfiguratorOnboardingPreparation(
+            ready=False,
+            errors=["manifest and runtime brand identities do not match"],
+            write_allowed=False,
+            variant_id=manifest.variant_id,
+        )
+
     validate_catalog_manifest(manifest)
     validation = validate_onboarding_record_set(records)
 
