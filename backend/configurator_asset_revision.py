@@ -6,7 +6,7 @@ import re
 from collections.abc import Mapping, Sequence
 from enum import Enum
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 _SHA256_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
 
@@ -32,6 +32,8 @@ _ALLOWED_TRANSITIONS: dict[AssetRevisionStatus, frozenset[AssetRevisionStatus]] 
 
 class ConfiguratorAssetRevision(BaseModel):
     """Immutable identity/evidence snapshot for one asset revision."""
+
+    model_config = ConfigDict(frozen=True)
 
     revision_id: str = Field(..., min_length=2, max_length=120)
     asset_id: str = Field(..., min_length=2, max_length=100)
