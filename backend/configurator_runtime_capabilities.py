@@ -129,10 +129,15 @@ async def build_runtime_capability_contract(
     )
 
     if not readiness["ready"] or asset is None or active_revision is None:
+        blockers = list(readiness["blockers"])
+        if asset is not None and active_revision is None:
+            blockers.append(
+                "configurator asset active revision is not published or is invalid"
+            )
         return {
             "variant_id": variant_id,
             "ready": False,
-            "blockers": readiness["blockers"],
+            "blockers": blockers,
             "warnings": readiness["warnings"],
             "asset": None,
             "capabilities": None,
