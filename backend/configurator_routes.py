@@ -253,6 +253,17 @@ def make_configurator_router(
 
     @router.get("/configurator/{variant_id}/asset")
     async def get_configurator_asset(variant_id: str):
+        from configurator_runtime_capabilities import build_runtime_capability_contract
+
+        contract = await build_runtime_capability_contract(db, variant_id)
+        if not contract["ready"]:
+            return {
+                "variant_id": variant_id,
+                "available": False,
+                "message": "3D asset is not ready for production runtime",
+                "readiness_blockers": contract["blockers"],
+            }
+
         variant = await db.variants.find_one(
             {"variant_id": variant_id},
             {"_id": 0, "configurator_status": 1, "configurator_asset_id": 1},
