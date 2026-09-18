@@ -33,6 +33,12 @@ def test_revision_identity_requires_stable_identity_fields() -> None:
         _revision(checksum_sha256="bad")
 
 
+def test_revision_evidence_is_immutable_after_validation() -> None:
+    revision = _revision()
+    with pytest.raises(ValidationError):
+        revision.version = "2.0.0"
+
+
 @pytest.mark.parametrize(
     ("current", "target"),
     [
