@@ -9,6 +9,7 @@ from typing import Any, Dict, Iterable, List, Optional, Set
 from configurator_schemas import AIConfiguratorIntent, InteractionState, PurchasableConfiguration
 from llm_provider import LLMProviderError, LlmChat, UserMessage, resolve_model
 from pricing_engine import calculate_configuration_price
+from configurator_ai_readiness import require_ai_configurator_readiness
 from rules_engine import get_available_options_for_variant
 
 _CONTEXT_PREFIX = "__AUTO_AI_CONTEXT__"
@@ -187,6 +188,13 @@ async def resolve_ai_selection(intent: AIConfiguratorIntent, db: Any) -> tuple[P
         intent.max_budget = _budget_from_text(user_request)
 
     catalog = await get_available_options_for_variant(intent.variant_id, db)
+    await require_ai_configurator_readiness(
+        intent.variant_id,
+        db,
+        catalog.get("colors", []),
+        catalog.get("wheels", []),
+        catalog.get("interiors", []),
+    )
     asset = await db.configurator_assets.find_one(
         {"variant_id": intent.variant_id, "published": True, "validation_passed": True},
         {"_id": 0, "asset_id": 1, "version": 1, "supported_interactions": 1, "camera_preset_names": 1},
