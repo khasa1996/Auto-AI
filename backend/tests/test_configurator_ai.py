@@ -119,3 +119,9 @@ def test_ai_prompt_excludes_untrusted_client_price_from_authoritative_context():
     prompt = build_ai_prompt(intent, catalog(), PurchasableConfiguration(variant_id="v1"), "Delhi", {"client_price": 999})
     assert "client_price" not in prompt
     assert "999" not in prompt
+
+def test_textual_preferences_ignore_unavailable_options():
+    unavailable_catalog = catalog()
+    unavailable_catalog["colors"][0]["available"] = False
+    selected = resolve_textual_preferences("make it passion red", unavailable_catalog)
+    assert selected["paint_id"] is None
