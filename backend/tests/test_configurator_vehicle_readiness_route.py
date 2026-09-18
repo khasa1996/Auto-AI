@@ -56,7 +56,25 @@ class _DB:
             "publisher": "Auto AI India",
             "checksum_sha256": "a" * 64,
             "file_size_bytes": 1024,
-            "storage_status": "PUBLISHED",
+                "storage_status": "PUBLISHED",
+            "active_revision_id": "rev-1",
+            "revisions": [{
+                "revision_id": "rev-1",
+                "asset_id": "asset-1",
+                "variant_id": "demo-variant",
+                "version": "1.0.0",
+                "checksum_sha256": "a" * 64,
+                "state": "PUBLISHED",
+            }],
+            "active_revision_id": "rev-1",
+            "revisions": [{
+                "revision_id": "rev-1",
+                "asset_id": "asset-1",
+                "variant_id": "demo-variant",
+                "version": "1.0.0",
+                "checksum_sha256": "a" * 64,
+                "state": "PUBLISHED",
+            }],
         })
 
 
