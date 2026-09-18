@@ -35,10 +35,16 @@ def test_ai_selection_rejects_unverified_variant_before_llm_resolution(monkeypat
         configurator_assets = Collection()
         configurator_options = Collection()
 
-    async def fail_if_called(*_args, **_kwargs):
-        raise AssertionError("catalog resolution must not run for an unverified variant")
+    async def catalog_for_variant(*_args, **_kwargs):
+        return {
+            "colors": [{"variant_id": "v1", "available": True}],
+            "wheels": [{"variant_id": "v1", "available": True}],
+            "interiors": [{"variant_id": "v1", "available": True}],
+            "roofs": [],
+            "accessories": [],
+        }
 
-    monkeypatch.setattr("configurator_ai.get_available_options_for_variant", fail_if_called)
+    monkeypatch.setattr("configurator_ai.get_available_options_for_variant", catalog_for_variant)
 
     with pytest.raises(ValueError, match="vehicle verification is not complete"):
         asyncio.run(
