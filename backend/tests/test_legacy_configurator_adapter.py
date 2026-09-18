@@ -20,7 +20,7 @@ def test_legacy_car_maps_to_canonical_identity_without_promotion() -> None:
 
     assert candidate["brand_id"] == "kia"
     assert candidate["model_id"] == "kia-seltos"
-    assert candidate["variant_id"] == "kia-seltos-gtx"
+    assert candidate["variant_id"] == "kia-seltos-gtx-plus"
     assert candidate["fuel_type"] == "Diesel"
     assert candidate["transmission"] == "Automatic"
     assert candidate["verification_status"] == "unverified"
