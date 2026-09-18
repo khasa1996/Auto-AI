@@ -88,3 +88,37 @@ async def test_availability_preserves_explicit_disabled_status_when_not_ready():
     body = response.json()
     assert body["configurator_status"] == "DISABLED"
     assert body["available"] is False
+
+
+@pytest.mark.asyncio
+async def test_asset_endpoint_does_not_expose_asset_without_full_runtime_readiness():
+    db = _DB()
+    db.configurator_assets.rows = [{
+        "asset_id": "asset-1",
+        "variant_id": "v1",
+        "active_revision_id": "rev-1",
+        "revisions": [{
+            "revision_id": "rev-1",
+            "asset_id": "asset-1",
+            "variant_id": "v1",
+            "version": "1.0.0",
+            "checksum_sha256": "a" * 64,
+            "state": "PUBLISHED",
+        }],
+        "url": "https://cdn.example.com/car.glb",
+        "format": "glb",
+        "version": "1.0.0",
+        "lod_level": 0,
+        "published": True,
+        "validation_passed": True,
+    }]
+
+    async with AsyncClient(
+        transport=ASGITransport(app=_app(db)),
+        base_url="http://test",
+    ) as client:
+        response = await client.get("/api/v1/configurator/v1/asset")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["available"] is False
