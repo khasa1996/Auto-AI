@@ -85,3 +85,21 @@ def test_reconciliation_does_not_mutate_legacy_input() -> None:
     reconcile_legacy_vehicle(legacy, _identity(), _complete_evidence())
 
     assert legacy == before
+
+
+
+def test_verified_source_factory_rejects_no_unverified_state() -> None:
+    identity = AuthoritativeVehicleIdentity.from_verified_source(
+        brand_id="kia",
+        brand_name="Kia",
+        model_id="kia-seltos",
+        model_name="Seltos",
+        variant_id="kia-seltos-gtx",
+        variant_name="GTX+",
+        fuel_type="Diesel",
+        transmission="Automatic",
+        source="OEM",
+        source_url="https://example.invalid/oem",
+    )
+
+    assert identity.verification_status == "verified"
