@@ -4,7 +4,10 @@ from configurator_catalog_reconciliation import (
     CatalogReconciliationResult,
     ReconciliationStatus,
 )
-from configurator_reconciliation_report import summarize_reconciliation_matrix
+from configurator_reconciliation_report import (
+    reconcile_and_summarize_legacy_catalog,
+    summarize_reconciliation_matrix,
+)
 
 
 def test_report_aggregates_statuses_and_blockers_deterministically() -> None:
@@ -58,3 +61,41 @@ def test_report_is_stable_for_repeated_input_order() -> None:
     second = summarize_reconciliation_matrix([review, ready]).to_dict()
 
     assert first == second
+
+
+
+def test_reconcile_and_summarize_stays_non_persistent_and_blocks_unmapped_records() -> None:
+    records = [
+        {
+            "id": "B",
+            "brand": "MG",
+            "model": "Hector",
+            "variant": "Savvy Pro",
+            "fuel": "Petrol",
+            "transmission": "Automatic",
+        },
+        {
+            "id": "A",
+            "brand": "Kia",
+            "model": "Seltos",
+            "variant": "GTX+",
+            "fuel": "Petrol",
+            "transmission": "Automatic",
+        },
+    ]
+    before = [dict(record) for record in records]
+
+    report = reconcile_and_summarize_legacy_catalog(records)
+
+    assert report.total_records == 2
+    assert report.status_counts == {
+        "REVIEW_REQUIRED": 2,
+        "IDENTITY_VERIFIED": 0,
+        "READY_FOR_ONBOARDING": 0,
+    }
+    assert report.blocker_counts == {
+        "authoritative vehicle identity is missing": 2,
+    }
+    assert report.ready_legacy_car_ids == ()
+    assert report.blocked_legacy_car_ids == ("a", "b")
+    assert records == before
