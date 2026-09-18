@@ -2,24 +2,61 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from typing import Any, Dict, Optional
 
+from configurator_asset_revision import ConfiguratorAssetRevision, select_active_revision
 from configurator_vehicle_readiness import assess_vehicle_configurator_readiness
 from rules_engine import get_available_options_for_variant
 
 
-def _asset_runtime_contract(asset: Dict[str, Any]) -> Dict[str, Any]:
+def resolve_authoritative_asset_revision(
+    asset: Mapping[str, object],
+    revisions: Sequence[ConfiguratorAssetRevision | Mapping[str, object]],
+) -> ConfiguratorAssetRevision:
+    """Resolve the single revision explicitly selected by the persisted asset record."""
+    active_revision_id = asset.get("active_revision_id")
+    if not isinstance(active_revision_id, str) or not active_revision_id.strip():
+        raise ValueError("active revision is not configured")
+
+    asset_id = asset.get("asset_id")
+    variant_id = asset.get("variant_id")
+    if not isinstance(asset_id, str) or not asset_id:
+        raise ValueError("asset identity is not configured")
+    if not isinstance(variant_id, str) or not variant_id:
+        raise ValueError("asset variant identity is not configured")
+
+    parsed_revisions = [
+        revision
+        if isinstance(revision, ConfiguratorAssetRevision)
+        else ConfiguratorAssetRevision.model_validate(revision)
+        for revision in revisions
+    ]
+    selected = select_active_revision(
+        active_revision_id,
+        parsed_revisions,
+        expected_variant_id=variant_id,
+    )
+    if selected.asset_id != asset_id:
+        raise ValueError("active revision does not belong to asset")
+    return selected
+
+def _asset_runtime_contract(
+    asset: Dict[str, Any],
+    revision: ConfiguratorAssetRevision,
+) -> Dict[str, Any]:
     """Expose only verified manifest data required by the runtime."""
     return {
         "asset_id": asset["asset_id"],
-        "version": asset["version"],
+        "revision_id": revision.revision_id,
+        "version": revision.version,
         "url": asset.get("cdn_url") or asset["url"],
         "format": asset["format"],
         "lod_level": asset["lod_level"],
         "provenance": asset["provenance"],
         "license_name": asset["license_name"],
         "publisher": asset["publisher"],
-        "checksum_sha256": asset["checksum_sha256"],
+        "checksum_sha256": revision.checksum_sha256,
         "file_size_bytes": asset["file_size_bytes"],
     }
 
@@ -61,6 +98,7 @@ async def build_runtime_capability_contract(
     ).to_list(100)
 
     asset = None
+    active_revision = None
     asset_id = vehicle.get("configurator_asset_id")
     if asset_id:
         asset = await db.configurator_assets.find_one(
@@ -71,7 +109,14 @@ async def build_runtime_capability_contract(
                 "validation_passed": True,
             },
             {"_id": 0},
-        )
+        )        if asset is not None:
+            try:
+                active_revision = resolve_authoritative_asset_revision(
+                    asset,
+                    asset.get("revisions", []),
+                )
+            except (TypeError, ValueError):
+                active_revision = None
 
     readiness = assess_vehicle_configurator_readiness(
         vehicle,
@@ -82,7 +127,7 @@ async def build_runtime_capability_contract(
         asset,
     )
 
-    if not readiness["ready"] or asset is None:
+    if not readiness["ready"] or asset is None or active_revision is None:
         return {
             "variant_id": variant_id,
             "ready": False,
@@ -99,7 +144,7 @@ async def build_runtime_capability_contract(
         "ready": True,
         "blockers": [],
         "warnings": readiness["warnings"],
-        "asset": _asset_runtime_contract(asset),
+        "asset": _asset_runtime_contract(asset, active_revision),
         "capabilities": _capability_contract(asset),
         "options": options,
     }
