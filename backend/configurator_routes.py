@@ -200,12 +200,47 @@ def make_configurator_router(
     @router.get("/configurator/{variant_id}/availability")
     async def get_configurator_availability(variant_id: str):
         variant = await _require_catalog_variant(db, variant_id)
-        status = variant.get("configurator_status", ConfiguratorStatus.COMING_SOON)
+        pricing = await db.variant_pricing.find_one({"variant_id": variant_id}, {"_id": 0})
+        colors = await db.variant_colors.find({"variant_id": variant_id}, {"_id": 0}).to_list(30)
+        wheels = await db.variant_wheels.find({"variant_id": variant_id}, {"_id": 0}).to_list(20)
+        interiors = await db.variant_interiors.find({"variant_id": variant_id}, {"_id": 0}).to_list(15)
+
+        asset = None
+        asset_id = variant.get("configurator_asset_id")
+        if asset_id:
+            asset = await db.configurator_assets.find_one(
+                {
+                    "asset_id": asset_id,
+                    "variant_id": variant_id,
+                    "published": True,
+                    "validation_passed": True,
+                },
+                {"_id": 0},
+            )
+
+        from configurator_vehicle_readiness import assess_vehicle_configurator_readiness
+
+        readiness = assess_vehicle_configurator_readiness(
+            variant,
+            pricing,
+            colors,
+            wheels,
+            interiors,
+            asset,
+        )
+        status = (
+            ConfiguratorStatus.AVAILABLE
+            if readiness["ready"]
+            else ConfiguratorStatus.COMING_SOON
+        )
         return {
             "variant_id": variant_id,
             "configurator_status": status,
-            "asset_id": variant.get("configurator_asset_id"),
+            "available": bool(readiness["ready"]),
+            "asset_id": asset_id if readiness["ready"] else None,
             "message": _status_message(status),
+            "blockers": readiness["blockers"],
+            "warnings": readiness["warnings"],
         }
 
     @router.get("/configurator/{variant_id}/asset")
