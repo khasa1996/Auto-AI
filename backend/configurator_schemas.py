@@ -251,6 +251,7 @@ class SavedConfigurationCreate(BaseModel):
     )
     asset_id: Optional[str] = Field(None, max_length=100)
     asset_version: Optional[str] = Field(None, max_length=30)
+    asset_revision_id: Optional[str] = Field(None, max_length=120)
 
 
 class SavedConfiguration(SavedConfigurationCreate):
