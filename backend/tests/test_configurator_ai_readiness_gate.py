@@ -144,6 +144,9 @@ def test_ai_selection_uses_variant_assigned_active_asset_revision(monkeypatch):
             return {"estimated_on_road": 1500000}
 
     class Chat:
+        def with_model(self, _provider, _model):
+            return self
+
         async def send_message(self, _message):
             return '{"variant_id":"v1"}'
 
