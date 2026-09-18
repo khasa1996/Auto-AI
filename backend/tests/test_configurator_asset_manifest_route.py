@@ -22,6 +22,21 @@ class FakeCollection:
         self.queries.append(query)
         return next(self.documents)
 
+    def find(
+        self,
+        _query: Dict[str, Any],
+        _projection: Optional[Dict[str, int]] = None,
+    ) -> Any:
+        return _AsyncCursor([])
+
+
+class _AsyncCursor:
+    def __init__(self, documents: list[Dict[str, Any]]) -> None:
+        self.documents = documents
+
+    async def to_list(self, _limit: int) -> list[Dict[str, Any]]:
+        return self.documents
+
 
 class FakeDatabase:
     def __init__(self) -> None:
