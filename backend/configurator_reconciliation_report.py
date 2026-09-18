@@ -1,0 +1,77 @@
+"""Read-only reconciliation reporting for the legacy configurator catalog.
+
+This module consumes reconciliation results and produces a deterministic review
+report. It never reads or writes MongoDB and never changes publication state.
+"""
+
+from __future__ import annotations
+
+from collections import Counter
+from dataclasses import dataclass
+from typing import Iterable
+
+from configurator_catalog_reconciliation import (
+    CatalogReconciliationResult,
+    ReconciliationStatus,
+)
+
+
+@dataclass(frozen=True)
+class ReconciliationReport:
+    """Deterministic aggregate of a reconciliation matrix."""
+
+    total_records: int
+    status_counts: dict[str, int]
+    blocker_counts: dict[str, int]
+    ready_legacy_car_ids: tuple[str, ...]
+    blocked_legacy_car_ids: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a JSON-serializable report without mutating report state."""
+        return {
+            "total_records": self.total_records,
+            "status_counts": dict(self.status_counts),
+            "blocker_counts": dict(self.blocker_counts),
+            "ready_legacy_car_ids": list(self.ready_legacy_car_ids),
+            "blocked_legacy_car_ids": list(self.blocked_legacy_car_ids),
+        }
+
+
+def summarize_reconciliation_matrix(
+    results: Iterable[CatalogReconciliationResult],
+) -> ReconciliationReport:
+    """Aggregate reconciliation results into a deterministic review report."""
+
+    materialized = tuple(results)
+    status_counts = Counter(item.status.value for item in materialized)
+    blocker_counts = Counter(
+        blocker
+        for item in materialized
+        for blocker in item.blockers
+    )
+
+    ready_ids = tuple(
+        sorted(
+            item.legacy_car_id
+            for item in materialized
+            if item.status is ReconciliationStatus.READY_FOR_ONBOARDING
+        )
+    )
+    blocked_ids = tuple(
+        sorted(
+            item.legacy_car_id
+            for item in materialized
+            if item.status is not ReconciliationStatus.READY_FOR_ONBOARDING
+        )
+    )
+
+    return ReconciliationReport(
+        total_records=len(materialized),
+        status_counts={
+            status.value: status_counts.get(status.value, 0)
+            for status in ReconciliationStatus
+        },
+        blocker_counts=dict(sorted(blocker_counts.items())),
+        ready_legacy_car_ids=ready_ids,
+        blocked_legacy_car_ids=blocked_ids,
+    )
