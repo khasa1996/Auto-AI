@@ -25,6 +25,17 @@ from pricing_engine import calculate_configuration_price, validate_asset_url
 from rules_engine import get_available_options_for_variant, validate_configuration
 
 
+async def _require_catalog_variant(
+    db: AsyncIOMotorDatabase,
+    variant_id: str,
+) -> Dict[str, object]:
+    """Require a canonical configurator variant; never fall back to legacy cars."""
+    variant = await db.variants.find_one({"variant_id": variant_id}, {"_id": 0})
+    if not variant:
+        raise HTTPException(status_code=404, detail="Variant not found")
+    return variant
+
+
 async def _resolve_optional_user_phone(
     authorization: Optional[str] = Header(None),
 ) -> Optional[str]:
@@ -169,20 +180,7 @@ def make_configurator_router(
 
     @router.get("/configurator/{variant_id}/availability")
     async def get_configurator_availability(variant_id: str):
-        variant = await db.variants.find_one(
-            {"variant_id": variant_id},
-            {"_id": 0, "configurator_status": 1, "configurator_asset_id": 1},
-        )
-        if not variant:
-            legacy = await db.cars.find_one({"id": variant_id}, {"_id": 0})
-            if not legacy:
-                raise HTTPException(status_code=404, detail="Variant not found")
-            return {
-                "variant_id": variant_id,
-                "configurator_status": ConfiguratorStatus.COMING_SOON,
-                "asset_id": None,
-                "message": "3D Configurator Coming Soon",
-            }
+        variant = await _require_catalog_variant(db, variant_id)
         status = variant.get("configurator_status", ConfiguratorStatus.COMING_SOON)
         return {
             "variant_id": variant_id,
@@ -246,12 +244,8 @@ def make_configurator_router(
 
     @router.get("/configurator/{variant_id}/options")
     async def get_configurator_options(variant_id: str):
+        await _require_catalog_variant(db, variant_id)
         options = await get_available_options_for_variant(variant_id, db)
-        variant = await db.variants.find_one({"variant_id": variant_id}, {"_id": 0, "configurator_status": 1})
-        if not variant:
-            legacy = await db.cars.find_one({"id": variant_id}, {"_id": 0})
-            if not legacy:
-                raise HTTPException(status_code=404, detail="Variant not found")
         return {"variant_id": variant_id, **options}
 
     @router.get("/configurator/{variant_id}/rules")
@@ -264,10 +258,12 @@ def make_configurator_router(
 
     @router.post("/configurator/validate", response_model=ValidationResult)
     async def validate_config(request: ConfigurationValidationRequest):
+        await _require_catalog_variant(db, request.configuration.variant_id)
         return await validate_configuration(request, db)
 
     @router.post("/configurator/price", response_model=ConfigurationPriceResponse)
     async def calculate_price(request: ConfigurationPriceRequest):
+        await _require_catalog_variant(db, request.configuration.variant_id)
         validation = await validate_configuration(
             ConfigurationValidationRequest(configuration=request.configuration), db
         )
