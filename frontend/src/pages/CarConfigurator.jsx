@@ -47,9 +47,7 @@ export default function CarConfigurator() {
       try {
         const availRes = await configuratorApi.getAvailability(variantId);
         const { configurator_status: configuratorStatus, asset_id: assetId } = availRes.data;
-        let variantData;
-        try { variantData = (await configuratorApi.getVariant(variantId)).data; }
-        catch { const { api } = await import('../lib/api'); variantData = (await api.get(`/cars/${variantId}`)).data; }
+        const variantData = (await configuratorApi.getVariant(variantId)).data;
         if (cancelled) return;
         setVariant(variantData); store.setVariant(variantId);
         if (configuratorStatus === 'AVAILABLE' && assetId) {
