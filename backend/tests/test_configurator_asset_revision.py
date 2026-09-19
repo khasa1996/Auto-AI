@@ -108,3 +108,20 @@ def test_active_revision_selection_rejects_cross_variant_revision() -> None:
 
     with pytest.raises(ValueError, match="does not match"):
         select_active_revision("rev-other", revisions, expected_variant_id="variant-1")
+
+
+def test_authoritative_revision_resolution_rejects_duplicate_revision_ids() -> None:
+    from configurator_asset_revision import resolve_authoritative_asset_revision
+
+    asset = {
+        "asset_id": "asset-1",
+        "variant_id": "variant-1",
+        "active_revision_id": "rev-1",
+    }
+    revisions = [
+        _revision(revision_id="rev-1", state="PUBLISHED"),
+        _revision(revision_id="rev-1", version="2.0.0", checksum_sha256="b" * 64, state="PUBLISHED"),
+    ]
+
+    with pytest.raises(ValueError, match="duplicate revision IDs"):
+        resolve_authoritative_asset_revision(asset, revisions)
