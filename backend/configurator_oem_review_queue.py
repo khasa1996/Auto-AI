@@ -82,10 +82,22 @@ def build_oem_review_queue(
     evidence_by_legacy_id = dict(evidence or {})
     evidence_package_by_legacy_id = dict(evidence_packages or {})
     materialized_records = tuple(dict(record) for record in legacy_records)
+    package_identity_by_legacy_id = {
+        legacy_id: package.identity
+        for legacy_id, package in evidence_package_by_legacy_id.items()
+        if package.legacy_car_id == legacy_id
+    }
+    package_evidence_by_legacy_id = {
+        legacy_id: package.evidence
+        for legacy_id, package in evidence_package_by_legacy_id.items()
+        if package.legacy_car_id == legacy_id
+    }
+    effective_identity_by_legacy_id = {**identity_by_legacy_id, **package_identity_by_legacy_id}
+    effective_evidence_by_legacy_id = {**evidence_by_legacy_id, **package_evidence_by_legacy_id}
     matrix = build_reconciliation_matrix(
         materialized_records,
-        identities=identity_by_legacy_id,
-        evidence=evidence_by_legacy_id,
+        identities=effective_identity_by_legacy_id,
+        evidence=effective_evidence_by_legacy_id,
     )
     records_by_id = {
         str(record.get("id", "")).strip().casefold(): record
@@ -97,8 +109,8 @@ def build_oem_review_queue(
         legacy_id = result.legacy_car_id
         legacy = records_by_id[legacy_id]
         package = evidence_package_by_legacy_id.get(legacy_id)
-        identity = package.identity if package else identity_by_legacy_id.get(legacy_id)
-        item_evidence = package.evidence if package else evidence_by_legacy_id.get(legacy_id)
+        identity = package.identity if package else effective_identity_by_legacy_id.get(legacy_id)
+        item_evidence = package.evidence if package else effective_evidence_by_legacy_id.get(legacy_id)
         package_status = package.status if package else None
         package_blockers = package.blockers if package else ()
         queue_blockers = list(result.blockers)
