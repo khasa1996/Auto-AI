@@ -30,7 +30,7 @@ class OemAssetEvidence(BaseModel):
 
     asset_id: str = Field(..., min_length=1, max_length=100)
     revision_id: str = Field(..., min_length=1, max_length=120)
-    asset_variant_id: str | None = Field(None, min_length=1, max_length=120)
+    asset_variant_id: str = Field(..., min_length=1, max_length=120)
     provenance: AssetProvenance
     license_name: str = Field(..., min_length=1, max_length=200)
     publisher: str = Field(..., min_length=1, max_length=200)
