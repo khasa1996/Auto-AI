@@ -11,6 +11,8 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from configurator_schemas import AssetProvenance
+
 from configurator_catalog_reconciliation import (
     AuthoritativeCatalogEvidence,
     AuthoritativeVehicleIdentity,
@@ -28,7 +30,7 @@ class OemAssetEvidence(BaseModel):
 
     asset_id: str = Field(..., min_length=1, max_length=100)
     revision_id: str = Field(..., min_length=1, max_length=120)
-    provenance: str = Field(..., min_length=1, max_length=60)
+    provenance: AssetProvenance
     license_name: str = Field(..., min_length=1, max_length=200)
     publisher: str = Field(..., min_length=1, max_length=200)
     checksum_sha256: str = Field(..., min_length=1, max_length=128)
