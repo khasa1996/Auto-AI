@@ -93,16 +93,17 @@ class OemEvidencePackage(BaseModel):
             blockers.append("active 3D asset revision is not published")
 
         if blockers:
-            identity_blockers = {
+            review_blockers = {
                 "authoritative vehicle identity is not verified",
                 "authoritative source_url must use HTTPS",
+                "3D asset evidence metadata is missing",
             }
-            has_identity_blocker = any(
-                message in identity_blockers for message in blockers
+            has_review_blocker = any(
+                message in review_blockers for message in blockers
             )
             return (
                 EvidencePackageStatus.REVIEW_REQUIRED
-                if has_identity_blocker
+                if has_review_blocker
                 else EvidencePackageStatus.EVIDENCE_REQUIRED,
                 tuple(blockers),
             )
