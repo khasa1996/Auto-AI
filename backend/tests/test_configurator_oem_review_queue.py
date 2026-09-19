@@ -8,7 +8,7 @@ from configurator_catalog_reconciliation import (
 from configurator_oem_review_queue import build_oem_review_queue, summarize_oem_review_queue
 
 
-def _record(vehicle_id: str, brand: str, model: str, variant: str) -> dict[str, object]:
+def _record(vehicle_id: str, brand: str, model: str, variant: str, model_year: int | None = None) -> dict[str, object]:
     return {
         "id": vehicle_id,
         "brand": brand,
@@ -16,6 +16,7 @@ def _record(vehicle_id: str, brand: str, model: str, variant: str) -> dict[str, 
         "variant": variant,
         "fuel": "Petrol",
         "transmission": "Automatic",
+        **({"model_year": model_year} if model_year is not None else {}),
     }
 
 
