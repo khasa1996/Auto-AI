@@ -10,6 +10,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date
 
+from configurator_oem_evidence_package import EvidencePackageStatus, OemEvidencePackage
 from configurator_catalog_reconciliation import (
     AuthoritativeCatalogEvidence,
     AuthoritativeVehicleIdentity,
@@ -45,10 +46,18 @@ class OemEvidenceReviewItem:
     licensed_3d_asset_verified: bool
     asset_revision_published: bool
     blockers: tuple[str, ...]
+    evidence_package_status: EvidencePackageStatus | None = None
+    evidence_package_blockers: tuple[str, ...] = ()
 
     @property
     def review_state(self) -> str:
         """Return a stable workflow state without changing reconciliation status."""
+        if self.status is ReconciliationStatus.REVIEW_REQUIRED:
+            return "REVIEW_REQUIRED"
+        if self.evidence_package_status is EvidencePackageStatus.REVIEW_REQUIRED:
+            return "REVIEW_REQUIRED"
+        if self.evidence_package_status is EvidencePackageStatus.EVIDENCE_REQUIRED:
+            return "EVIDENCE_REQUIRED"
         if self.status is ReconciliationStatus.READY_FOR_ONBOARDING:
             return "READY"
         if self.status is ReconciliationStatus.IDENTITY_VERIFIED:
@@ -60,11 +69,18 @@ def build_oem_review_queue(
     legacy_records: Iterable[Mapping[str, object]],
     identities: Mapping[str, AuthoritativeVehicleIdentity] | None = None,
     evidence: Mapping[str, AuthoritativeCatalogEvidence] | None = None,
+    evidence_packages: Mapping[str, OemEvidencePackage] | None = None,
 ) -> tuple[OemEvidenceReviewItem, ...]:
-    """Build deterministic review items without persistence or inference."""
+    """Build deterministic review items without persistence or inference.
+
+    When evidence_packages are supplied, each package is the explicit source
+    for that vehicle identity and evidence. A package whose internal legacy
+    ID does not match its mapping key is review-blocked.
+    """
 
     identity_by_legacy_id = dict(identities or {})
     evidence_by_legacy_id = dict(evidence or {})
+    evidence_package_by_legacy_id = dict(evidence_packages or {})
     materialized_records = tuple(dict(record) for record in legacy_records)
     matrix = build_reconciliation_matrix(
         materialized_records,
@@ -80,8 +96,22 @@ def build_oem_review_queue(
     for result in matrix:
         legacy_id = result.legacy_car_id
         legacy = records_by_id[legacy_id]
-        identity = identity_by_legacy_id.get(legacy_id)
-        item_evidence = evidence_by_legacy_id.get(legacy_id)
+        package = evidence_package_by_legacy_id.get(legacy_id)
+        identity = package.identity if package else identity_by_legacy_id.get(legacy_id)
+        item_evidence = package.evidence if package else evidence_by_legacy_id.get(legacy_id)
+        package_status = package.status if package else None
+        package_blockers = package.blockers if package else ()
+        queue_blockers = list(result.blockers)
+        if package is None:
+            mismatched_package = next(
+                (candidate for candidate in evidence_package_by_legacy_id.values()
+                 if candidate.legacy_car_id == legacy_id),
+                None,
+            )
+            if mismatched_package is not None:
+                queue_blockers.append("evidence package legacy_car_id does not match queue key")
+        queue_blockers.extend(package_blockers)
+        queue_blockers = list(dict.fromkeys(queue_blockers))
         items.append(
             OemEvidenceReviewItem(
                 legacy_car_id=legacy_id,
@@ -106,7 +136,9 @@ def build_oem_review_queue(
                 compatible_interiors_verified=item_evidence.compatible_interiors_verified if item_evidence else False,
                 licensed_3d_asset_verified=item_evidence.licensed_3d_asset_verified if item_evidence else False,
                 asset_revision_published=item_evidence.asset_revision_published if item_evidence else False,
-                blockers=tuple(result.blockers),
+                blockers=tuple(queue_blockers),
+                evidence_package_status=package_status,
+                evidence_package_blockers=package_blockers,
             )
         )
 
