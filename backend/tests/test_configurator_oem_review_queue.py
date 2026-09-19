@@ -1,5 +1,6 @@
 """Tests for the read-only OEM evidence review queue."""
 
+from configurator_schemas import AssetProvenance
 from configurator_catalog_reconciliation import (
     AuthoritativeCatalogEvidence,
     AuthoritativeVehicleIdentity,
@@ -104,7 +105,7 @@ def _complete_evidence_package() -> OemEvidencePackage:
         asset=OemAssetEvidence(
             asset_id="kia-seltos-gtx-o-3d",
             revision_id="rev-001",
-            provenance="OEM_AUTHORIZED",
+            provenance=AssetProvenance.OEM_AUTHORIZED,
             license_name="OEM production license",
             publisher="Kia India",
             checksum_sha256="a" * 64,
