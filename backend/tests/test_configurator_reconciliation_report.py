@@ -4,8 +4,10 @@ from configurator_catalog_reconciliation import (
     CatalogReconciliationResult,
     ReconciliationStatus,
 )
+from configurator_oem_evidence_package import OemAssetEvidence, OemEvidencePackage
 from configurator_reconciliation_report import (
     reconcile_and_summarize_legacy_catalog,
+    summarize_oem_evidence_queue,
     summarize_reconciliation_matrix,
 )
 
@@ -99,3 +101,35 @@ def test_reconcile_and_summarize_stays_non_persistent_and_blocks_unmapped_record
     assert report.ready_legacy_car_ids == ()
     assert report.blocked_legacy_car_ids == ("a", "b")
     assert records == before
+
+
+def test_oem_evidence_queue_report_includes_package_blockers() -> None:
+    record = {
+        "id": "kia-seltos",
+        "brand": "Kia",
+        "model": "Seltos",
+        "variant": "GTX(O)",
+        "fuel": "Petrol",
+        "transmission": "Automatic",
+    }
+    package = OemEvidencePackage(
+        legacy_car_id="kia-seltos",
+        identity=__import__("configurator_catalog_reconciliation", fromlist=["AuthoritativeVehicleIdentity"]).AuthoritativeVehicleIdentity.from_verified_source(
+            brand_id="kia", brand_name="Kia", model_id="kia-seltos", model_name="Seltos",
+            variant_id="kia-seltos-gtx-o", variant_name="GTX(O)", fuel_type="Petrol",
+            transmission="Automatic", source="Kia India",
+            source_url="https://www.kia.com/in/our-vehicles/seltos/showroom.html",
+        ),
+        evidence=__import__("configurator_catalog_reconciliation", fromlist=["AuthoritativeCatalogEvidence"]).AuthoritativeCatalogEvidence(
+            pricing_verified=True, compatible_colors_verified=True,
+            compatible_wheels_verified=True, compatible_interiors_verified=True,
+            licensed_3d_asset_verified=True, asset_revision_published=True,
+        ),
+    )
+    report = summarize_oem_evidence_queue([record], {"kia-seltos": package})
+    assert report.status_counts == {
+        "REVIEW_REQUIRED": 1,
+        "IDENTITY_VERIFIED": 0,
+        "READY_FOR_ONBOARDING": 0,
+    }
+    assert report.blocker_counts == {"3D asset evidence metadata is missing": 1}
