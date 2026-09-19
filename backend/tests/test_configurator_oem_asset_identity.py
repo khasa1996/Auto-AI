@@ -1,5 +1,7 @@
 """Tests for explicit OEM asset-to-variant identity binding."""
 
+import pytest
+
 from configurator_schemas import AssetProvenance
 from configurator_catalog_reconciliation import (
     AuthoritativeCatalogEvidence,
@@ -77,3 +79,18 @@ def test_matching_asset_variant_can_remain_ready() -> None:
     )
 
     assert validate_evidence_package(package) == (EvidencePackageStatus.READY, ())
+
+
+def test_asset_variant_identity_is_required() -> None:
+    with pytest.raises(ValueError):
+        OemAssetEvidence(
+            asset_id="kia-seltos-3d",
+            revision_id="rev-001",
+            provenance=AssetProvenance.OEM_AUTHORIZED,
+            license_name="OEM production license",
+            publisher="Kia India",
+            checksum_sha256="a" * 64,
+            file_size_bytes=1024,
+            validation_passed=True,
+            published=True,
+        )
