@@ -5,6 +5,7 @@ from configurator_catalog_reconciliation import (
     AuthoritativeVehicleIdentity,
     ReconciliationStatus,
 )
+from configurator_oem_evidence_package import EvidencePackageStatus, OemAssetEvidence, OemEvidencePackage
 from configurator_oem_review_queue import build_oem_review_queue, summarize_oem_review_queue
 
 
@@ -93,6 +94,74 @@ def test_partial_evidence_remains_evidence_required() -> None:
     assert items[0].review_state == "EVIDENCE_REQUIRED"
     assert items[0].pricing_verified is True
     assert items[0].compatible_colors_verified is False
+
+
+def _complete_evidence_package() -> OemEvidencePackage:
+    return OemEvidencePackage(
+        legacy_car_id="kia-seltos",
+        identity=_identity(),
+        evidence=_complete_evidence(),
+        asset=OemAssetEvidence(
+            asset_id="kia-seltos-gtx-o-3d",
+            revision_id="rev-001",
+            provenance="OEM_AUTHORIZED",
+            license_name="OEM production license",
+            publisher="Kia India",
+            checksum_sha256="a" * 64,
+            file_size_bytes=1024,
+            validation_passed=True,
+            published=True,
+        ),
+    )
+
+
+def test_evidence_package_is_the_explicit_source_for_queue_evidence() -> None:
+    package = _complete_evidence_package()
+    items = build_oem_review_queue(
+        [_record("kia-seltos", "Kia", "Seltos", "GTX(O)")],
+        evidence_packages={"kia-seltos": package},
+    )
+
+    assert package.status is EvidencePackageStatus.READY
+    assert items[0].evidence_package_status is EvidencePackageStatus.READY
+    assert items[0].evidence_package_blockers == ()
+    assert items[0].review_state == "READY"
+    assert items[0].status is ReconciliationStatus.READY_FOR_ONBOARDING
+
+
+def test_evidence_package_blockers_are_exposed_without_persistence() -> None:
+    package = OemEvidencePackage(
+        legacy_car_id="kia-seltos",
+        identity=_identity(),
+        evidence=_complete_evidence(),
+    )
+    items = build_oem_review_queue(
+        [_record("kia-seltos", "Kia", "Seltos", "GTX(O)")],
+        evidence_packages={"kia-seltos": package},
+    )
+
+    assert items[0].evidence_package_status is EvidencePackageStatus.REVIEW_REQUIRED
+    assert items[0].review_state == "REVIEW_REQUIRED"
+    assert items[0].evidence_package_blockers == (
+        "3D asset evidence metadata is missing",
+    )
+    assert items[0].blockers == (
+        "3D asset evidence metadata is missing",
+    )
+
+
+def test_mismatched_evidence_package_key_is_review_blocked() -> None:
+    package = _complete_evidence_package()
+    items = build_oem_review_queue(
+        [_record("kia-seltos", "Kia", "Seltos", "GTX(O)")],
+        evidence_packages={"different-id": package},
+    )
+
+    assert items[0].review_state == "REVIEW_REQUIRED"
+    assert items[0].evidence_package_status is None
+    assert items[0].blockers == (
+        "evidence package legacy_car_id does not match queue key",
+    )
 
 
 def test_queue_is_sorted_and_does_not_mutate_inputs() -> None:
