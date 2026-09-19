@@ -122,41 +122,6 @@ def _identity_matches(
     )
 
 
-def _temporal_scope_blocker(
-    legacy: Mapping[str, object],
-    authoritative: AuthoritativeVehicleIdentity,
-) -> str | None:
-    """Reject implicit temporal mapping when either side supplies scope."""
-
-    legacy_model_year = legacy.get("model_year")
-    if legacy_model_year is not None or authoritative.model_year is not None:
-        if legacy_model_year is None:
-            return "legacy model year is missing for a model-year-scoped authoritative record"
-        if authoritative.model_year is None:
-            return "authoritative model year is missing for a model-year-scoped legacy record"
-        try:
-            if int(legacy_model_year) != authoritative.model_year:
-                return "legacy model year does not match authoritative model year"
-        except (TypeError, ValueError):
-            return "legacy model year is invalid"
-
-    legacy_from = legacy.get("effective_from")
-    legacy_to = legacy.get("effective_to")
-    if authoritative.effective_from is not None or authoritative.effective_to is not None:
-        if legacy_from is None and legacy_to is None:
-            return "legacy effective-date scope is missing for a time-scoped authoritative record"
-        try:
-            parsed_from = date.fromisoformat(str(legacy_from)) if legacy_from else None
-            parsed_to = date.fromisoformat(str(legacy_to)) if legacy_to else None
-        except ValueError:
-            return "legacy effective-date scope is invalid"
-        if authoritative.effective_from and parsed_to and parsed_to < authoritative.effective_from:
-            return "legacy effective-date scope does not overlap authoritative scope"
-        if authoritative.effective_to and parsed_from and parsed_from > authoritative.effective_to:
-            return "legacy effective-date scope does not overlap authoritative scope"
-
-    return None
-
 
 def _temporal_scope_blocker(
     legacy: Mapping[str, object],
@@ -216,15 +181,6 @@ def reconcile_legacy_vehicle(
             status=ReconciliationStatus.REVIEW_REQUIRED,
             legacy_car_id=legacy_car_id,
             blockers=["legacy identity does not match authoritative identity"],
-        )
-
-    temporal_blocker = _temporal_scope_blocker(legacy, authoritative)
-    if temporal_blocker is not None:
-        return CatalogReconciliationResult(
-            status=ReconciliationStatus.REVIEW_REQUIRED,
-            legacy_car_id=legacy_car_id,
-            canonical_variant_id=None,
-            blockers=[temporal_blocker],
         )
 
     temporal_blocker = _temporal_scope_blocker(legacy, authoritative)
