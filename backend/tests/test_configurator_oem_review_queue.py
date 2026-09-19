@@ -160,6 +160,7 @@ def test_mismatched_evidence_package_key_is_review_blocked() -> None:
     assert items[0].review_state == "REVIEW_REQUIRED"
     assert items[0].evidence_package_status is None
     assert items[0].blockers == (
+        "authoritative vehicle identity is missing",
         "evidence package legacy_car_id does not match queue key",
     )
 
