@@ -17,6 +17,8 @@ from configurator_catalog_reconciliation import (
     ReconciliationStatus,
 )
 from configurator_reconciliation_matrix import build_reconciliation_matrix
+from configurator_oem_evidence_package import OemEvidencePackage
+from configurator_oem_review_queue import build_oem_review_queue
 
 
 @dataclass(frozen=True)
@@ -79,6 +81,35 @@ def summarize_reconciliation_matrix(
         blocked_legacy_car_ids=blocked_ids,
     )
 
+
+
+
+def summarize_oem_evidence_queue(
+    legacy_records: Iterable[Mapping[str, object]],
+    evidence_packages: Mapping[str, OemEvidencePackage],
+) -> ReconciliationReport:
+    """Summarize the OEM evidence review queue without persistence."""
+
+    items = build_oem_review_queue(
+        legacy_records,
+        evidence_packages=evidence_packages,
+    )
+    results = tuple(
+        CatalogReconciliationResult(
+            status=(
+                ReconciliationStatus.READY_FOR_ONBOARDING
+                if item.review_state == "READY"
+                else ReconciliationStatus.IDENTITY_VERIFIED
+                if item.review_state == "EVIDENCE_REQUIRED"
+                else ReconciliationStatus.REVIEW_REQUIRED
+            ),
+            legacy_car_id=item.legacy_car_id,
+            canonical_variant_id=item.canonical_variant_id,
+            blockers=item.blockers,
+        )
+        for item in items
+    )
+    return summarize_reconciliation_matrix(results)
 
 
 def reconcile_and_summarize_legacy_catalog(
