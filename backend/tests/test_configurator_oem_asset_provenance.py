@@ -45,6 +45,7 @@ def _asset(provenance: AssetProvenance) -> OemAssetEvidence:
     return OemAssetEvidence(
         asset_id="kia-seltos-gtx-o-3d",
         revision_id="rev-001",
+        asset_variant_id="kia-seltos-gtx-o",
         provenance=provenance,
         license_name="OEM production license",
         publisher="Kia India",
