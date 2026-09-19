@@ -137,9 +137,14 @@ def test_effective_date_scope_requires_legacy_scope() -> None:
 def test_effective_date_range_is_validated() -> None:
     with pytest.raises(ValueError, match="effective_to"):
         AuthoritativeVehicleIdentity(
-            **_identity().model_dump(),
-            effective_from=date(2025, 1, 1),
-            effective_to=date(2024, 1, 1),
+            **_identity()
+            .model_copy(
+                update={
+                    "effective_from": date(2025, 1, 1),
+                    "effective_to": date(2024, 1, 1),
+                }
+            )
+            .model_dump()
         )
 
 
