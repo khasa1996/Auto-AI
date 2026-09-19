@@ -103,6 +103,10 @@ def resolve_authoritative_asset_revision(
         else ConfiguratorAssetRevision.model_validate(revision)
         for revision in revisions
     ]
+    revision_ids = [revision.revision_id for revision in parsed_revisions]
+    if len(revision_ids) != len(set(revision_ids)):
+        raise ValueError("asset revisions contain duplicate revision IDs")
+
     selected = select_active_revision(
         active_revision_id,
         parsed_revisions,
