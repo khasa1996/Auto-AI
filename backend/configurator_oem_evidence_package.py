@@ -1,0 +1,121 @@
+"""Explicit, read-only OEM evidence package contract for configurator onboarding.
+
+This module records evidence metadata supplied by reviewers. It does not infer
+vehicle identity, fetch OEM data, or persist production catalog records.
+"""
+
+from __future__ import annotations
+
+import re
+from enum import Enum
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from configurator_catalog_reconciliation import (
+    AuthoritativeCatalogEvidence,
+    AuthoritativeVehicleIdentity,
+)
+
+
+class EvidencePackageStatus(str, Enum):
+    REVIEW_REQUIRED = "REVIEW_REQUIRED"
+    EVIDENCE_REQUIRED = "EVIDENCE_REQUIRED"
+    READY = "READY"
+
+
+class OemAssetEvidence(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    asset_id: str = Field(..., min_length=1, max_length=100)
+    revision_id: str = Field(..., min_length=1, max_length=120)
+    provenance: str = Field(..., min_length=1, max_length=60)
+    license_name: str = Field(..., min_length=1, max_length=200)
+    publisher: str = Field(..., min_length=1, max_length=200)
+    checksum_sha256: str = Field(..., min_length=64, max_length=64)
+    file_size_bytes: int = Field(..., gt=0, le=200 * 1024 * 1024)
+    validation_passed: bool = False
+    published: bool = False
+
+    @field_validator("checksum_sha256")
+    @classmethod
+    def checksum_must_be_sha256(cls, value: str) -> str:
+        if not re.fullmatch(r"[0-9a-fA-F]{64}", value):
+            raise ValueError("checksum_sha256 must be a 64-character hexadecimal SHA-256")
+        return value.lower()
+
+
+class OemEvidencePackage(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    legacy_car_id: str = Field(..., min_length=1, max_length=100)
+    identity: AuthoritativeVehicleIdentity
+    evidence: AuthoritativeCatalogEvidence
+    asset: OemAssetEvidence | None = None
+
+    def evaluate(self) -> tuple[EvidencePackageStatus, tuple[str, ...]]:
+        blockers: list[str] = []
+
+        if self.identity.verification_status != "verified":
+            blockers.append("authoritative vehicle identity is not verified")
+        if not self.identity.source_url.startswith("https://"):
+            blockers.append("authoritative source_url must use HTTPS")
+
+        checks = (
+            ("authoritative pricing is not verified", self.evidence.pricing_verified),
+            ("compatible colors are not verified", self.evidence.compatible_colors_verified),
+            ("compatible wheels are not verified", self.evidence.compatible_wheels_verified),
+            ("compatible interiors are not verified", self.evidence.compatible_interiors_verified),
+        )
+        blockers.extend(message for message, passed in checks if not passed)
+
+        if not self.evidence.licensed_3d_asset_verified:
+            blockers.append("licensed 3D asset is not verified")
+        elif self.asset is None:
+            blockers.append("3D asset evidence metadata is missing")
+        else:
+            if not self.asset.validation_passed:
+                blockers.append("3D asset validation has not passed")
+            if not self.asset.published:
+                blockers.append("3D asset revision is not published")
+
+        if not self.evidence.asset_revision_published:
+            blockers.append("active 3D asset revision is not published")
+
+        if blockers:
+            identity_only_blockers = {
+                "authoritative pricing is not verified",
+                "compatible colors are not verified",
+                "compatible wheels are not verified",
+                "compatible interiors are not verified",
+                "licensed 3D asset is not verified",
+                "3D asset evidence metadata is missing",
+                "3D asset validation has not passed",
+                "3D asset revision is not published",
+                "active 3D asset revision is not published",
+            }
+            identity_only = (
+                self.identity.verification_status == "verified"
+                and not any(message in identity_only_blockers for message in blockers)
+            )
+            return (
+                EvidencePackageStatus.EVIDENCE_REQUIRED
+                if identity_only
+                else EvidencePackageStatus.REVIEW_REQUIRED,
+                tuple(blockers),
+            )
+
+        return EvidencePackageStatus.READY, ()
+
+    @property
+    def status(self) -> EvidencePackageStatus:
+        return self.evaluate()[0]
+
+    @property
+    def blockers(self) -> tuple[str, ...]:
+        return self.evaluate()[1]
+
+
+def validate_evidence_package(
+    package: OemEvidencePackage,
+) -> tuple[EvidencePackageStatus, tuple[str, ...]]:
+    return package.evaluate()
