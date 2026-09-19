@@ -30,6 +30,7 @@ class OemAssetEvidence(BaseModel):
 
     asset_id: str = Field(..., min_length=1, max_length=100)
     revision_id: str = Field(..., min_length=1, max_length=120)
+    asset_variant_id: str | None = Field(None, min_length=1, max_length=120)
     provenance: AssetProvenance
     license_name: str = Field(..., min_length=1, max_length=200)
     publisher: str = Field(..., min_length=1, max_length=200)
@@ -86,6 +87,11 @@ class OemEvidencePackage(BaseModel):
         elif self.asset is None:
             blockers.append("3D asset evidence metadata is missing")
         else:
+            if (
+                self.asset.asset_variant_id is not None
+                and self.asset.asset_variant_id != self.identity.variant_id
+            ):
+                blockers.append("3D asset variant does not match authoritative variant")
             if self.asset.provenance not in {
                 AssetProvenance.OEM_AUTHORIZED,
                 AssetProvenance.AUTO_AI_LICENSED,
@@ -105,6 +111,7 @@ class OemEvidencePackage(BaseModel):
                 "authoritative vehicle identity is not verified",
                 "authoritative source_url must use HTTPS",
                 "3D asset evidence metadata is missing",
+                "3D asset variant does not match authoritative variant",
                 "3D asset provenance is not production-authorized",
             }
             has_review_blocker = any(
