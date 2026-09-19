@@ -11,6 +11,7 @@ Each `OemEvidenceReviewItem` records:
 - reconciliation status and derived review state;
 - an explicitly supplied canonical variant identity, when one exists;
 - the authoritative source and HTTPS source URL, when supplied;
+- temporal identity scope (`model_year`, `effective_from`, `effective_to`), when supplied;
 - six evidence gates: pricing, compatible colours, wheels, interiors,
   licensed 3D asset, and published asset revision;
 - blockers returned by the reconciliation engine.
