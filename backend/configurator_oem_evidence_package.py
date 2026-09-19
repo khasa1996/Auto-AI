@@ -86,6 +86,12 @@ class OemEvidencePackage(BaseModel):
         elif self.asset is None:
             blockers.append("3D asset evidence metadata is missing")
         else:
+            if self.asset.provenance not in {
+                AssetProvenance.OEM_AUTHORIZED,
+                AssetProvenance.AUTO_AI_LICENSED,
+                AssetProvenance.LICENSED_THIRD_PARTY,
+            }:
+                blockers.append("3D asset provenance is not production-authorized")
             if not self.asset.validation_passed:
                 blockers.append("3D asset validation has not passed")
             if not self.asset.published:
@@ -99,6 +105,7 @@ class OemEvidencePackage(BaseModel):
                 "authoritative vehicle identity is not verified",
                 "authoritative source_url must use HTTPS",
                 "3D asset evidence metadata is missing",
+                "3D asset provenance is not production-authorized",
             }
             has_review_blocker = any(
                 message in review_blockers for message in blockers
