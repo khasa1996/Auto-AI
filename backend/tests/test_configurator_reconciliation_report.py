@@ -1,10 +1,12 @@
 """Tests for read-only reconciliation reporting."""
 
 from configurator_catalog_reconciliation import (
+    AuthoritativeCatalogEvidence,
+    AuthoritativeVehicleIdentity,
     CatalogReconciliationResult,
     ReconciliationStatus,
 )
-from configurator_oem_evidence_package import OemAssetEvidence, OemEvidencePackage
+from configurator_oem_evidence_package import OemEvidencePackage
 from configurator_reconciliation_report import (
     reconcile_and_summarize_legacy_catalog,
     summarize_oem_evidence_queue,
@@ -114,13 +116,13 @@ def test_oem_evidence_queue_report_includes_package_blockers() -> None:
     }
     package = OemEvidencePackage(
         legacy_car_id="kia-seltos",
-        identity=__import__("configurator_catalog_reconciliation", fromlist=["AuthoritativeVehicleIdentity"]).AuthoritativeVehicleIdentity.from_verified_source(
+        identity=AuthoritativeVehicleIdentity.from_verified_source(
             brand_id="kia", brand_name="Kia", model_id="kia-seltos", model_name="Seltos",
             variant_id="kia-seltos-gtx-o", variant_name="GTX(O)", fuel_type="Petrol",
             transmission="Automatic", source="Kia India",
             source_url="https://www.kia.com/in/our-vehicles/seltos/showroom.html",
         ),
-        evidence=__import__("configurator_catalog_reconciliation", fromlist=["AuthoritativeCatalogEvidence"]).AuthoritativeCatalogEvidence(
+        evidence=AuthoritativeCatalogEvidence(
             pricing_verified=True, compatible_colors_verified=True,
             compatible_wheels_verified=True, compatible_interiors_verified=True,
             licensed_3d_asset_verified=True, asset_revision_published=True,
