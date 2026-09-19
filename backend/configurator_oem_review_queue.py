@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from datetime import date
 
 from configurator_catalog_reconciliation import (
     AuthoritativeCatalogEvidence,
@@ -34,6 +35,9 @@ class OemEvidenceReviewItem:
     canonical_variant: str | None
     authoritative_source: str | None
     authoritative_source_url: str | None
+    model_year: int | None
+    effective_from: date | None
+    effective_to: date | None
     pricing_verified: bool
     compatible_colors_verified: bool
     compatible_wheels_verified: bool
@@ -93,6 +97,9 @@ def build_oem_review_queue(
                 canonical_variant=identity.variant_name if identity else None,
                 authoritative_source=identity.source if identity else None,
                 authoritative_source_url=identity.source_url if identity else None,
+                model_year=identity.model_year if identity else None,
+                effective_from=identity.effective_from if identity else None,
+                effective_to=identity.effective_to if identity else None,
                 pricing_verified=item_evidence.pricing_verified if item_evidence else False,
                 compatible_colors_verified=item_evidence.compatible_colors_verified if item_evidence else False,
                 compatible_wheels_verified=item_evidence.compatible_wheels_verified if item_evidence else False,
