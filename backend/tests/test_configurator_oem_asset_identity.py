@@ -76,6 +76,7 @@ def test_matching_asset_variant_can_remain_ready() -> None:
         identity=_identity(),
         evidence=_evidence(),
         asset=_asset("kia-seltos-gtx-o"),
+        authoritative_active_revision_id="rev-001",
     )
 
     assert validate_evidence_package(package) == (EvidencePackageStatus.READY, ())
