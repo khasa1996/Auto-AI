@@ -56,6 +56,7 @@ class OemEvidencePackage(BaseModel):
     identity: AuthoritativeVehicleIdentity
     evidence: AuthoritativeCatalogEvidence
     asset: OemAssetEvidence | None = None
+    authoritative_active_revision_id: str | None = Field(None, min_length=1, max_length=120)
 
     def evaluate(self) -> tuple[EvidencePackageStatus, tuple[str, ...]]:
         blockers: list[str] = []
@@ -87,10 +88,11 @@ class OemEvidencePackage(BaseModel):
         elif self.asset is None:
             blockers.append("3D asset evidence metadata is missing")
         else:
-            if (
-                self.asset.asset_variant_id is not None
-                and self.asset.asset_variant_id != self.identity.variant_id
-            ):
+            if self.authoritative_active_revision_id is None:
+                blockers.append("authoritative active asset revision is not specified")
+            elif self.asset.revision_id != self.authoritative_active_revision_id:
+                blockers.append("3D asset revision does not match authoritative active revision")
+            if self.asset.asset_variant_id != self.identity.variant_id:
                 blockers.append("3D asset variant does not match authoritative variant")
             if self.asset.provenance not in {
                 AssetProvenance.OEM_AUTHORIZED,
@@ -111,6 +113,8 @@ class OemEvidencePackage(BaseModel):
                 "authoritative vehicle identity is not verified",
                 "authoritative source_url must use HTTPS",
                 "3D asset evidence metadata is missing",
+                "authoritative active asset revision is not specified",
+                "3D asset revision does not match authoritative active revision",
                 "3D asset variant does not match authoritative variant",
                 "3D asset provenance is not production-authorized",
             }
