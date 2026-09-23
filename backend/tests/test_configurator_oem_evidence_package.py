@@ -56,12 +56,28 @@ def _asset() -> OemAssetEvidence:
     )
 
 
+def test_asset_revision_must_match_authoritative_active_revision() -> None:
+    package = OemEvidencePackage(
+        legacy_car_id="kia-seltos-gtx-o",
+        identity=_identity(),
+        evidence=_evidence(),
+        asset=_asset(),
+        authoritative_active_revision_id="rev-authoritative",
+    )
+
+    status, blockers = validate_evidence_package(package)
+
+    assert status is EvidencePackageStatus.REVIEW_REQUIRED
+    assert blockers == ("3D asset revision does not match authoritative active revision",)
+
+
 def test_complete_package_is_ready() -> None:
     package = OemEvidencePackage(
         legacy_car_id="kia-seltos-gtx-o",
         identity=_identity(),
         evidence=_evidence(),
         asset=_asset(),
+        authoritative_active_revision_id="rev-001",
     )
 
     assert validate_evidence_package(package) == (EvidencePackageStatus.READY, ())
