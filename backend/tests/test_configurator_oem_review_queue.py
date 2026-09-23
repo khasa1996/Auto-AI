@@ -114,6 +114,7 @@ def _complete_evidence_package() -> OemEvidencePackage:
             validation_passed=True,
             published=True,
         ),
+        authoritative_active_revision_id="rev-001",
     )
 
 
