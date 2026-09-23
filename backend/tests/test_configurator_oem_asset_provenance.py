@@ -68,6 +68,7 @@ def test_non_production_provenance_requires_review(
         identity=_identity(),
         evidence=_evidence(),
         asset=_asset(provenance),
+        authoritative_active_revision_id="rev-001",
     )
 
     status, blockers = validate_evidence_package(package)
