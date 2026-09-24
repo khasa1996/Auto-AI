@@ -120,6 +120,16 @@ def test_asset_integrity_evidence_is_required():
     assert "configurator asset integrity evidence is incomplete" in result["blockers"]
 
 
+def test_asset_checksum_must_match_active_revision_checksum():
+    colors, wheels, interiors = _options()
+    asset = {**_asset(), "checksum_sha256": "b" * 64}
+    result = assess_vehicle_configurator_readiness(
+        _vehicle(), _pricing(), colors, wheels, interiors, asset
+    )
+    assert result["ready"] is False
+    assert "configurator asset checksum does not match active revision" in result["blockers"]
+
+
 def test_asset_storage_publication_state_is_required():
     colors, wheels, interiors = _options()
     asset = {**_asset(), "storage_status": "VALIDATED"}
