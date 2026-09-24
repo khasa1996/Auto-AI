@@ -102,16 +102,20 @@ def assess_vehicle_configurator_readiness(
             if "configurator asset integrity evidence is incomplete" not in blockers:
                 blockers.append("configurator asset integrity evidence is incomplete")
 
-        if asset.get("storage_status") != "PUBLISHED":
-            blockers.append("configurator asset storage publication state is not complete")
-
         try:
-            resolve_authoritative_asset_revision(
+            active_revision = resolve_authoritative_asset_revision(
                 asset,
                 asset.get("revisions", []),
             )
         except (TypeError, ValueError):
+            active_revision = None
             blockers.append("configurator asset active revision is not published or is invalid")
+        else:
+            if active_revision.checksum_sha256 != checksum:
+                blockers.append("configurator asset checksum does not match active revision")
+
+        if asset.get("storage_status") != "PUBLISHED":
+            blockers.append("configurator asset storage publication state is not complete")
 
     if not vehicle.get("source") or not vehicle.get("source_url"):
         warnings.append("vehicle source traceability is incomplete")
